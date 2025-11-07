@@ -1,0 +1,1303 @@
+import axios from "axios";
+import { getAuthToken, setAuthToken as setAuthTokenUtil, isValidToken } from "./utils/auth";
+
+// Set base URL for backend
+const API_BASE_URL = "https://cropeye-server-1.onrender.com/api"; // changed to root API URL
+
+// KML/GeoJSON API URL
+const KML_API_URL = "http://192.168.41.51";
+
+// Create axios instance
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+// Create axios instance for public endpoints (no auth required)
+const publicApi = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+// Add auth token if available
+api.interceptors.request.use((config) => {
+  const token = getAuthToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Add response interceptor to handle authentication errors
+api.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  (error) => {
+    // Suppress console errors for silent errors
+    if (error.isSilent) {
+      // Don't log silent errors to console
+      return Promise.reject(error);
+    }
+    
+    // Only log non-silent errors
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      // Authentication errors are expected in some cases, don't log them as errors
+      // They're handled by the calling code
+      return Promise.reject(error);
+    }
+    
+    return Promise.reject(error);
+  }
+);
+
+// ==================== AUTHENTICATION API ====================
+// Note: Using password-based authentication instead of OTP
+
+// OTP-based authentication (commented out - using password-based auth instead)
+//export const sendOtp = (email: string) => {
+// return api.post('/otp/', { email });
+//};
+
+//export const verifyOtp = (email: string, otp: string) => {
+//return api.post('/verify-otp/', { email, otp });
+//};
+
+//Login function - backend expects email field
+export const login = (email: string, password: string) => {
+  return api.post("/login/", { email, password });
+};
+
+export const addUser = (data: {
+  username?: string;
+  first_name: string;
+  last_name: string;
+  phone_number: string;
+  email: string;
+  password?: string;
+  role: string;
+}) => {
+  return api.post("/users/", data);
+};
+
+export const addTask = (data: {
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  assigned_to_id: number;
+  due_date: string;
+}) => {
+  return api.post("/tasks/", data);
+};
+
+export const getTasks = () => {
+  return api.get("/tasks/");
+};
+
+export const getTaskById = (id: number) => {
+  return api.get(`/tasks/${id}/`);
+};
+
+export const updateTask = (id: number, data: any) => {
+  return api.put(`/tasks/${id}/`, data);
+};
+
+export const getTasksForUser = (userId: number) => {
+  return api.get(`/tasks/?assigned_to_id=${userId}`);
+};
+
+export const getFarmersByFieldOfficer = (fieldOfficerId: number) => {
+  return api.get(`/users/farmers-by-field-officer/${fieldOfficerId}/`);
+};
+
+export const updateTaskStatus = (taskId: number, status: string) => {
+  return api.patch(`/tasks/${taskId}/`, { status });
+};
+
+export const addVendor = (data: {
+  vendor_name: string;
+  email: string;
+  mobile: string;
+  gstin: string;
+  state: string;
+  city: string;
+  address: string;
+}) => {
+  return api.post("/vendors/", data);
+};
+
+export const getVendors = () => {
+  return api.get("/vendors/");
+};
+
+export const addOrder = (data: {
+  vendor_name: string;
+  invoice_date: string;
+  invoice_number: string;
+  state: string;
+  items: {
+    item_name: string;
+    year_of_make: string;
+    estimate_cost: string;
+    remark: string;
+  }[];
+}) => {
+  return api.post("/addorder", data);
+};
+
+export const addStock = (data: {
+  item_name: string;
+  item_type: string;
+  make: string;
+  year_of_make: string;
+  estimate_cost: string;
+  status: string;
+  remark: string;
+}) => {
+  return api.post("/addstock", data);
+};
+
+export const addBooking = (data: {
+  item_name: string;
+  user_role: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+}) => {
+  return api.post("/addbooking", data);
+};
+
+// ==================== FARM MANAGEMENT API ====================
+
+// Farm Management
+export const getFarms = () => {
+  return api.get("/farms/");
+};
+
+// Get farms with farmer details
+export const getFarmsWithFarmerDetails = () => {
+  return api.get("/farms/?include_farmer=true");
+};
+
+// Get recent farmers
+export const getRecentFarmers = () => {
+  return api.get("/farms/recent-farmers/");
+};
+
+export const getFarmById = (id: string) => {
+  return api.get(`/farms/${id}/`);
+};
+
+// Get farms by farmer ID
+export const getFarmsByFarmerId = (farmerId: string) => {
+  return api.get(`/farms/?farmer_id=${farmerId}`);
+};
+
+export const createFarm = async (data: {
+  first_name: string;
+  last_name: string;
+  username: string;
+  password: string;
+  confirm_password: string;
+  email: string;
+  phone_number: string;
+  address: string;
+  village: string;
+  taluka: string;
+  state: string;
+  pin_code: string;
+  district: string;
+  gat_No: string;
+  area: string;
+  crop_type: string;
+  plantation_Type: string;
+  plantation_Date: string;
+  irrigation_Type: string;
+  // plants_Per_Acre: string;
+  spacing_A: string;
+  spacing_B: string;
+  flow_Rate: string;
+  emitters: string;
+  motor_Horsepower: string;
+  pipe_Width: string;
+  distance_From_Motor: string;
+  geometry: string;
+  location: { lat: string; lng: string };
+  documents: FileList | null;
+}) => {
+  // Create FormData for file upload
+  const formData = new FormData();
+
+  // Add all text fields
+  Object.keys(data).forEach((key) => {
+    if (key !== "documents") {
+      formData.append(key, data[key as keyof typeof data] as string);
+    }
+  });
+
+  // Add files if they exist
+  if (data.documents) {
+    for (let i = 0; i < data.documents.length; i++) {
+      formData.append("documents", data.documents[i]);
+    }
+  }
+
+  // Use multipart/form-data for file upload
+  return api.post("/farms/", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+};
+
+export const updateFarm = (id: string, data: any) => {
+  return api.put(`/farms/${id}/`, data);
+};
+
+// Update farm registration
+export const updateFarmRegistration = (
+  id: string,
+  data: {
+    farmer_id?: string;
+    plots?: Array<any>;
+    totalArea?: {
+      sqm: number;
+      ha: number;
+      acres: number;
+    };
+    location?: {
+      lat: string;
+      lng: string;
+    };
+    documents?: FileList | null;
+  }
+) => {
+  return api.put(`/farms/${id}/`, data);
+};
+
+export const deleteFarm = (id: string) => {
+  return api.delete(`/farms/${id}/`);
+};
+
+export const getFarmsGeoJSON = () => {
+  return api.get("/farms/geojson/");
+};
+
+// Farm Plots Management
+export const getFarmPlots = () => {
+  return api.get("/farm-plots/");
+};
+
+export const createFarmPlot = (data: {
+  farm_id: string;
+  boundary: string; // GeoJSON geometry
+  area: number;
+  plot_name: string;
+}) => {
+  return api.post("/farm-plots/", data);
+};
+
+export const getFarmPlotsGeoJSON = () => {
+  return api.get("/farm-plots/geojson/");
+};
+
+// Soil and Crop Types
+export const getSoilTypes = () => {
+  return api.get("/soil-types/");
+};
+
+export const getCropTypes = () => {
+  return api.get("/crop-types/");
+};
+
+// Get crop types with Bearer token
+export const getCropTypesWithAuth = (token: string) => {
+  return axios.get(`${API_BASE_URL}/crop-types/`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+};
+
+export const registerUser = (data: {
+  username: string;
+  password: string;
+  password2: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+  phone_number: string;
+  address: string;
+}) => {
+  return api.post("/users/", data);
+};
+
+// OTP-based authentication (commented out - using password-based auth instead)
+// export const getTokenWithOtp = (email: string, otp: string) => {
+//   return api.post('/token/', { email, otp });
+// };
+
+export const getCurrentUser = () => {
+  return api.get("/users/me/");
+};
+
+export const getUsers = () => {
+  return api.get("/users/");
+};
+
+export const getContactDetails = () => {
+  return api.get("/users/contact-details/");
+};
+
+// Farmer Registration API (role_id = 1 for Farmer) - No authentication required
+export const registerFarmer = (data: {
+  username: string;
+  email: string;
+  password: string;
+  first_name: string;
+  last_name: string;
+  role_id: number; // Always 1 for Farmer
+  phone_number: string;
+  address: string;
+  village: string;
+  taluka: string;
+  district: string;
+  state: string;
+}) => {
+  // Create axios instance without auth token for registration
+  return axios.post(`${API_BASE_URL}/users/`, data, {
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+};
+
+// OTP-based registration (commented out - using password-based auth instead)
+// export const sendOTPForRegistration = async (email: string): Promise<void> => {
+//   try {
+//     console.log('Sending OTP to:', email);
+//     await axios.post(`${API_BASE_URL}/otp/`, {
+//       email: email
+//     }, {
+//       headers: {
+//         'Content-Type': 'application/json',
+//       },
+//     });
+//
+//     console.log('✅ OTP sent successfully to:', email);
+//   } catch (error: any) {
+//     console.error('Failed to send OTP:', error);
+//     throw new Error(`Failed to send OTP: ${error.response?.data?.detail || error.message}`);
+//   }
+// };
+
+// OTP verification (commented out - using password-based auth instead)
+// export const verifyOTPAndGetToken = async (email: string, otp: string): Promise<string> => {
+//   try {
+//     console.log('Verifying OTP for:', email);
+//     const verifyResponse = await axios.post(`${API_BASE_URL}/verify-otp/`, {
+//       email: email,
+//       otp: otp
+//     }, {
+//       headers: {
+//         'Content-Type': 'application/json',
+//       },
+//     });
+//
+//     if (verifyResponse.data && (verifyResponse.data.access || verifyResponse.data.token)) {
+//       const token = verifyResponse.data.access || verifyResponse.data.token;
+//       console.log('✅ OTP verification successful, token received');
+//       return token;
+//     } else {
+//       throw new Error('Invalid OTP response format');
+//     }
+//   } catch (error: any) {
+//     console.error('OTP verification failed:', error);
+//     throw new Error(`OTP verification failed: ${error.response?.data?.detail || error.message}`);
+//   }
+// };
+
+// Set authentication token for API calls
+export const setAuthToken = (token: string) => {
+  // Set the token in the axios instance
+  api.defaults.headers.Authorization = `Bearer ${token}`;
+  // Also store it in localStorage using the utility
+  setAuthTokenUtil(token);
+};
+
+// Plot Creation API - Requires Bearer token
+export const createPlot = (
+  data: {
+    gat_number: string;
+    plot_number: string;
+    village: string;
+    taluka: string;
+    district: string;
+    state: string;
+    country: string;
+    pin_code: string;
+    location: {
+      type: "Point";
+      coordinates: [number, number]; // longitude, latitude
+    };
+    boundary: {
+      type: "Polygon";
+      coordinates: [[[number, number]]]; // GeoJSON Polygon
+    };
+  },
+  token?: string
+) => {
+  const headers: any = {
+    "Content-Type": "application/json",
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  return axios.post(`${API_BASE_URL}/plots/`, data, { headers });
+};
+
+// Farm Creation API - Requires Bearer token
+export const createFarmWithPlot = (
+  data: {
+    plot_id: number;
+    address: string;
+    area_size: number;
+    soil_type_id: string;
+    crop_type_id: string;
+    farm_document: File | null;
+  },
+  token?: string
+) => {
+  const formData = new FormData();
+  formData.append("plot_id", data.plot_id.toString());
+  formData.append("address", data.address);
+  formData.append("area_size", data.area_size.toString());
+  formData.append("soil_type_id", data.soil_type_id);
+  formData.append("crop_type_id", data.crop_type_id);
+
+  if (data.farm_document) {
+    formData.append("farm_document", data.farm_document);
+  }
+
+  const headers: any = {
+    "Content-Type": "multipart/form-data",
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  return axios.post(`${API_BASE_URL}/farms/`, formData, { headers });
+};
+
+// Farm Registration API - Main endpoint
+export const createFarmRegistration = (data: {
+  farmer_id: string;
+  plots: Array<{
+    id: string;
+    geometry: any;
+    area: {
+      sqm: number;
+      ha: number;
+      acres: number;
+    };
+    GroupGatNo: string;
+    GatNoId: string;
+    village: string;
+    pin_code: string;
+    crop_type: string;
+    plantation_Type: string;
+    plantation_Method: string;
+    plantation_Date: string;
+    irrigation_Type: string;
+    plants_Per_Acre: string;
+    spacing_A: string;
+    spacing_B: string;
+    flow_Rate: string;
+    emitters: string;
+    motor_Horsepower: string;
+    pipe_Width: string;
+    distance_From_Motor: string;
+  }>;
+  totalArea: {
+    sqm: number;
+    ha: number;
+    acres: number;
+  };
+  location: {
+    lat: string;
+    lng: string;
+  };
+  irrigation: {
+    irrigation_type_name: string;
+    status: boolean;
+    location: {
+      type: "Point";
+      coordinates: [number, number];
+    };
+    // Optional fields based on irrigation type
+    // plants_per_acre?: number;
+    flow_rate_lph?: number;
+    emitters_count?: number;
+    motor_horsepower?: number;
+    pipe_width_inches?: number;
+    distance_motor_to_plot_m?: number;
+  };
+  documents?: FileList | null;
+}) => {
+  return api.post("/farms/", data);
+};
+
+// Utility function to calculate area from GeoJSON polygon coordinates (in hectares)
+export const calculatePolygonArea = (
+  coordinates: [number, number][]
+): number => {
+  if (coordinates.length < 3) return 0;
+
+  // Use a simple planar approximation for small agricultural plots
+  // This is more suitable for small areas and avoids the large number issue
+  let area = 0;
+
+  for (let i = 0; i < coordinates.length; i++) {
+    const j = (i + 1) % coordinates.length;
+    const [lng1, lat1] = coordinates[i];
+    const [lng2, lat2] = coordinates[j];
+
+    // Use the shoelace formula with a simple planar approximation
+    // For small agricultural plots, this is sufficiently accurate
+    area += ((lng2 - lng1) * (lat2 + lat1)) / 2;
+  }
+
+  // Convert to square meters using a simplified conversion
+  // For small areas, we can use a local approximation
+  const lat = coordinates[0][1]; // Use first coordinate's latitude
+  const latRad = (lat * Math.PI) / 180;
+  const metersPerDegreeLat = 111320; // meters per degree latitude
+  const metersPerDegreeLng = 111320 * Math.cos(latRad); // meters per degree longitude
+
+  const areaSqm = Math.abs(area) * metersPerDegreeLat * metersPerDegreeLng;
+
+  // Convert from square meters to hectares
+  const areaHectares = areaSqm / 10000;
+
+  // Round to exactly 2 decimal places as required by the API
+  return Math.round(areaHectares * 100) / 100;
+};
+
+// Get farmer profile using the dedicated my-profile endpoint
+export const getFarmerMyProfile = () => {
+  // Check if token exists and is valid before making the call
+  const token = getAuthToken();
+  if (!token || !isValidToken(token)) {
+    // Create a silent error that won't be logged to console
+    const error = new Error('No valid authentication token found');
+    (error as any).response = { 
+      status: 403, 
+      data: { detail: 'Authentication credentials were not provided.' } 
+    };
+    (error as any).isSilent = true; // Mark as silent to prevent console logging
+    return Promise.reject(error);
+  }
+  return api.get("/farms/my-profile/");
+};
+
+// Farmer profile API function - uses existing endpoints
+export const getFarmerProfile = async () => {
+  try {
+    // First, get the current user data
+    const userResponse = await api.get("/users/me/");
+    const userData = userResponse.data;
+
+    // Then, get farms for this user using the new API structure
+    let farmsData = [];
+    let plotsData = [];
+    let agriculturalSummary = {
+      total_plots: 0,
+      total_farms: 0,
+      total_irrigations: 0,
+      crop_types: [] as string[],
+      plantation_types: [] as string[],
+      irrigation_types: [] as string[],
+      total_farm_area: 0,
+    };
+
+    try {
+      // Try to get farms by farmer ID using the new API
+      const farmsResponse = await api.get("/farms/?include_farmer=true");
+      const allFarms = farmsResponse.data.results || farmsResponse.data || [];
+
+      // Filter farms for the current user
+      farmsData = allFarms.filter((farm: any) => {
+        // Check different possible field names for farmer ID
+        const farmFarmerId =
+          farm.farmer_id || farm.farmer?.id || farm.user_id || farm.user?.id;
+        const matches = farmFarmerId == userData.id;
+        return matches;
+      });
+
+      // Calculate agricultural summary
+      agriculturalSummary.total_farms = farmsData.length;
+      agriculturalSummary.total_plots = farmsData.length; // Each farm has one plot
+
+      // Extract unique crop types, plantation types, and irrigation types
+      const cropTypes = new Set();
+      const plantationTypes = new Set();
+      const irrigationTypes = new Set();
+      let totalArea = 0;
+
+      farmsData.forEach((farm: any) => {
+        if (farm.crop_type_name) cropTypes.add(farm.crop_type_name);
+        if (farm.plantation_type) plantationTypes.add(farm.plantation_type);
+        if (farm.irrigation_type_name)
+          irrigationTypes.add(farm.irrigation_type_name);
+        if (farm.area_size_numeric) totalArea += farm.area_size_numeric;
+      });
+
+      agriculturalSummary.crop_types = Array.from(cropTypes) as string[];
+      agriculturalSummary.plantation_types = Array.from(
+        plantationTypes
+      ) as string[];
+      agriculturalSummary.irrigation_types = Array.from(
+        irrigationTypes
+      ) as string[];
+      agriculturalSummary.total_farm_area = totalArea;
+
+      // Transform farms data to plots format
+      plotsData = farmsData.map((farm: any, index: number) => ({
+        id: farm.id || index + 1,
+        fastapi_plot_id: farm.farm_uid || `plot_${index + 1}`,
+        gat_number: farm.gat_number || "",
+        plot_number: farm.plot_number || "",
+        address: {
+          village: farm.village || userData.village || "",
+          taluka: farm.taluka || userData.taluka || "",
+          district: farm.district || userData.district || "",
+          state: farm.state || userData.state || "",
+          country: farm.country || "India",
+          pin_code: farm.pin_code || userData.pin_code || "",
+          full_address: `${farm.village || userData.village || ""}, ${
+            farm.taluka || userData.taluka || ""
+          }, ${farm.district || userData.district || ""}, ${
+            farm.state || userData.state || ""
+          }`
+            .replace(/,\s*,/g, ",")
+            .replace(/^,\s*|,\s*$/g, ""),
+        },
+        coordinates: {
+          location: {
+            type: "Point",
+            coordinates: farm.location?.coordinates || [0, 0],
+            latitude: farm.location?.coordinates?.[1] || 0,
+            longitude: farm.location?.coordinates?.[0] || 0,
+          },
+          boundary: {
+            type: "Polygon",
+            coordinates: farm.boundary?.coordinates || [],
+            has_boundary: !!(
+              farm.boundary?.coordinates && farm.boundary.coordinates.length > 0
+            ),
+          },
+        },
+        farms: [
+          {
+            id: farm.id,
+            farm_uid: farm.farm_uid,
+            area_size: farm.area_size,
+            area_size_numeric: farm.area_size_numeric,
+            soil_type: {
+              id: farm.soil_type?.id || 1,
+              name: farm.soil_type?.name || "Loamy",
+            },
+            crop_type: {
+              id: farm.crop_type?.id || 1,
+              crop_type: farm.crop_type_name || "Sugarcane",
+              plantation_type: farm.plantation_type || "adsali",
+              plantation_type_display: farm.plantation_type || "Adsali",
+              planting_method: farm.planting_method || "3_bud",
+              planting_method_display: farm.planting_method || "3 Bud",
+            },
+          },
+        ],
+      }));
+    } catch (farmsError: any) {
+      // Continue with empty farms data
+    }
+
+    // Transform the data to match the expected farmer profile structure
+    const transformedData = {
+      success: true,
+      farmer_profile: {
+        id: userData.id,
+        username: userData.username,
+        email: userData.email,
+        personal_info: {
+          first_name: userData.first_name || "",
+          last_name: userData.last_name || "",
+          full_name: `${userData.first_name || ""} ${
+            userData.last_name || ""
+          }`.trim(),
+          phone_number: userData.phone_number || "",
+          profile_picture: null,
+        },
+        address_info: {
+          address: userData.address || "",
+          village: userData.village || "",
+          district: userData.district || "",
+          state: userData.state || "",
+          taluka: userData.taluka || "",
+          full_address: `${userData.address || ""}, ${
+            userData.village || ""
+          }, ${userData.taluka || ""}, ${userData.district || ""}, ${
+            userData.state || ""
+          }`
+            .replace(/,\s*,/g, ",")
+            .replace(/^,\s*|,\s*$/g, ""),
+        },
+        role: {
+          id: userData.role_id || userData.role || 1,
+          name: userData.role || "farmer",
+          display_name: userData.role || "Farmer",
+        },
+      },
+      agricultural_summary: agriculturalSummary,
+      plots: plotsData,
+    };
+
+    return transformedData;
+  } catch (error: any) {
+
+    if (error.response?.status === 401) {
+      throw new Error("Authentication failed. Please login again.");
+    } else if (error.response?.status === 403) {
+      throw new Error(
+        "Access denied. You may not have permission to access farmer profile."
+      );
+    } else if (error.response?.status >= 500) {
+      throw new Error("Server error. Please try again later.");
+    } else {
+      throw new Error(
+        `Failed to fetch farmer profile: ${
+          error.response?.data?.detail || error.message
+        }`
+      );
+    }
+  }
+};
+
+// All-in-one farmer registration API for field officers
+// Note: This endpoint should NOT require authentication since users are registering for the first time
+export const registerFarmerAllInOne = async (data: {
+  farmer: {
+    username: string;
+    email: string;
+    password: string;
+    first_name: string;
+    last_name: string;
+    phone_number: string;
+    address: string;
+    village: string;
+    district: string;
+    state: string;
+    taluka: string;
+  };
+  plot: {
+    gat_number: string;
+    plot_number: string;
+    village: string;
+    taluka: string;
+    district: string;
+    state: string;
+    country: string;
+    pin_code: string;
+    location: {
+      type: "Point";
+      coordinates: [number, number]; // [longitude, latitude]
+    };
+    boundary: {
+      type: "Polygon";
+      coordinates: [[[number, number]]]; // GeoJSON Polygon coordinates
+    };
+  };
+  farm: {
+    address: string;
+    area_size: string;
+    soil_type_name: string;
+    crop_type_name: string;
+    plantation_type: string;
+    planting_method: string;
+  };
+  irrigation: {
+    irrigation_type_name: string;
+    status: boolean;
+    location: {
+      type: "Point";
+      coordinates: [number, number];
+    };
+    // Optional fields based on irrigation type
+    // plants_per_acre?: number;
+    flow_rate_lph?: number;
+    emitters_count?: number;
+    motor_horsepower?: number;
+    pipe_width_inches?: number;
+    distance_motor_to_plot_m?: number;
+  };
+}) => {
+  try {
+    // Check if user is authenticated - registration endpoint REQUIRES authentication
+    const token = getAuthToken();
+    
+    // Registration endpoint requires authentication (Field Officers/Admins register farmers)
+    if (!token || !isValidToken(token)) {
+      const errorMsg = "Authentication required. Please login as a Field Officer or Admin to register farmers.";
+      const error = new Error(errorMsg);
+      (error as any).response = { 
+        status: 401, 
+        data: { detail: errorMsg } 
+      };
+      (error as any).requiresAuth = true;
+      throw error;
+    }
+    
+    // Use authenticated API for registration
+    const response = await api.post("/farms/register-farmer/", data);
+    return response;
+  } catch (error: any) {
+    // Provide better error messages
+    if (error.response?.status === 401 || error.response?.status === 403 || error.requiresAuth) {
+      const errorMsg = error.response?.data?.detail || error.response?.data?.message || error.message || "Authentication credentials were not provided. Please login as a Field Officer or Admin to register farmers.";
+      const authError = new Error(errorMsg);
+      (authError as any).response = error.response || { 
+        status: 401, 
+        data: { detail: errorMsg } 
+      };
+      (authError as any).requiresAuth = true;
+      throw authError;
+    }
+    throw error;
+  }
+};
+
+// Convert plot data to the new bulk API format (multiple plots in one request)
+const convertToBulkFormat = (formData: any, plots: any[]) => {
+  const plotsData = plots.map((plot) => {
+    // Calculate center coordinates for location
+    const coordinates = plot.geometry.coordinates[0];
+    const centerLng =
+      coordinates.reduce((sum: number, coord: number[]) => sum + coord[0], 0) /
+      coordinates.length;
+    const centerLat =
+      coordinates.reduce((sum: number, coord: number[]) => sum + coord[1], 0) /
+      coordinates.length;
+
+    return {
+      plot: {
+        gat_number: plot.Group_Gat_No || plot.GroupGatNo || "",
+        plot_number: plot.Gat_No_Id || plot.GatNoId || "",
+        village: plot.village || formData.district,
+        taluka: formData.taluka,
+        district: formData.district,
+        state: formData.state,
+        country: "India",
+        pin_code: plot.pin_code || "422605",
+        location: {
+          type: "Point" as const,
+          coordinates: [centerLng, centerLat] as [number, number],
+        },
+      },
+      farm: {
+        address: `${plot.village || formData.district}, ${formData.taluka}, ${formData.district}`,
+        area_size: plot.area?.ha?.toString() || plot.area_size || "1.0",
+        spacing_a: plot.spacing_A || plot.spacing_a || "3.0",
+        spacing_b: plot.spacing_B || plot.spacing_b || "1.5",
+        soil_type_name: plot.soil_Type || plot.soil_type_name || "Black Soil",
+        crop_type_name: plot.crop_Type || plot.crop_type_name || "Sugarcane",
+        plantation_type: plot.plantation_Type || plot.plantation_type || "adsali",
+      },
+      irrigation: {
+        irrigation_type_name: plot.irrigation_Type || plot.irrigation_type_name || "drip",
+        status: true,
+        ...(plot.irrigation_Type === "drip" || plot.irrigation_type_name === "drip"
+          ? {
+              flow_rate_lph: parseFloat(plot.flow_Rate || plot.flow_rate_lph) || 2.0,
+              emitters_count: parseInt(plot.emitters || plot.emitters_count) || 120,
+            }
+          : plot.irrigation_Type === "flood" || plot.irrigation_type_name === "flood"
+          ? {
+              motor_horsepower: parseFloat(plot.motor_Horsepower || plot.motor_horsepower) || 7.5,
+              pipe_width_inches: parseFloat(plot.pipe_Width || plot.pipe_width_inches) || 4.0,
+              distance_motor_to_plot_m: parseFloat(plot.distance_From_Motor || plot.distance_motor_to_plot_m) || 50.0,
+            }
+          : {}),
+      },
+    };
+  });
+
+  return {
+    farmer: {
+      username: formData.username,
+      email: formData.email,
+      password: formData.password,
+      first_name: formData.first_name,
+      last_name: formData.last_name,
+      phone_number: formData.phone_number,
+      address: formData.address,
+      village: formData.district, // Use district as village if not specified
+      district: formData.district,
+      state: formData.state,
+      taluka: formData.taluka,
+    },
+    plots: plotsData,
+  };
+};
+
+// Simplified farmer registration - uses ONLY all-in-one API for ALL users
+// Now handles MULTIPLE plots - tries bulk endpoint first, falls back to individual submissions
+export const registerFarmerAllInOneOnly = async (
+  formData: any,
+  plots: any[]
+) => {
+  try {
+    // Check if user is authenticated - registration endpoint REQUIRES authentication
+    const token = getAuthToken();
+    
+    if (!token || !isValidToken(token)) {
+      const errorMsg = "Authentication required. Please login as a Field Officer or Admin to register farmers.";
+      const error = new Error(errorMsg);
+      (error as any).response = { 
+        status: 401, 
+        data: { detail: errorMsg } 
+      };
+      (error as any).requiresAuth = true;
+      throw error;
+    }
+
+    // Try bulk registration first (all plots in one request)
+    try {
+      const bulkPayload = convertToBulkFormat(formData, plots);
+      const response = await api.post("/farms/register-farmer/", bulkPayload);
+      return response;
+    } catch (bulkError: any) {
+      // If bulk endpoint doesn't exist or fails, fall back to individual submissions
+      if (bulkError.response?.status === 404 || bulkError.response?.status === 405) {
+        // Convert form data and plots to all-in-one format (returns array of payloads)
+        const allInOneDataArray = convertToAllInOneFormat(formData, plots);
+        
+        // Submit each plot separately
+        const results = [];
+        for (let i = 0; i < allInOneDataArray.length; i++) {
+          const plotData = allInOneDataArray[i];
+          
+          const result = await registerFarmerAllInOne(plotData);
+          results.push(result);
+          
+          // Small delay between submissions to avoid overwhelming the server
+          if (i < allInOneDataArray.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+        return results;
+      }
+      // Re-throw if it's a different error (like validation or auth)
+      throw bulkError;
+    }
+  } catch (error: any) {
+    // Only log non-authentication errors to console
+    // Authentication errors are expected and handled by the UI
+    if (!error.requiresAuth && error.response?.status !== 401 && error.response?.status !== 403) {
+      console.error('Error in registerFarmerAllInOneOnly:', error);
+    }
+    throw error;
+  }
+};
+
+// Helper function to convert a single plot to all-in-one API format
+const convertSinglePlotToAllInOneFormat = (formData: any, plot: any) => {
+  // Calculate center coordinates for location
+  const coordinates = plot.geometry.coordinates[0];
+
+  const centerLng =
+    coordinates.reduce((sum: number, coord: number[]) => sum + coord[0], 0) /
+    coordinates.length;
+  const centerLat =
+    coordinates.reduce((sum: number, coord: number[]) => sum + coord[1], 0) /
+    coordinates.length;
+
+  const payload = {
+    farmer: {
+      username: formData.username,
+      email: formData.email,
+      password: formData.password,
+      first_name: formData.first_name,
+      last_name: formData.last_name,
+      phone_number: formData.phone_number,
+      address: formData.address,
+      village: plot.village || formData.district,
+      district: formData.district,
+      state: formData.state,
+      taluka: formData.taluka,
+    },
+    plot: {
+      gat_number: plot.Group_Gat_No || plot.GroupGatNo || "",
+      plot_number: plot.Gat_No_Id || plot.GatNoId || "",
+      village: plot.village || formData.district,
+      taluka: formData.taluka,
+      district: formData.district,
+      state: formData.state,
+      country: "India",
+      pin_code: plot.pin_code || "422605",
+      location: {
+        type: "Point" as const,
+        coordinates: [centerLng, centerLat] as [number, number],
+      },
+      boundary: {
+        type: "Polygon" as const,
+        coordinates: [
+          coordinates.map((coord: number[]) => [coord[0], coord[1]]),
+        ] as [[[number, number]]],
+      },
+    },
+    farm: {
+      address: `${plot.village || formData.district}, ${
+        formData.taluka
+      }, ${formData.district}`,
+      area_size: plot.area.ha.toString(),
+      plantation_date: plot.plantation_Date || "2024-01-15",
+      spacing_a: plot.spacing_A || "3.0",
+      spacing_b: plot.spacing_B || "1.5",
+      soil_type_name: "Loamy", // Default - you can make this dynamic
+      crop_type_name: "Sugarcane", // Fixed as per your requirement
+      plantation_type: plot.plantation_Type || "adsali",
+      planting_method: plot.plantation_Method || "3_bud",
+    },
+    irrigation: {
+      irrigation_type_name: plot.irrigation_Type || "drip",
+      status: true,
+      location: {
+        type: "Point" as const,
+        coordinates: [centerLng, centerLat] as [number, number],
+      },
+      // Conditional irrigation details based on type
+      ...(plot.irrigation_Type === "drip"
+        ? {
+            plants_per_acre:
+              parseFloat(plot.spacing_A) &&
+              parseFloat(plot.spacing_B)
+                ? Math.floor(
+                    43560 /
+                      (parseFloat(plot.spacing_A) *
+                        parseFloat(plot.spacing_B))
+                  )
+                : 2000,
+            flow_rate_lph: parseFloat(plot.flow_Rate) || 2.5,
+            emitters_count: parseInt(plot.emitters) || 150,
+          }
+        : plot.irrigation_Type === "flood"
+        ? {
+            motor_horsepower: parseFloat(plot.motor_Horsepower) || 7.5,
+            pipe_width_inches: parseFloat(plot.pipe_Width) || 6.0,
+            distance_motor_to_plot_m:
+              parseFloat(plot.distance_From_Motor) || 75.0,
+          }
+        : {}),
+    },
+  };
+
+  // Validate that GAT and plot numbers are provided
+  if (!payload.plot.gat_number || payload.plot.gat_number.trim() === "") {
+    throw new Error(
+      "GAT Number is required. Please fill in the GAT Number field in the form."
+    );
+  }
+  if (!payload.plot.plot_number || payload.plot.plot_number.trim() === "") {
+    throw new Error(
+      "Plot Number is required. Please fill in the Plot Number field in the form."
+    );
+  }
+
+  // Validate the payload before returning
+  validateAllInOnePayload(payload);
+
+  return payload;
+};
+
+// Helper function to convert form data to all-in-one API format for ALL plots
+const convertToAllInOneFormat = (formData: any, plots: any[]) => {
+  if (!plots || plots.length === 0) {
+    throw new Error("At least one plot is required for registration");
+  }
+
+  // Return array of payloads - one for each plot
+  return plots.map((plot, index) => convertSinglePlotToAllInOneFormat(formData, plot));
+};
+
+// ==================== SYSTEM/UTILITY API ====================
+
+/**
+ * Refreshes various microservice endpoints after a new farm/plot registration.
+ * This ensures that other services are aware of the newly created data.
+ *
+ * It calls multiple endpoints in parallel and returns the results.
+ */
+export const refreshApiEndpoints = async () => {
+  const refreshEndpoints = [
+    "https://dev-plot.cropeye.ai/refresh-from-django",
+    "https://dev-soil.cropeye.ai/refresh-from-django",
+    "https://dev-events.cropeye.ai/refresh-from-django",
+    "https://dev-field.cropeye.ai/refresh-from-django",
+  ];
+
+  const refreshPromises = refreshEndpoints.map((endpoint) =>
+    api.post(endpoint, {}).then(
+      (response) => {
+        return { endpoint, status: "success", ok: true, response };
+      },
+      (error) => {
+        return {
+          endpoint,
+          status: "failed",
+          ok: false,
+          error: error.response?.data || error.message,
+        };
+      }
+    )
+  );
+
+  // Use Promise.allSettled to ensure all promises complete, regardless of success or failure
+  const results = await Promise.allSettled(refreshPromises);
+  return results;
+};
+
+// Debug function to validate data format before sending
+export const validateAllInOnePayload = (payload: any) => {
+  const errors: string[] = [];
+
+  // Validate farmer object
+  if (!payload.farmer) {
+    errors.push("Missing 'farmer' object");
+  } else {
+    const requiredFarmerFields = [
+      "username",
+      "email",
+      "password",
+      "first_name",
+      "last_name",
+      "phone_number",
+    ];
+    requiredFarmerFields.forEach((field) => {
+      if (!payload.farmer[field]) {
+        errors.push(`Missing farmer.${field}`);
+      }
+    });
+  }
+
+  // Validate plot object
+  if (!payload.plot) {
+    errors.push("Missing 'plot' object");
+  } else {
+    const requiredPlotFields = [
+      "gat_number",
+      "plot_number",
+      "village",
+      "location",
+      "boundary",
+    ];
+    requiredPlotFields.forEach((field) => {
+      if (!payload.plot[field]) {
+        errors.push(`Missing plot.${field}`);
+      }
+    });
+
+    // Validate location format
+    if (payload.plot.location) {
+      if (payload.plot.location.type !== "Point") {
+        errors.push("plot.location.type must be 'Point'");
+      }
+      if (
+        !Array.isArray(payload.plot.location.coordinates) ||
+        payload.plot.location.coordinates.length !== 2
+      ) {
+        errors.push("plot.location.coordinates must be [longitude, latitude]");
+      }
+    }
+
+    // Validate boundary format
+    if (payload.plot.boundary) {
+      if (payload.plot.boundary.type !== "Polygon") {
+        errors.push("plot.boundary.type must be 'Polygon'");
+      }
+      if (!Array.isArray(payload.plot.boundary.coordinates)) {
+        errors.push("plot.boundary.coordinates must be an array");
+      }
+    }
+  }
+
+  // Validate farm object
+  if (!payload.farm) {
+    errors.push("Missing 'farm' object");
+  } else {
+    const requiredFarmFields = ["address", "area_size"];
+    requiredFarmFields.forEach((field) => {
+      if (!payload.farm[field]) {
+        errors.push(`Missing farm.${field}`);
+      }
+    });
+  }
+
+  // Validate irrigation object
+  if (!payload.irrigation) {
+    errors.push("Missing 'irrigation' object");
+  }
+
+  if (errors.length > 0) {
+    return false;
+  }
+
+  return true;
+};
+
+// KML/GeoJSON API functions
+export const getKMLData = async () => {
+  try {
+    const response = await axios.get(KML_API_URL);
+    return response.data;
+  } catch (error: any) {
+    throw new Error(
+      `Failed to fetch KML data: ${
+        error.response?.data?.detail || error.message
+      }`
+    );
+  }
+};
+
+// Get KML data with authentication (if needed)
+export const getKMLDataWithAuth = async (token?: string) => {
+  const headers: any = {
+    "Content-Type": "application/json",
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  try {
+    const response = await axios.get(KML_API_URL, { headers });
+    return response.data;
+  } catch (error: any) {
+    throw new Error(
+      `Failed to fetch KML data: ${
+        error.response?.data?.detail || error.message
+      }`
+    );
+  }
+};
+
+export default api;
