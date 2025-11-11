@@ -23,7 +23,6 @@ import {
   MapPin,
 } from "lucide-react";
 import { EditControl } from "react-leaflet-draw";
-import html2canvas from "html2canvas";
 import "leaflet/dist/leaflet.css"; // It's good practice to import CSS at the top level of your component file.
 import "leaflet-draw/dist/leaflet.draw.css";
 import L from "leaflet";
@@ -32,8 +31,6 @@ import {
   registerFarmerAllInOneOnly,
   refreshApiEndpoints,
 } from "../api";
-import * as turf from "@turf/turf";
-
 // Fix default marker icons for Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -121,6 +118,51 @@ const getTalukasByDistrict = (state: string, district: string): string[] => {
 
 const plantationTypes = ["Adsali", "Suru", "Pre-seasonal", "Ratoon"];
 const plantationMethods = ["3 bud", "2 bud", "1 bud", "1 bud (Stip Method)"];
+
+const SQUARE_METERS_PER_ACRE = 4046.8564224;
+
+function calculateAreaMetricsFromGeometry(geometry: any) {
+  if (!geometry || geometry.type !== "Polygon" || !Array.isArray(geometry.coordinates)) {
+    return null;
+  }
+
+  const coordinates = geometry.coordinates[0];
+  if (!coordinates || coordinates.length < 4) {
+    return null;
+  }
+
+  const polygonCoordinates = coordinates as Array<[number, number]>;
+
+  const projectedPoints = polygonCoordinates.map((coordinate) => {
+    if (!coordinate || coordinate.length < 2) {
+      return null;
+    }
+    const [lng, lat] = coordinate;
+    const projected = L.CRS.EPSG3857.project(L.latLng(lat, lng));
+    return [projected.x, projected.y] as [number, number];
+  }).filter(Boolean) as Array<[number, number]>;
+
+  if (projectedPoints.length < 4) {
+    return null;
+  }
+
+  let areaSqMeters = 0;
+  for (let i = 0; i < projectedPoints.length; i++) {
+    const [x1, y1] = projectedPoints[i];
+    const [x2, y2] = projectedPoints[(i + 1) % projectedPoints.length];
+    areaSqMeters += x1 * y2 - x2 * y1;
+  }
+
+  const areaSqm = Math.abs(areaSqMeters) / 2;
+  const areaAcres = areaSqm / SQUARE_METERS_PER_ACRE;
+  const areaHa = areaSqm / 10_000;
+
+  return {
+    sqm: areaSqm,
+    ha: areaHa,
+    acres: areaAcres,
+  };
+}
 
 function RecenterMap({ latlng }: { latlng: [number, number] }) {
   const map = useMap();
@@ -335,17 +377,17 @@ function AddFarm() {
     }
   }, [formData.district]);
 
-  // Calculate total area from all plots
   const getTotalArea = () => {
     return plots.reduce(
       (total, plot) => ({
-        sqm: total.sqm + plot.area.sqm,
-        ha: total.ha + plot.area.ha,
-        acres: total.acres + plot.area.acres,
+        sqm: total.sqm + (plot.area?.sqm || 0),
+        ha: total.ha + (plot.area?.ha || 0),
+        acres: total.acres + (plot.area?.acres || 0),
       }),
       { sqm: 0, ha: 0, acres: 0 }
     );
   };
+
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -590,16 +632,13 @@ function AddFarm() {
         return;
       }
 
-      // Calculate area using turf.js
-      const areaSqm = turf.area(geoJson); // in square meters
-      const areaHa = areaSqm / 10000;
-      const areaAcres = areaSqm / 4046.85642;
+      // Calculate area using degree-to-meter conversion (aligns with backend logic)
+      const areaMetrics = calculateAreaMetricsFromGeometry(geoJson.geometry);
 
-      const newPlotArea = {
-        sqm: areaSqm,
-        ha: areaHa,
-        acres: areaAcres,
-      };
+      if (!areaMetrics) {
+        setAreaError("Unable to calculate area for this polygon. Please redraw.");
+        return;
+      }
 
       setAreaError(null);
 
@@ -607,7 +646,11 @@ function AddFarm() {
       const newPlot: Plot = {
         id: `plot-${Date.now()}`,
         geometry: geoJson.geometry,
-        area: newPlotArea,
+        area: {
+          sqm: areaMetrics.sqm,
+          ha: areaMetrics.ha,
+          acres: areaMetrics.acres,
+        },
         layer: layer,
         Group_Gat_No: "",
         Gat_No_Id: "",
@@ -640,7 +683,7 @@ function AddFarm() {
       const plotMarker = L.marker(center, {
         icon: L.divIcon({
           className: "plot-label",
-          html: `<div style="background: white; border: 2px solid #059669; border-radius: 4px; padding: 4px 8px; font-weight: bold; font-size: 12px; color: #059669;">Plot ${plotNumber}<br/>${areaAcres.toFixed(
+          html: `<div style="background: white; border: 2px solid #059669; border-radius: 4px; padding: 4px 8px; font-weight: bold; font-size: 12px; color: #059669;">Plot ${plotNumber}<br/>${areaMetrics.acres.toFixed(
             2
           )} acres</div>`,
           iconSize: [80, 40],
@@ -741,19 +784,6 @@ function AddFarm() {
 
       return prev.filter((p) => p.id !== plotId);
     });
-  };
-
-  const handleCaptureMap = async () => {
-    const container = document.querySelector(
-      ".leaflet-container"
-    ) as HTMLElement;
-    if (container) {
-      const canvas = await html2canvas(container);
-      const link = document.createElement("a");
-      link.download = "farm-map.png";
-      link.href = canvas.toDataURL();
-      link.click();
-    }
   };
 
   // Handle file input changes
@@ -1010,13 +1040,12 @@ function AddFarm() {
 
     try {
       // Use all-in-one registration API for all users
-      const registrationResult = await registerFarmerAllInOneOnly(
+      await registerFarmerAllInOneOnly(
         formData,
         plots
       );
 
       // SUCCESS: Registration completed
-      const totalArea = getTotalArea();
       setSubmitStatus("success");
 
       // Success message for all-in-one API
@@ -1978,8 +2007,7 @@ The farmer can now login with Email credentials to access the dashboard and moni
                                 Plot {index + 1}
                               </span>
                               <div className="text-xs sm:text-sm text-gray-600">
-                                {plot.area.acres.toFixed(2)} acres (
-                                {plot.area.ha.toFixed(2)} hectares)
+                                {plot.area.acres.toFixed(2)} acres
                               </div>
                             </div>
                             {plot.isSaved ? (
@@ -2115,8 +2143,7 @@ The farmer can now login with Email credentials to access the dashboard and moni
 
                   <div className="mt-6 pt-4 border-t border-green-300">
                     <div className="text-lg font-bold text-green-900">
-                      Total Area: {totalArea.acres.toFixed(2)} acres (
-                      {totalArea.ha.toFixed(2)} hectares)
+                      Total Area: {totalArea.acres.toFixed(2)} acres 
                     </div>
                     <div className="text-sm text-green-700">
                       {plots.length} plot{plots.length !== 1 ? "s" : ""} •{" "}

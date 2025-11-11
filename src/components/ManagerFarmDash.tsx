@@ -364,7 +364,7 @@ const ManagerFarmDash: React.FC = () => {
       let allPlotsData = getCache(agroStatsCacheKey);
       if (!allPlotsData) {
         const agroStatsRes = await axios.get(
-          `https://dev-soil.cropeye.ai/plots/agroStats?end_date=${today}`
+          `https://dev-events.cropeye.ai/plots/agroStats?end_date=${today}`
         );
         allPlotsData = agroStatsRes.data;
         setCache(agroStatsCacheKey, allPlotsData);

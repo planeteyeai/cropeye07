@@ -427,7 +427,7 @@ const Map: React.FC<MapProps> = ({
     try {
       console.log("Fetching water uptake data for plot:", plotName, "end_date:", currentEndDate);
       const resp = await fetch(
-        `https://dev-plot.cropeye.ai/wateruptake?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`,
+        `http://192.168.41.80:3030/wateruptake_combined?plot_name=${plotName}&end_date=${currentEndDate}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -456,7 +456,7 @@ const Map: React.FC<MapProps> = ({
     try {
       console.log("Fetching soil moisture data for plot:", plotName, "end_date:", currentEndDate);
       const resp = await fetch(
-        `https://dev-plot.cropeye.ai/SoilMoisture?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`,
+        `https://dev-plot.cropeye.ai/SoilMoisture?plot_name=${plotName}&end_date=${currentEndDate}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

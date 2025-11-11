@@ -100,7 +100,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           renderMenu('Harvesting Planning', <GiSugarCane size={20} />),
           renderMenu('Agroclimatic', <Cloud size={20} />),
           renderMenu('Resources', <ShoppingBag size={20} />),
-          renderMenu('Plot Birde View', <BarChart3 size={20} />),
+          // renderMenu('Plot Birde View', <BarChart3 size={20} />),
           renderMenu('TeamConnect', <List size={20} />, ['Team List']),
           renderMenu('User Desk', <Users size={20} />, ['Contactuser']),
           
@@ -111,7 +111,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           renderMenu('Harvesting Planning', <GiSugarCane size={20} />),
           renderMenu('Agroclimatic', <Cloud size={20} />),
           renderMenu('Resources', <ShoppingBag size={20} />),
-          renderMenu('Plot Birde View', <BarChart3 size={20} />),
+          // renderMenu('Plot Birde View', <BarChart3 size={20} />),
           renderMenu('TeamConnect', <List size={20} />, ['Team List']),
           renderMenu('User Desk', <Users size={20} />, ['Contactuser']),
           

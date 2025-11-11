@@ -4,11 +4,40 @@ import { getRecentFarmers } from '../api';
 
 const ITEMS_PER_PAGE = 5;
 
+const ACRES_PER_HECTARE = 2.47105381;
+const HECTARES_PER_ACRE = 1 / ACRES_PER_HECTARE;
+
+const parseNumericValue = (value: unknown): number => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+  if (typeof value === "string") {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
+
+const hectaresToAcres = (value: unknown): number => parseNumericValue(value) * ACRES_PER_HECTARE;
+const acresToHectares = (value: unknown): number => parseNumericValue(value) * HECTARES_PER_ACRE;
+
+const formatAcresValue = (value: unknown, fractionDigits = 2): string =>
+  parseNumericValue(value).toFixed(fractionDigits);
+
+const formatAcresFromHectaresOrNA = (value: unknown, fractionDigits = 2): string => {
+  if (value === null || value === undefined || value === "") {
+    return "N/A";
+  }
+  const acres = hectaresToAcres(value);
+  return Number.isFinite(acres) ? acres.toFixed(fractionDigits) : "N/A";
+};
+
 interface Farmer {
   id: number;
   farmer_name: string;
   phone_number: string;
   area: number;
+  area_hectares?: number;
   plantation_type: string;
   variety_type: string;
   farmer?: {
@@ -93,12 +122,15 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
           
           console.log('First farm data:', firstFarm);
           console.log('First irrigation data:', firstIrrigation);
-          
+
+          const farmAreaHectares = firstFarm ? parseNumericValue(firstFarm.area_size) : 0;
+          const farmAreaAcresRaw = firstFarm ? hectaresToAcres(firstFarm.area_size) : 0;
           const transformed = {
             id: farmer.id,
             farmer_name: farmer.username || `${farmer.first_name || ''} ${farmer.last_name || ''}`.trim() || 'N/A',
             phone_number: farmer.phone_number || 'N/A',
-            area: firstFarm ? parseFloat(firstFarm.area_size) || 0 : 0,
+            area: Number(farmAreaAcresRaw.toFixed(2)),
+            area_hectares: Number(farmAreaHectares.toFixed(4)),
             plantation_type: firstFarm?.plantation_type || 'N/A',
             variety_type: firstFarm?.crop_type || 'N/A',
             farmer: {
@@ -245,6 +277,9 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
     ]);
     
     // Add farmer data row
+    const totalAreaAcres = formatAcresValue(farmer.area);
+    const totalAreaHectares = acresToHectares(farmer.area).toFixed(2);
+
     const farmerRow = [
       farmer.id,
       farmer.farmer_name,
@@ -258,8 +293,8 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
       farmer.district || 'N/A',
       farmer.taluka || 'N/A',
       farmer.created_at ? new Date(farmer.created_at).toLocaleDateString('en-GB') : 'N/A',
-      farmer.area,
-      (farmer.area * 0.404686).toFixed(2),
+      totalAreaAcres,
+      totalAreaHectares,
       farmer.plantation_type,
       farmer.variety_type,
       farmer.irrigation?.irrigation_type || 'N/A',
@@ -311,7 +346,7 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                 detailedRow[20] = plot.id || 'N/A'; // Plot ID
                 detailedRow[21] = plot.plot_number || 'N/A'; // Plot Number
                 detailedRow[22] = plot.gat_number || 'N/A'; // Gat Number
-                detailedRow[23] = plot.area_size || 'N/A'; // Plot Area Size
+                detailedRow[23] = formatAcresFromHectaresOrNA(plot.area_size); // Plot Area Size (acres)
                 detailedRow[24] = plot.village || 'N/A'; // Plot Village
                 detailedRow[25] = plot.state || 'N/A'; // Plot State
                 detailedRow[26] = plot.district || 'N/A'; // Plot District
@@ -323,7 +358,7 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                 // Fill farm data
                 detailedRow[31] = farm.id || 'N/A'; // Farm ID
                 detailedRow[32] = farm.farm_uid || 'N/A'; // Farm UID
-                detailedRow[33] = farm.area_size || 'N/A'; // Farm Area Size
+                detailedRow[33] = formatAcresFromHectaresOrNA(farm.area_size); // Farm Area Size (acres)
                 detailedRow[34] = farm.crop_type || 'N/A'; // Crop Type
                 detailedRow[35] = farm.plantation_type || 'N/A'; // Farm Plantation Type
                 detailedRow[36] = farm.planting_method || 'N/A'; // Planting Method
@@ -350,7 +385,7 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
               farmRow[20] = plot.id || 'N/A';
               farmRow[21] = plot.plot_number || 'N/A';
               farmRow[22] = plot.gat_number || 'N/A';
-              farmRow[23] = plot.area_size || 'N/A';
+              farmRow[23] = formatAcresFromHectaresOrNA(plot.area_size);
               farmRow[24] = plot.village || 'N/A';
               farmRow[25] = plot.state || 'N/A';
               farmRow[26] = plot.district || 'N/A';
@@ -362,7 +397,7 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
               // Fill farm data
               farmRow[31] = farm.id || 'N/A';
               farmRow[32] = farm.farm_uid || 'N/A';
-              farmRow[33] = farm.area_size || 'N/A';
+              farmRow[33] = formatAcresFromHectaresOrNA(farm.area_size);
               farmRow[34] = farm.crop_type || 'N/A';
               farmRow[35] = farm.plantation_type || 'N/A';
               farmRow[36] = farm.planting_method || 'N/A';
@@ -379,7 +414,7 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
           plotRow[20] = plot.id || 'N/A';
           plotRow[21] = plot.plot_number || 'N/A';
           plotRow[22] = plot.gat_number || 'N/A';
-          plotRow[23] = plot.area_size || 'N/A';
+          plotRow[23] = formatAcresFromHectaresOrNA(plot.area_size);
           plotRow[24] = plot.village || 'N/A';
           plotRow[25] = plot.state || 'N/A';
           plotRow[26] = plot.district || 'N/A';
@@ -477,6 +512,9 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
     // Process each selected farmer
     selectedFarmersData.forEach((farmer) => {
       // Create base farmer row
+      const totalAreaAcres = formatAcresValue(farmer.area);
+      const totalAreaHectares = acresToHectares(farmer.area).toFixed(2);
+
       const farmerRow = [
         farmer.id,
         farmer.farmer_name,
@@ -490,8 +528,8 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
         farmer.district || 'N/A',
         farmer.taluka || 'N/A',
         farmer.created_at ? new Date(farmer.created_at).toLocaleDateString('en-GB') : 'N/A',
-        farmer.area,
-        (farmer.area * 0.404686).toFixed(2),
+        totalAreaAcres,
+        totalAreaHectares,
         farmer.plantation_type,
         farmer.variety_type,
         farmer.irrigation?.irrigation_type || 'N/A',
@@ -543,7 +581,7 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                   detailedRow[20] = plot.id || 'N/A'; // Plot ID
                   detailedRow[21] = plot.plot_number || 'N/A'; // Plot Number
                   detailedRow[22] = plot.gat_number || 'N/A'; // Gat Number
-                  detailedRow[23] = plot.area_size || 'N/A'; // Plot Area Size
+                detailedRow[23] = formatAcresFromHectaresOrNA(plot.area_size); // Plot Area Size (acres)
                   detailedRow[24] = plot.village || 'N/A'; // Plot Village
                   detailedRow[25] = plot.state || 'N/A'; // Plot State
                   detailedRow[26] = plot.district || 'N/A'; // Plot District
@@ -555,7 +593,7 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                   // Fill farm data
                   detailedRow[31] = farm.id || 'N/A'; // Farm ID
                   detailedRow[32] = farm.farm_uid || 'N/A'; // Farm UID
-                  detailedRow[33] = farm.area_size || 'N/A'; // Farm Area Size
+                detailedRow[33] = formatAcresFromHectaresOrNA(farm.area_size); // Farm Area Size (acres)
                   detailedRow[34] = farm.crop_type || 'N/A'; // Crop Type
                   detailedRow[35] = farm.plantation_type || 'N/A'; // Farm Plantation Type
                   detailedRow[36] = farm.planting_method || 'N/A'; // Planting Method
@@ -582,7 +620,7 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                 farmRow[20] = plot.id || 'N/A';
                 farmRow[21] = plot.plot_number || 'N/A';
                 farmRow[22] = plot.gat_number || 'N/A';
-                farmRow[23] = plot.area_size || 'N/A';
+              farmRow[23] = formatAcresFromHectaresOrNA(plot.area_size);
                 farmRow[24] = plot.village || 'N/A';
                 farmRow[25] = plot.state || 'N/A';
                 farmRow[26] = plot.district || 'N/A';
@@ -594,7 +632,7 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                 // Fill farm data
                 farmRow[31] = farm.id || 'N/A';
                 farmRow[32] = farm.farm_uid || 'N/A';
-                farmRow[33] = farm.area_size || 'N/A';
+              farmRow[33] = formatAcresFromHectaresOrNA(farm.area_size);
                 farmRow[34] = farm.crop_type || 'N/A';
                 farmRow[35] = farm.plantation_type || 'N/A';
                 farmRow[36] = farm.planting_method || 'N/A';
@@ -611,7 +649,7 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
             plotRow[20] = plot.id || 'N/A';
             plotRow[21] = plot.plot_number || 'N/A';
             plotRow[22] = plot.gat_number || 'N/A';
-            plotRow[23] = plot.area_size || 'N/A';
+            plotRow[23] = formatAcresFromHectaresOrNA(plot.area_size);
             plotRow[24] = plot.village || 'N/A';
             plotRow[25] = plot.state || 'N/A';
             plotRow[26] = plot.district || 'N/A';
@@ -651,7 +689,7 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
     (user) =>
       user.farmer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.phone_number.toString().includes(searchTerm) ||
-      user.area.toString().includes(searchTerm) ||
+      formatAcresValue(user.area).includes(searchTerm) ||
       user.plantation_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.variety_type.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -745,7 +783,7 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                     </td>
                     <td className="px-4 py-2 font-medium">{user.farmer_name}</td>
                     <td className="px-4 py-2">{user.phone_number}</td>
-                    <td className="px-4 py-2">{user.area} acres</td>
+                    <td className="px-4 py-2">{formatAcresValue(user.area)} acres</td>
                     <td className="px-4 py-2">{user.plantation_type}</td>
                     <td className="px-4 py-2">{user.variety_type}</td>
                     <td className="px-4 py-2 space-x-3">
@@ -849,7 +887,7 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
                       <span className="text-gray-500">Area:</span>
-                      <p className="font-medium">{user.area} acres</p>
+                      <p className="font-medium">{formatAcresValue(user.area)} acres</p>
                     </div>
                     <div>
                       <span className="text-gray-500">Plantation:</span>
@@ -959,7 +997,7 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                   <h3 className="text-base sm:text-lg font-semibold text-gray-800">Total Farm Area</h3>
                 </div>
                 <p className="text-lg sm:text-2xl font-bold text-green-600">
-                  {selectedFarmer.area} acres ({(selectedFarmer.area * 0.404686).toFixed(2)} hectares)
+                  {formatAcresValue(selectedFarmer.area)} acres
                 </p>
               </div>
 
@@ -976,7 +1014,7 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                   selectedFarmer.plots.map((plot: any, index: number) => (
                     <div key={index} className="bg-white rounded-lg p-3 sm:p-4 mb-3 sm:mb-4 border">
                       <h4 className="text-base sm:text-lg font-semibold text-green-600 mb-3">
-                        Plot {index + 1} - {plot.area_size} acres
+                        Plot {index + 1} - {formatAcresFromHectaresOrNA(plot.area_size)} acres
                       </h4>
                       
                       {plot.farms && plot.farms.length > 0 ? (

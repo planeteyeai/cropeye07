@@ -16,21 +16,13 @@
     margin: 2px !important;
   }
   
-  .mobile-draw-controls .leaflet-draw-toolbar .leaflet-draw-draw-polygon {
-    background-size: 20px 20px !important;
-    background-position: center !important;
-  }
-  
-  .mobile-draw-controls .leaflet-draw-toolbar .leaflet-draw-edit-remove {
-    background-size: 20px 20px !important;
-    background-position: center !important;
-  }
-  
+  /* keep built-in sprite positioning so icons remain visible */
+  .mobile-draw-controls .leaflet-draw-toolbar .leaflet-draw-draw-polygon,
+  .mobile-draw-controls .leaflet-draw-toolbar .leaflet-draw-edit-remove,
   .mobile-draw-controls .leaflet-draw-toolbar .leaflet-draw-edit-edit {
-    background-size: 20px 20px !important;
-    background-position: center !important;
+    background-size: 300px 30px !important;
   }
-  
+
   /* Make drawing controls more touch-friendly */
   .mobile-draw-controls .leaflet-draw-toolbar a:hover {
     background-color: #f4f4f4 !important;
