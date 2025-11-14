@@ -81,3 +81,18 @@ body {
 .weather-rain-line {
   @apply stroke-purple-500 stroke-2 fill-none [stroke-dasharray:4];
 }
+
+/* Enable scrolling for pest tab at 1024px in CropHealthAnalysis */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .pest-tab-scroll {
+    max-height: 400px !important;
+    overflow-y: auto !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Ensure the table inside can scroll */
+  .pest-tab-scroll table {
+    min-width: 100%;
+  }
+}

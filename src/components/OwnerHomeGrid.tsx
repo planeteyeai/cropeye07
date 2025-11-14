@@ -7,13 +7,13 @@ interface OwnerHomeGridProps {
 }
 
 const items = [
-  { title: 'DataVista', icon: <BarChart3 size={32} className="text-blue-600" />, bgColor: 'bg-blue-50', hoverColor: 'hover:bg-blue-100' },
-  { title: 'Team Connect', icon: <TeamConnect size={32} className="text-pink-600" />, bgColor: 'bg-pink-50', hoverColor: 'hover:bg-pink-100' },
-  
+  { title: 'Farm Crop Status', icon: <BarChart3 size={32} className="text-blue-600" />, bgColor: 'bg-blue-50', hoverColor: 'hover:bg-blue-100' },  
   { title: 'Harvesting Planning', icon: <Wheat size={32} className="text-yellow-600" />, bgColor: 'bg-yellow-50', hoverColor: 'hover:bg-yellow-100' },
   { title: 'Agroclimatic', icon: <Cloud size={32} className="text-cyan-600" />, bgColor: 'bg-cyan-50', hoverColor: 'hover:bg-cyan-100' },
-  { title: 'Resources Dashboard', icon: <User size={32} className="text-emerald-600" />, bgColor: 'bg-emerald-50', hoverColor: 'hover:bg-emerald-100' },
-  { title: 'Plot Overview', icon: <MapPin size={32} className="text-red-600" />, bgColor: 'bg-red-50', hoverColor: 'hover:bg-red-100' }
+  { title: 'Contactuser', icon: <User size={32} className="text-emerald-600" />, bgColor: 'bg-emerald-50', hoverColor: 'hover:bg-emerald-100' },
+  { title: 'Team Connect', icon: <TeamConnect size={32} className="text-pink-600" />, bgColor: 'bg-pink-50', hoverColor: 'hover:bg-pink-100' },
+
+  // { title: 'Plot Overview', icon: <MapPin size={32} className="text-red-600" />, bgColor: 'bg-red-50', hoverColor: 'hover:bg-red-100' }
 ];
 
 const OwnerHomeGrid: React.FC<OwnerHomeGridProps> = ({ onMenuClick }) => {

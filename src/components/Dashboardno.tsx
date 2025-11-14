@@ -4,11 +4,11 @@ import { Users, ShoppingCart } from "lucide-react";
 
 export const DashboardNo: React.FC = () => {
   const stats = [
-    { title: "Total Users", value: "1,234", icon: Users,        color: "blue"   },
-    { title: "Vendors",     value: "56",    icon: Users,        color: "green"  },
-    { title: "Stock Items", value: "35",    icon: ShoppingCart, color: "yellow" },
-    { title: "Orders",      value: "89",    icon: ShoppingCart, color: "purple" },
-    { title: "Bookings",    value: "12",    icon: ShoppingCart, color: "teal"   },
+    { title: "Total Users", value: "51", icon: Users,        color: "blue"   },
+    { title: "Vendors",     value: "0",    icon: Users,        color: "green"  },
+    { title: "Stock Items", value: "0",    icon: ShoppingCart, color: "yellow" },
+    { title: "Orders",      value: "0",    icon: ShoppingCart, color: "purple" },
+    { title: "Bookings",    value: "0",    icon: ShoppingCart, color: "teal"   },
   ];
 
   return (

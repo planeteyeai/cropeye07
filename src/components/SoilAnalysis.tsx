@@ -77,7 +77,7 @@ const SoilAnalysis: React.FC<SoilAnalysisProps> = ({
   phValue,
   phStatistics,
 }) => {
-  const { appState, setAppState, getCached, setCached, selectedPlotName } = useAppContext();
+  const { appState, setAppState, setCached, selectedPlotName } = useAppContext();
   const { profile, loading: profileLoading } = useFarmerProfile();
   const soilData = appState.soilData || null;
   const [loading, setLoading] = useState(false);
@@ -127,8 +127,6 @@ const SoilAnalysis: React.FC<SoilAnalysisProps> = ({
 
     // Check cache
     const cacheKey = `soilData_${currentPlotName}`;
-    const cached = getCached(cacheKey);
-
     // Comment out these lines to disable cache for testing
     // if (cached) {
     //   setAppState((prev: any) => ({
@@ -750,7 +748,7 @@ const SoilAnalysis: React.FC<SoilAnalysisProps> = ({
       <div className="mb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Info className="w-4 h-4 text-blue-500" />
+            {/* <Info className="w-4 h-4 text-blue-500" /> */}
             <span className="text-gray-600 font-semibold">
               Soil Analysis Report
             </span>
@@ -878,18 +876,24 @@ const SoilAnalysis: React.FC<SoilAnalysisProps> = ({
                   {metric.name}
                 </h3>
                 <p className="text-xs text-gray-500">({metric.symbol})</p>
-                <p className="text-lg font-bold text-gray-900">
-                  {metric.value === null
-                    ? "N/A"
-                    : typeof metric.value === "number"
-                    ? metric.value.toFixed(2)
-                    : metric.value}
-                  {metric.value !== null && metric.unit && (
-                    <span className="text-sm text-gray-500 ml-1">
-                      {metric.unit}
-                    </span>
+                <div className="mt-1">
+                  {metric.value === null ? (
+                    <p className="text-lg font-bold text-gray-900">N/A</p>
+                  ) : (
+                    <div className="flex flex-col items-center leading-tight">
+                      <span className="text-lg font-bold text-gray-900">
+                        {typeof metric.value === "number"
+                          ? metric.value.toFixed(2)
+                          : metric.value}
+                      </span>
+                      {metric.unit && (
+                        <span className="text-xs font-medium text-gray-500">
+                          {metric.unit}
+                        </span>
+                      )}
+                    </div>
                   )}
-                </p>
+                </div>
                 <p className="text-[10px] text-gray-500 bg-gray-100 rounded mt-1 px-2 py-1">
                   Range: {metric.optimalRange}
                 </p>

@@ -1,12 +1,18 @@
 
 // src/components/CropHealthAnalysis.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Download, Info } from 'lucide-react';
 import { pestsData } from './pestt/meter/pestsData';
 import { diseasesData } from './pestt/meter/diseasesData';
 import { weedsData } from './pestt/meter/Weeds';
+import {
+  buildWeedRiskLevelMap,
+  categorizeWeedsBySeason,
+  getCurrentMonthLower,
+  WeedRiskLevel,
+} from './pestt/meter/weedRiskUtils';
 import { 
   generateRiskAssessment, 
   fetchPlantationDate, 
@@ -125,18 +131,7 @@ const MeasureWithInfo: React.FC<{ measure: string }> = ({ measure }) => {
   );
 };
 
-// Function to determine weed risk level - matches Pest & Disease component logic
-// First 2 weeds (index 0-1) = High, 3rd (index 2) = Moderate, 4th (index 3) = Low
-function getWeedRiskLevel(weedIndex: number): 'High' | 'Moderate' | 'Low' {
-  // Assign risk level based on index position (matching Pest & Disease component)
-  if (weedIndex <= 1) {
-    return 'High';
-  } else if (weedIndex === 2) {
-    return 'Moderate';
-  } else {
-    return 'Low';
-  }
-}
+const FALLBACK_WEED_RISK: WeedRiskLevel = 'Low';
 
 // Enhanced InfoTooltip component with better responsive behavior
 const InfoTooltip: React.FC<{ text: string }> = ({ text }) => {
@@ -208,6 +203,12 @@ const CropHealthAnalysis: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'pests' | 'diseases' | 'weeds'>('pests');
   const [riskAssessment, setRiskAssessment] = useState<RiskAssessmentResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const currentMonthLower = useMemo(getCurrentMonthLower, []);
+  const weedRiskBuckets = useMemo(
+    () => categorizeWeedsBySeason(weedsData, currentMonthLower),
+    [currentMonthLower]
+  );
+  const weedRiskMap = useMemo(() => buildWeedRiskLevelMap(weedRiskBuckets), [weedRiskBuckets]);
 
   useEffect(() => {
     loadRiskAssessment();
@@ -430,9 +431,9 @@ const CropHealthAnalysis: React.FC = () => {
         ))}
       </div>
 
-      <div className="p-2 md:p-4 flex-1">
+      <div className="p-2 md:p-4 flex-1 overflow-hidden">
         {activeTab === 'pests' && (
-          <div className="overflow-x-auto sm:overflow-x-hidden w-full scroll-hide">
+          <div className="overflow-x-auto overflow-y-auto w-full pest-tab-scroll">
             {pestControls.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-gray-500 font-medium">No pests detected in current conditions</p>
@@ -533,7 +534,7 @@ const CropHealthAnalysis: React.FC = () => {
               </thead>
               <tbody>
                 {weedsData.map((weed, idx) => {
-                  const riskLevel = getWeedRiskLevel(idx);
+                  const riskLevel = weedRiskMap.get(weed.name) ?? FALLBACK_WEED_RISK;
                   const chemicalText = Array.isArray(weed.chemical) ? weed.chemical[0] : '';
                   // Extract chemical name and dosage from the string (format: "Chemical - Dosage")
                   const chemicalParts = chemicalText.split(' - ');

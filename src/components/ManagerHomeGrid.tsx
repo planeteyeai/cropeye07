@@ -14,7 +14,6 @@ import { DashboardNo } from "./Dashboardno";
 import TeamList from "./TeamList";
 import AddBooking from "./AddBooking";
 import HarvestDashboard from "../components/HarvestDashboard";
-import FarmCropStatus from "./FarmCropStatus";
 
 interface ManagerHomeGridProps {
   onMenuClick: (menuTitle: string) => void;
@@ -167,35 +166,6 @@ const ManagerHomeGrid: React.FC<ManagerHomeGridProps> = ({
     );
   }
 
-  if (currentPage === "farm-crop-status") {
-    return (
-      <div>
-        <div className="mb-4 p-4 bg-gray-100 rounded-lg">
-          <button
-            onClick={() => setCurrentPage(null)}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M10 19l-7-7m0 0l7-7m-7 7h18"
-              />
-            </svg>
-            <span>Back to Home</span>
-          </button>
-        </div>
-        <FarmCropStatus />
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-4 sm:gap-8">
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
@@ -224,8 +194,7 @@ const ManagerHomeGrid: React.FC<ManagerHomeGridProps> = ({
                 onMenuClick("harvesting-planning"); // Notify App component
                 // setCurrentPage("harvesting-planning"); // This is now handled by the onMenuClick logic
               } else if (item.title === "Farm Crop Status") {
-                // Open Farm Crop Status page in full window
-                setCurrentPage("farm-crop-status");
+                onMenuClick("Farm Crop Status");
               } else {
                 // Default behavior for other cards
                 onMenuClick(item.title);

@@ -232,7 +232,13 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
       case "MyList":
         nextView = View.MyList;
         break;
+      case "Farm Crop Status":
+      case "farm-crop-status":
+        nextView = View.FarmCropStatus;
+        break;
       case "Team List":
+      case "Team Connect":
+      case "TeamConnect":
         nextView = View.TeamList;
         break;
       case "Calendar":

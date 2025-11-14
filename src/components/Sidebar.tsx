@@ -99,9 +99,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           renderMenu('Farm Crop Status', <BarChart3 size={20} />),
           renderMenu('Harvesting Planning', <GiSugarCane size={20} />),
           renderMenu('Agroclimatic', <Cloud size={20} />),
-          renderMenu('Resources', <ShoppingBag size={20} />),
+        //  renderMenu('Resources', <ShoppingBag size={20} />),
           // renderMenu('Plot Birde View', <BarChart3 size={20} />),
-          renderMenu('TeamConnect', <List size={20} />, ['Team List']),
+          renderMenu('Team Connect', <List size={20} />),
           renderMenu('User Desk', <Users size={20} />, ['Contactuser']),
           
         ];
@@ -110,10 +110,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           renderMenu('Farm Crop Status', <BarChart3 size={20} />),
           renderMenu('Harvesting Planning', <GiSugarCane size={20} />),
           renderMenu('Agroclimatic', <Cloud size={20} />),
-          renderMenu('Resources', <ShoppingBag size={20} />),
+        //  renderMenu('Resources', <ShoppingBag size={20} />),
           // renderMenu('Plot Birde View', <BarChart3 size={20} />),
-          renderMenu('TeamConnect', <List size={20} />, ['Team List']),
-          renderMenu('User Desk', <Users size={20} />, ['Contactuser']),
+          renderMenu('Team Connect', <List size={20} />),
+          renderMenu('Contactuser', <Users size={20} />,),
           
         ];
       case 'fieldofficer':
@@ -134,7 +134,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             'Contactuser',
           ]),
           renderMenu('MyTask', <Calendar size={20} />, ['CalendarView', 'MyList']),
-          renderMenu('TeamConnect', <List size={20} />, ['Team List']),
+          renderMenu('Team Connect', <List size={20} />),
           renderMenu('Resoucres Planning', <ShoppingBag size={20} />, [
             'Add Vendor',
             'Vendor list',

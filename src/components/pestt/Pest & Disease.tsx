@@ -1,9 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { SingleCategoryRiskMeter } from './meter/SingleCategoryRiskMeter';
 import { ImageModal } from './meter/ImageModal';
 import { pestsData } from './meter/pestsData';
 import { diseasesData } from './meter/diseasesData';
 import { weedsData } from './meter/Weeds';
+import {
+  categorizeWeedsBySeason,
+  getCurrentMonthLower,
+} from './meter/weedRiskUtils';
 import { DetectionCard } from './meter/PestCard';
 import { 
   generateRiskAssessment, 
@@ -28,6 +32,11 @@ export const PestDisease: React.FC = () => {
   const [selectedRiskLevel, setSelectedRiskLevel] = useState<'High' | 'Moderate' | 'Low' | null>(null);
 
   const [chemModal, setChemModal] = useState<{ open: boolean; title: string; chemicals: string[] }>({ open: false, title: '', chemicals: [] });
+  const currentMonthLower = useMemo(getCurrentMonthLower, []);
+  const weedRiskBuckets = useMemo(
+    () => categorizeWeedsBySeason(weedsData, currentMonthLower),
+    [currentMonthLower]
+  );
 
   useEffect(() => {
     loadRiskAssessment();
@@ -252,9 +261,9 @@ export const PestDisease: React.FC = () => {
             {/* Weeds Risk Meter */}
             <SingleCategoryRiskMeter
               category="Weeds"
-              highCount={2}
-              moderateCount={1}
-              lowCount={1}
+              highCount={weedRiskBuckets.high.length}
+              moderateCount={weedRiskBuckets.moderate.length}
+              lowCount={weedRiskBuckets.low.length}
               // icon="🌿"
               onRiskClick={handleRiskClick}
               selectedCategory={selectedCategory}
@@ -331,15 +340,12 @@ export const PestDisease: React.FC = () => {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
               {(() => {
-                // Filter weeds based on selected risk level
-                let filteredWeeds;
-                if (selectedRiskLevel === 'High') {
-                  filteredWeeds = weedsData.slice(0, 2); // First 2 weeds for High risk
-                } else if (selectedRiskLevel === 'Moderate') {
-                  filteredWeeds = weedsData.slice(2, 3); // Next 1 weed for Moderate risk
-                } else {
-                  filteredWeeds = weedsData.slice(3, 4); // Last 1 weed for Low risk
-                }
+                const filteredWeeds =
+                  selectedRiskLevel === 'High'
+                    ? weedRiskBuckets.high
+                    : selectedRiskLevel === 'Moderate'
+                      ? weedRiskBuckets.moderate
+                      : weedRiskBuckets.low;
                 
                 return filteredWeeds.map((weed, index) => (
                   <div key={index} className="bg-[#fbf3ea] rounded-lg sm:rounded-xl p-4 sm:p-6 shadow border border-orange-200">

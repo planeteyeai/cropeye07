@@ -454,7 +454,7 @@
 .plot-info {
   position: absolute;
   top: 50px;
-  left: 50%;
+  left: 80%;
   transform: translateX(-50%);
   z-index: 1000;
 }
@@ -682,6 +682,65 @@
 
 .leaflet-control {
   box-shadow: none !important;
+}
+
+/* Fix white space issue at 1024px laptop view - ensure satellite map fills container and matches soil analysis card height */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .map-wrapper {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  
+  .map-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  
+  .leaflet-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    height: 100% !important;
+    flex: 1 !important;
+  }
+  
+  /* Ensure Leaflet map panes fill the container */
+  .leaflet-map-pane,
+  .leaflet-tile-pane,
+  .leaflet-overlay-pane {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+  }
+  
+  /* Ensure tiles fill the entire width and height */
+  .leaflet-tile-container {
+    width: 100% !important;
+    height: 100% !important;
+  }
+  
+  /* Ensure tile images fill properly */
+  .leaflet-tile {
+    max-width: none !important;
+    width: 256px !important;
+    height: 256px !important;
+  }
+  
+  /* Ensure the grid column containing the map matches the soil analysis card height */
+  .grid > div.lg\\:col-span-2 {
+    display: flex !important;
+    flex-direction: column !important;
+  }
 }
 
 /* Desktop view - ensure controls always visible */

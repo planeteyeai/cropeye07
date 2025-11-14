@@ -14,7 +14,6 @@ const IrrigationSchedule: React.FC = () => {
   const [rainfallMm, setRainfallMm] = useState<number>(0);
   const [forecastRainfall, setForecastRainfall] = useState<number[]>([]);
   const [kc, setKc] = useState<number>(0.3);
-  const [stage, setStage] = useState<string>("");
   const [motorHp, setMotorHp] = useState<number | null>(null);
   const [flowRateLph, setFlowRateLph] = useState<number | null>(null);
   const [emittersCount, setEmittersCount] = useState<number>(0);
@@ -23,6 +22,8 @@ const IrrigationSchedule: React.FC = () => {
   const [spacingB, setSpacingB] = useState<number>(0);
   const [irrigationTypeCode, setIrrigationTypeCode] = useState<string>("flood");
   const [irrigationType, setIrrigationType] = useState<string>("Flood");
+  const [pipeWidthInches, setPipeWidthInches] = useState<number | null>(null);
+  const [distanceMotorToPlot, setDistanceMotorToPlot] = useState<number | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,7 +66,7 @@ const IrrigationSchedule: React.FC = () => {
     return `${h} hrs ${m} mins`;
   };
 
-  const calcIrrigationTime = (waterRequired: number, rainfall: number) => {
+  const calcIrrigationTime = (waterRequired: number) => {
     if (waterRequired <= 0) return "0 hrs 0 mins";
 
     if (irrigationTypeCode === "drip") {
@@ -76,11 +77,32 @@ const IrrigationSchedule: React.FC = () => {
       const hours = timeInMinutes / 60;
       return formatTimeHrsMins(hours);
     } else {
-      if (!motorHp || motorHp <= 0) return "N/A";
+      if (!motorHp || motorHp <= 0 || !pipeWidthInches || pipeWidthInches <= 0) {
+        return "N/A";
+      }
 
-      // Flow rate calculation: 1 HP ≈ 450-500 L/h for agricultural pumps
-      // Using 450 L/h per HP as standard conversion factor
-      const flowRateLitersPerHour = motorHp * 450;
+      const diameterMeters = pipeWidthInches * 0.0254;
+      const pipeAreaSqM = Math.PI * Math.pow(diameterMeters / 2, 2);
+
+      // Base velocity derived from motor horsepower (m/s)
+      const baseVelocity = Math.max(0.75, Math.min(2.5, motorHp * 0.45));
+
+      // Simple friction-loss adjustment using pipe length (5% reduction per 100 m, capped)
+      let frictionFactor = 1;
+      if (distanceMotorToPlot && distanceMotorToPlot > 0) {
+        const reduction = (distanceMotorToPlot / 100) * 0.05;
+        frictionFactor = Math.max(0.5, 1 - reduction);
+      }
+
+      const effectiveVelocity = baseVelocity * frictionFactor;
+
+      const flowRateLitersPerHour =
+        pipeAreaSqM * effectiveVelocity * 3600 * 1000; // cubic meters/sec to L/h
+
+      if (!Number.isFinite(flowRateLitersPerHour) || flowRateLitersPerHour <= 0) {
+        return "N/A";
+      }
+
       const hours = waterRequired / flowRateLitersPerHour;
       return formatTimeHrsMins(hours);
     }
@@ -133,8 +155,6 @@ const IrrigationSchedule: React.FC = () => {
       else if (days > 90) derivedStage = "Grand Growth";
       else if (days > 30) derivedStage = "Tillering";
 
-      setStage(derivedStage);
-
       let kcValue = 0.3;
       try {
         for (const method of (budData as any).fertilizer_schedule || []) {
@@ -155,6 +175,8 @@ const IrrigationSchedule: React.FC = () => {
       const flow = firstIrrigation?.flow_rate_lph ?? null;
       const emitters = firstIrrigation?.emitters_count ?? 0;
       const irrigationCode = firstIrrigation?.irrigation_type_code || "flood";
+      const pipeWidth = firstIrrigation?.pipe_width_inches ?? null;
+      const distanceFromMotor = firstIrrigation?.distance_motor_to_plot_m ?? null;
       const plants = firstFarm?.plants_in_field ?? 0;
       const spacing_a = firstFarm?.spacing_a ?? 0;
       const spacing_b = firstFarm?.spacing_b ?? 0;
@@ -167,6 +189,8 @@ const IrrigationSchedule: React.FC = () => {
       setSpacingB(spacing_b);
       setIrrigationTypeCode(irrigationCode);
       setIrrigationType(irrigationCode === "drip" ? "Drip" : "Flood");
+      setPipeWidthInches(pipeWidth);
+      setDistanceMotorToPlot(distanceFromMotor);
     }
   }, [profile, profileLoading, selectedPlotName]);
 
@@ -416,7 +440,7 @@ const IrrigationSchedule: React.FC = () => {
 
       const netEt = calculateNetET(etForDay, rainfall);
       const waterRequired = waterFromNetET(netEt, kc);
-      const time = calcIrrigationTime(waterRequired, rainfall);
+      const time = calcIrrigationTime(waterRequired);
 
       scheduleData.push({
         date: date.toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
