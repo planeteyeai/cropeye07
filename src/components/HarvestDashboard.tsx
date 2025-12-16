@@ -73,7 +73,7 @@ interface HarvestData {
   "Sugarcane Status": string;
   "Area (Hect)": number;
   Days: number;
-  "Prediction Yield (T/acre)": number;
+  "Prediction Yield (T/Ha)": number;
   "Brix (Degree)": number;
   "Recovery (Degree)": number;
   "Distance (km)": number;
@@ -83,6 +83,7 @@ interface HarvestData {
   Variety: string;
   representative?: string;
   representativeUrl?: string;
+  boundaryCoordinates?: [number, number][];
 }
 
 interface PlotPoint {
@@ -92,6 +93,7 @@ interface PlotPoint {
   plotNo: string;
   area: string;
   raw: HarvestData;
+  boundaryCoordinates?: [number, number][];
 }
 
 interface StatusData {
@@ -142,7 +144,7 @@ interface HarvestTooltipProps {
 }
 
 interface MapAutoCenterProps {
-  center: [number, number];
+  center: [number, number] | null;
 }
 
 interface CombinedChartProps {
@@ -262,7 +264,7 @@ const CombinedChart: React.FC<CombinedChartProps> = ({
             <strong>Days:</strong> {entry.day}
           </div>
           <div className="text-sm">
-            <strong>Avg Yield (T/acre):</strong> {entry.area?.toFixed(2)}
+            <strong>Avg Yield (T/Ha):</strong> {entry.area?.toFixed(2)}
           </div>
           <div className="text-sm">
             <strong>Plot Count:</strong> {entry.count}
@@ -336,7 +338,7 @@ const CombinedChart: React.FC<CombinedChartProps> = ({
                 tick={{ fontSize: 12 }}
                 axisLine={{ stroke: "#e5e7eb" }}
                 label={{
-                  value: "Yield (T/acre)",
+                  value: "Yield (T/Ha)",
                   angle: -90,
                   position: "insideLeft",
                   offset: 10,
@@ -565,27 +567,45 @@ const HarvestDashboard: React.FC = () => {
                   const area = parseFloat(farm.area_size || "0");
                   const yieldPerHa = Math.min(60 + days / 3, 100);
 
-                  const dataPoint: HarvestData = {
-                    id: `${plot.id}-${farm.id}`,
-                    "Plot No": plot.plot_number || "",
-                    Latitude: centerLat || 19.765,
-                    Longitude: centerLng || 74.475,
-                    "Sugarcane Status": status,
-                    "Area (Hect)": area,
-                    Days: days,
-                    "Prediction Yield (T/acre)": yieldPerHa,
-                    "Brix (Degree)": brix,
-                    "Recovery (Degree)": recovery,
-                    "Distance (km)": Math.random() * 10 + 1,
-                    Stage: stage,
-                    Region: plot.taluka || "Unknown",
-                    "Sugarcane Type": farm.plantation_type || "Unknown",
-                    Variety: "Phule 265",
-                    representative: representativeName,
-                    representativeUrl: "",
-                  };
+                  // Only add data point if we have valid coordinates
+                  if (
+                    centerLat &&
+                    centerLng &&
+                    centerLat !== 0 &&
+                    centerLng !== 0
+                  ) {
+                    // Convert boundary coordinates from [lng, lat] to [lat, lng] for Leaflet
+                    const boundaryCoords: [number, number][] | undefined =
+                      coordinates.length > 0
+                        ? coordinates.map(
+                            (coord: number[]) =>
+                              [coord[1], coord[0]] as [number, number]
+                          )
+                        : undefined;
 
-                  allData.push(dataPoint);
+                    const dataPoint: HarvestData = {
+                      id: `${plot.id}-${farm.id}`,
+                      "Plot No": plot.plot_number || "",
+                      Latitude: centerLat,
+                      Longitude: centerLng,
+                      "Sugarcane Status": status,
+                      "Area (Hect)": area,
+                      Days: days,
+                      "Prediction Yield (T/Ha)": yieldPerHa,
+                      "Brix (Degree)": brix,
+                      "Recovery (Degree)": recovery,
+                      "Distance (km)": Math.random() * 10 + 1,
+                      Stage: stage,
+                      Region: plot.taluka || "Unknown",
+                      "Sugarcane Type": farm.plantation_type || "Unknown",
+                      Variety: "Phule 265",
+                      representative: representativeName,
+                      representativeUrl: "",
+                      boundaryCoordinates: boundaryCoords,
+                    };
+
+                    allData.push(dataPoint);
+                  }
                 });
               });
             });
@@ -692,8 +712,9 @@ const HarvestDashboard: React.FC = () => {
       position: [item.Latitude, item.Longitude] as [number, number],
       status: item["Sugarcane Status"],
       plotNo: item["Plot No"] || item["plot in no."] || `P${idx + 1}`,
-      area: `${item["Area (Hect)"]} acre`,
+      area: `${item["Area (Hect)"]} Ha`,
       raw: item,
+      boundaryCoordinates: item.boundaryCoordinates,
     }));
   }, [filteredData, activeChart, harvestRange]);
 
@@ -725,7 +746,7 @@ const HarvestDashboard: React.FC = () => {
       (acc: { [key: number]: number[] }, item) => {
         if (
           typeof item.Days === "number" &&
-          typeof item["Prediction Yield (T/acre)"] === "number"
+          typeof item["Prediction Yield (T/Ha)"] === "number"
         ) {
           if (!acc[item.Days]) {
             acc[item.Days] = [];
@@ -806,7 +827,7 @@ const HarvestDashboard: React.FC = () => {
 
     return [
       {
-        label: "Total Area (acre)",
+        label: "Total Area (Ha)",
         value: totalArea ? totalArea.toFixed(2) : "-",
         icon: BarChart3,
       },
@@ -823,7 +844,7 @@ const HarvestDashboard: React.FC = () => {
         icon: MapPin,
       },
       {
-        label: "Expected Yield (T/acre)",
+        label: "Expected Yield (T/Ha)",
         value: avgYield,
         icon: TrendingUp,
       },
@@ -835,17 +856,26 @@ const HarvestDashboard: React.FC = () => {
     ];
   }, [filteredData]);
 
-  const mapCenter = useMemo((): [number, number] => {
+  const mapCenter = useMemo((): [number, number] | null => {
     if (filteredData.length > 0) {
-      const avgLat =
-        filteredData.reduce((sum, item) => sum + (item.Latitude || 0), 0) /
-        filteredData.length;
-      const avgLng =
-        filteredData.reduce((sum, item) => sum + (item.Longitude || 0), 0) /
-        filteredData.length;
-      return [avgLat, avgLng];
+      const validData = filteredData.filter(
+        (item) =>
+          item.Latitude &&
+          item.Longitude &&
+          item.Latitude !== 0 &&
+          item.Longitude !== 0
+      );
+      if (validData.length > 0) {
+        const avgLat =
+          validData.reduce((sum, item) => sum + (item.Latitude || 0), 0) /
+          validData.length;
+        const avgLng =
+          validData.reduce((sum, item) => sum + (item.Longitude || 0), 0) /
+          validData.length;
+        return [avgLat, avgLng];
+      }
     }
-    return [19.765, 74.475];
+    return null;
   }, [filteredData]);
 
   const getPlotColor = useMemo(
@@ -860,7 +890,12 @@ const HarvestDashboard: React.FC = () => {
   function MapAutoCenter({ center }: MapAutoCenterProps) {
     const map = useMap();
     useEffect(() => {
-      if (center && Array.isArray(center) && !center.some(isNaN)) {
+      if (
+        center &&
+        Array.isArray(center) &&
+        center.length === 2 &&
+        !center.some(isNaN)
+      ) {
         map.setView(center, map.getZoom());
       }
     }, [center, map]);
@@ -893,6 +928,14 @@ const HarvestDashboard: React.FC = () => {
       </div>
     </div>
   );
+
+  if (loading || rawData.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <CommonSpinner />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 lg:p-6">
@@ -988,73 +1031,85 @@ const HarvestDashboard: React.FC = () => {
                     <Maximize2 className="w-4 h-4" />
                   </div>
                   <div ref={mapWrapperRef} className="w-full h-full">
-                    <MapContainer
-                      center={mapCenter}
-                      zoom={15}
-                      minZoom={1}
-                      maxZoom={25}
-                      className="w-full h-full"
-                      style={{
-                        height: "100%",
-                        width: "100%",
-                        borderRadius: "inherit",
-                      }}
-                    >
-                      <MapAutoCenter center={mapCenter} />
-                      <TileLayer
-                        url="http://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
-                        attribution="© Google"
-                        maxZoom={25}
-                        maxNativeZoom={21}
+                    {mapCenter ? (
+                      <MapContainer
+                        center={mapCenter}
+                        zoom={7.5}
                         minZoom={1}
-                        tileSize={256}
-                        zoomOffset={0}
-                      />
-                      <Polygon
-                        positions={[
-                          [19.764, 74.474],
-                          [19.766, 74.474],
-                          [19.766, 74.476],
-                          [19.764, 74.476],
-                        ]}
-                        pathOptions={{
-                          color: "lime",
-                          fillOpacity: 0.2,
-                          weight: 2,
+                        maxZoom={25}
+                        className="w-full h-full"
+                        style={{
+                          height: "100%",
+                          width: "100%",
+                          borderRadius: "inherit",
                         }}
-                      />
-                      {plotPoints.map((plot) => (
-                        <CircleMarker
-                          key={plot.id}
-                          center={plot.position}
-                          radius={8}
-                          pathOptions={{
-                            color: getPlotColor(plot.raw),
-                            fillColor: getPlotColor(plot.raw),
-                            fillOpacity: 0.8,
-                            weight: 2,
-                          }}
-                        >
-                          <Popup>
-                            <div className="text-sm">
-                              <div className="font-semibold text-gray-900 mb-1">
-                                Plot {plot.plotNo}
-                              </div>
-                              <div className="text-gray-600 mb-1">
-                                Status:{" "}
-                                <span className="font-medium">
-                                  {plot.status}
-                                </span>
-                              </div>
-                              <div className="text-gray-600">
-                                Area:{" "}
-                                <span className="font-medium">{plot.area}</span>
-                              </div>
-                            </div>
-                          </Popup>
-                        </CircleMarker>
-                      ))}
-                    </MapContainer>
+                      >
+                        <MapAutoCenter center={mapCenter} />
+                        <TileLayer
+                          url="http://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
+                          attribution="© Google"
+                          maxZoom={25}
+                          maxNativeZoom={21}
+                          minZoom={1}
+                          tileSize={256}
+                          zoomOffset={0}
+                        />
+                        {plotPoints.map((plot) => (
+                          <React.Fragment key={plot.id}>
+                            {/* Plot Boundary Polygon */}
+                            {plot.boundaryCoordinates &&
+                              plot.boundaryCoordinates.length > 0 && (
+                                <Polygon
+                                  positions={plot.boundaryCoordinates}
+                                  pathOptions={{
+                                    color: getPlotColor(plot.raw),
+                                    fillColor: getPlotColor(plot.raw),
+                                    fillOpacity: 0.2,
+                                    weight: 2,
+                                  }}
+                                />
+                              )}
+                            {/* Plot Center Point */}
+                            <CircleMarker
+                              center={plot.position}
+                              radius={8}
+                              pathOptions={{
+                                color: getPlotColor(plot.raw),
+                                fillColor: getPlotColor(plot.raw),
+                                fillOpacity: 0.8,
+                                weight: 2,
+                              }}
+                            >
+                              <Popup>
+                                <div className="text-sm">
+                                  <div className="font-semibold text-gray-900 mb-1">
+                                    Plot {plot.plotNo}
+                                  </div>
+                                  <div className="text-gray-600 mb-1">
+                                    Status:{" "}
+                                    <span className="font-medium">
+                                      {plot.status}
+                                    </span>
+                                  </div>
+                                  <div className="text-gray-600">
+                                    Area:{" "}
+                                    <span className="font-medium">
+                                      {plot.area}
+                                    </span>
+                                  </div>
+                                </div>
+                              </Popup>
+                            </CircleMarker>
+                          </React.Fragment>
+                        ))}
+                      </MapContainer>
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                        <div className="text-gray-500">
+                          No plot data available
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

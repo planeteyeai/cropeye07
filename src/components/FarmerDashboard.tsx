@@ -32,7 +32,6 @@ import {
 import axios from "axios";
 import { getCache, setCache } from "../utils/cache";
 import { useFarmerProfile } from "../hooks/useFarmerProfile";
-import { useAppContext } from "../context/AppContext";
 import CommonSpinner from "./CommanSpinner";
 
 // Type definitions
@@ -197,7 +196,6 @@ const FarmerDashboard: React.FC = () => {
     loading: profileLoading,
     getFarmerFullName,
   } = useFarmerProfile();
-  const { selectedPlotName, setSelectedPlotName } = useAppContext();
 
   const [currentPlotId, setCurrentPlotId] = useState<string | null>(null);
   const [showDebugInfo, setShowDebugInfo] = useState(false);
@@ -259,21 +257,18 @@ const FarmerDashboard: React.FC = () => {
       return;
     }
 
-    // Use global selectedPlotName if available, otherwise use first plot
-    if (selectedPlotName) {
-      setCurrentPlotId(selectedPlotName);
-      console.log("✅ FarmerDashboard: Using global selected plot:", selectedPlotName);
-    } else {
-      const plotNames = profile.plots?.map((plot) => plot.fastapi_plot_id) || [];
-      const defaultPlot = plotNames.length > 0 ? plotNames[0] : null;
+    const plotNames = profile.plots?.map((plot) => plot.fastapi_plot_id) || [];
+    const defaultPlot = plotNames.length > 0 ? plotNames[0] : null;
 
-      if (defaultPlot) {
-        setSelectedPlotName(defaultPlot);
-        setCurrentPlotId(defaultPlot);
-        console.log("✅ FarmerDashboard: Auto-selected first plot:", defaultPlot);
-      }
+    console.log("📊 FarmerDashboard: Available plots:", plotNames);
+    console.log("📊 FarmerDashboard: Selected plot:", defaultPlot);
+
+    if (defaultPlot) {
+      setCurrentPlotId(defaultPlot);
+      localStorage.setItem("selectedPlot", defaultPlot);
+      console.log("✅ FarmerDashboard: Using plot ID:", defaultPlot);
     }
-  }, [profile, profileLoading, selectedPlotName, setSelectedPlotName]);
+  }, [profile, profileLoading]);
 
   useEffect(() => {
     if (currentPlotId && !profileLoading) {
@@ -473,6 +468,31 @@ const FarmerDashboard: React.FC = () => {
         setCache(soilCacheKey, soilData);
       }
 
+      // Fetch harvest status from sugarcane-harvest endpoint
+      const harvestCacheKey = `harvest_${currentPlotId}_${endDate}`;
+      let harvestStatus = null;
+      let harvestData = getCache(harvestCacheKey);
+
+      if (!harvestData) {
+        try {
+          const harvestRes = await axios.post(
+            `${BASE_URL}/sugarcane-harvest?plot_name=${currentPlotId}&end_date=${endDate}`
+          );
+          harvestData = harvestRes.data;
+          setCache(harvestCacheKey, harvestData);
+        } catch (harvestErr) {
+          console.error("Error fetching harvest status:", harvestErr);
+        }
+      }
+
+      // Extract harvest_status from response
+      if (harvestData) {
+        harvestStatus =
+          harvestData?.harvest_summary?.harvest_status ||
+          harvestData?.features?.[0]?.properties?.harvest_status ||
+          null;
+      }
+
       const stats = soilData?.features?.[0]?.properties?.statistics;
       const expectedYieldValue =
         currentPlotData?.brix_sugar?.sugar_yield?.mean ?? null;
@@ -496,7 +516,7 @@ const FarmerDashboard: React.FC = () => {
         biomass: calculatedBiomass,
         totalBiomass: totalBiomassForMetric,
         daysToHarvest: currentPlotData?.days_to_harvest ?? null,
-        growthStage: currentPlotData?.Sugarcane_Status ?? null,
+        growthStage: harvestStatus || currentPlotData?.Sugarcane_Status || null,
         soilPH: currentPlotData?.soil?.phh2o ?? null,
         organicCarbonDensity:
           currentPlotData?.soil?.organic_carbon_stock != null
@@ -757,9 +777,7 @@ const FarmerDashboard: React.FC = () => {
       {showNDREEvents && (
         <div className="flex items-center gap-1 ml-1 px-2 py-1 bg-orange-100 rounded-md border border-orange-300">
           <div className="w-2 h-2 rounded-full bg-orange-500 border border-orange-600"></div>
-          <span className="text-orange-800 font-semibold text-xs">
-            Stress
-          </span>
+          <span className="text-orange-800 font-semibold text-xs">Stress</span>
         </div>
       )}
     </div>
@@ -836,54 +854,6 @@ const FarmerDashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-3">
       <div className="max-w-7xl mx-auto space-y-4">
-        {/* Plot Selector */}
-        {profile && !profileLoading && (
-          <div className="bg-white rounded-xl shadow-lg p-4 mb-4">
-            <div className="flex items-center gap-4 flex-wrap">
-              <label className="font-semibold text-gray-700">Select Plot:</label>
-              <select
-                value={selectedPlotName || ""}
-                onChange={(e) => {
-                  const newPlot = e.target.value;
-                  setSelectedPlotName(newPlot);
-                  setCurrentPlotId(newPlot);
-                }}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {profile.plots?.map(plot => {
-                  let displayName = '';
-                  
-                  if (plot.gat_number && plot.plot_number && 
-                      plot.gat_number.trim() !== "" && plot.plot_number.trim() !== "" &&
-                      !plot.gat_number.startsWith('GAT_') && !plot.plot_number.startsWith('PLOT_')) {
-                    displayName = `${plot.gat_number}_${plot.plot_number}`;
-                  } else if (plot.gat_number && plot.gat_number.trim() !== "" && !plot.gat_number.startsWith('GAT_')) {
-                    displayName = plot.gat_number;
-                  } else if (plot.plot_number && plot.plot_number.trim() !== "" && !plot.plot_number.startsWith('PLOT_')) {
-                    displayName = plot.plot_number;
-                  } else {
-                    const village = plot.address?.village;
-                    const taluka = plot.address?.taluka;
-                    
-                    if (village) {
-                      displayName = `Plot in ${village}`;
-                      if (taluka) displayName += `, ${taluka}`;
-                    } else {
-                      displayName = 'Plot (No GAT/Plot Number)';
-                    }
-                  }
-                  
-                  return (
-                    <option key={plot.fastapi_plot_id} value={plot.fastapi_plot_id}>
-                      {displayName}
-                    </option>
-                  );
-                }) || []}
-              </select>
-            </div>
-          </div>
-        )}
-
         {/* Debug Info Panel */}
         {showDebugInfo && (
           <div className="bg-gray-900 rounded-xl shadow-lg p-4 border border-gray-700">
@@ -965,7 +935,9 @@ const FarmerDashboard: React.FC = () => {
               <div className="text-right">
                 <div className="text-xl font-bold text-gray-800">
                   {metrics.brix || "-"}
-                  <span className="text-xl font-bold text-blue-600">{"\u00B0"}Brix(Avg)</span>
+                  <span className="text-xl font-bold text-blue-600">
+                    {"\u00B0"}Brix(Avg)
+                  </span>
                 </div>
               </div>
             </div>
@@ -1022,7 +994,9 @@ const FarmerDashboard: React.FC = () => {
                     />
                     <YAxis
                       type="category"
-                      dataKey={timePeriod === "monthly" ? "displayDate" : "date"}
+                      dataKey={
+                        timePeriod === "monthly" ? "displayDate" : "date"
+                      }
                       tickFormatter={(tick: string) => {
                         if (timePeriod === "monthly") return tick;
                         if (timePeriod === "daily") {
@@ -1034,7 +1008,9 @@ const FarmerDashboard: React.FC = () => {
                         }
                         const d = new Date(tick);
                         const yy = d.getFullYear().toString().slice(-2);
-                        return `${d.toLocaleString("default", { month: "short" })}-${yy}`;
+                        return `${d.toLocaleString("default", {
+                          month: "short",
+                        })}-${yy}`;
                       }}
                       stroke="#6b7280"
                       tick={{ fontSize: 12 }}
@@ -1043,7 +1019,9 @@ const FarmerDashboard: React.FC = () => {
                 ) : (
                   <>
                     <XAxis
-                      dataKey={timePeriod === "monthly" ? "displayDate" : "date"}
+                      dataKey={
+                        timePeriod === "monthly" ? "displayDate" : "date"
+                      }
                       tickFormatter={(tick: string) => {
                         if (timePeriod === "monthly") return tick;
                         if (timePeriod === "daily") {
@@ -1055,7 +1033,9 @@ const FarmerDashboard: React.FC = () => {
                         }
                         const d = new Date(tick);
                         const yy = d.getFullYear().toString().slice(-2);
-                        return `${d.toLocaleString("default", { month: "short" })}-${yy}`;
+                        return `${d.toLocaleString("default", {
+                          month: "short",
+                        })}-${yy}`;
                       }}
                       stroke="#6b7280"
                       tick={{ fontSize: 12 }}
@@ -1175,8 +1155,13 @@ const FarmerDashboard: React.FC = () => {
                             className="text-xs font-left fill-green-600"
                             style={{ fontSize: "10px" }}
                           >
-                            <tspan x="79%" dy="0">Average</tspan>
-                            <tspan x="79%" dy="12">Good ({goodRange[0].toFixed(2)} - {goodRange[1].toFixed(2)})</tspan>
+                            <tspan x="79%" dy="0">
+                              Average
+                            </tspan>
+                            <tspan x="79%" dy="12">
+                              Good ({goodRange[0].toFixed(2)} -{" "}
+                              {goodRange[1].toFixed(2)})
+                            </tspan>
                           </text>
                           <text
                             x="79%"
@@ -1185,8 +1170,13 @@ const FarmerDashboard: React.FC = () => {
                             className="text-xs font-right fill-red-600"
                             style={{ fontSize: "10px" }}
                           >
-                            <tspan x="30%" dy="0">Average</tspan>
-                            <tspan x="35%" dy="12">Bad ({badRange[0].toFixed(2)} - {badRange[1].toFixed(2)})</tspan>
+                            <tspan x="30%" dy="0">
+                              Average
+                            </tspan>
+                            <tspan x="35%" dy="12">
+                              Bad ({badRange[0].toFixed(2)} -{" "}
+                              {badRange[1].toFixed(2)})
+                            </tspan>
                           </text>
                         </>
                       ) : (
@@ -1198,7 +1188,7 @@ const FarmerDashboard: React.FC = () => {
                             className="text-xs font-medium fill-green-600"
                             style={{ fontSize: "10px" }}
                           >
-                            {labelText} Good ({goodRange[0].toFixed(2)} - {" "}
+                            {labelText} Good ({goodRange[0].toFixed(2)} -{" "}
                             {goodRange[1].toFixed(2)})
                           </text>
                           <text
@@ -1208,7 +1198,7 @@ const FarmerDashboard: React.FC = () => {
                             className="text-xs font-medium fill-red-600"
                             style={{ fontSize: "10px" }}
                           >
-                            {labelText} Bad ({badRange[0].toFixed(2)} - {" "}
+                            {labelText} Bad ({badRange[0].toFixed(2)} -{" "}
                             {badRange[1].toFixed(2)})
                           </text>
                         </>
@@ -1221,7 +1211,9 @@ const FarmerDashboard: React.FC = () => {
                   stressEvents.map((event, index) => (
                     <React.Fragment key={index}>
                       <ReferenceLine
-                        {...(isMobile ? { y: event.from_date } : { x: event.from_date })}
+                        {...(isMobile
+                          ? { y: event.from_date }
+                          : { x: event.from_date })}
                         stroke="#dc2626"
                         strokeDasharray="5 5"
                         strokeWidth={1}
@@ -1233,7 +1225,9 @@ const FarmerDashboard: React.FC = () => {
                         }}
                       />
                       <ReferenceLine
-                        {...(isMobile ? { y: event.to_date } : { x: event.to_date })}
+                        {...(isMobile
+                          ? { y: event.to_date }
+                          : { x: event.to_date })}
                         stroke="#dc2626"
                         strokeDasharray="5 5"
                         strokeWidth={1}
@@ -1434,7 +1428,8 @@ const FarmerDashboard: React.FC = () => {
                   <div className="flex items-center gap-1">
                     <div className="w-2 h-2 rounded bg-purple-500"></div>
                     <span className="text-purple-700 font-semibold">
-                      Projected: {(metrics.expectedYield || 0).toFixed(1)} T/acre
+                      Projected: {(metrics.expectedYield || 0).toFixed(1)}{" "}
+                      T/acre
                     </span>
                   </div>
                   <div className="flex items-center gap-1">

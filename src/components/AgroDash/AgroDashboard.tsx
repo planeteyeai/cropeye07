@@ -169,7 +169,6 @@ const processApiData = (apiData: Record<string, ApiPlotData>): PlotPoint[] => {
           total_nitrogen: 100, // Default value since not in API
           cation_exchange_capacity: 20, // Default value since not in API
           organic_carbon_density: organicCarbon,
-          organic_carbon_stock: organicCarbon,
           phh2o: ph,
           potassium: 150, // Default value since not in API
           phosphorus: 15, // Default value since not in API
@@ -463,7 +462,7 @@ const AgroDashboard: React.FC = () => {
             </div>
             <div className="flex flex-col p-2 bg-white rounded-lg border border-gray-200 shadow-md">
               <DropdownFilter
-                label="Yield Forecast (T/acre)"
+                label="Yield Forecast (T/Ha)"
                 options={["All", "20-30", "30-40", "40-50", "50+"]}
                 value={filters.yieldForecast}
                 onChange={(value) => handleFilterChange("yieldForecast", value)}
@@ -568,7 +567,7 @@ const AgroDashboard: React.FC = () => {
                   <GaugeChart
                     value={totalArea}
                     maxValue={areaGaugeMaxValue.toFixed(2)}
-                    label="Total Area (acre)"
+                    label="Total Area (Ha)"
                     color="#10b981"
                   />
                   {/* Filter indicator */}
@@ -721,7 +720,7 @@ const AgroDashboard: React.FC = () => {
                             <div className="text-gray-600">
                               Yield Forecast:{" "}
                               <span className="font-medium">
-                                {plot.yieldForecast.toFixed(1)} T/acre
+                                {plot.yieldForecast.toFixed(1)} T/Ha
                               </span>
                             </div>
                           </div>

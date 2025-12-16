@@ -9,12 +9,12 @@ import {
   PieChart,
   Pie,
   Cell,
-  // ReferenceLine,
+  ReferenceLine,
   ReferenceArea,
-  // Scatter,
+  Scatter,
   ComposedChart,
-  // BarChart,
-  // Bar,
+  BarChart,
+  Bar,
 } from "recharts";
 import {
   MapContainer,
@@ -25,9 +25,7 @@ import {
 } from "react-leaflet";
 import {
   Loader2,
-  AlertTriangle,
   Calendar,
-  TrendingUp,
   Droplets,
   Thermometer,
   Activity,
@@ -59,12 +57,12 @@ const OPTIMAL_BIOMASS = 150;
 const SOIL_API_URL = "https://dev-soil.cropeye.ai";
 const SOIL_DATE = "2025-10-03";
 
-// const OTHER_FARMERS_RECOVERY = {
-//   regional_average: 78.5,
-//   top_quartile: 85.2,
-//   bottom_quartile: 65.8,
-//   similar_farms: 76.3,
-// };
+const OTHER_FARMERS_RECOVERY = {
+  regional_average: 7.85,
+  top_quartile: 8.52,
+  bottom_quartile: 6.58,
+  similar_farms: 7.63,
+};
 
 // Type definitions (keeping the same as original)
 interface LineChartData {
@@ -89,7 +87,6 @@ interface LineStyles {
   [key: string]: {
     color: string;
     label: string;
-    icon: React.ComponentType<any>;
   };
 }
 
@@ -99,11 +96,11 @@ interface StressEvent {
   stress: number;
 }
 
-// interface CustomStressDotProps {
-//   cx?: number;
-//   cy?: number;
-//   payload?: any;
-// }
+interface CustomStressDotProps {
+  cx?: number;
+  cy?: number;
+  payload?: any;
+}
 
 interface CustomTooltipProps {
   active?: boolean;
@@ -113,9 +110,12 @@ interface CustomTooltipProps {
 
 interface Metrics {
   brix: number | null;
+  brixMin: number | null;
+  brixMax: number | null;
   recovery: number | null;
   area: number | null;
   biomass: number | null;
+  totalBiomass: number | null;
   stressCount: number | null;
   irrigationEvents: number | null;
   expectedYield: number | null;
@@ -159,18 +159,10 @@ const OwnerFarmDash: React.FC = () => {
   const [showDebugInfo, setShowDebugInfo] = useState(false);
 
   const lineStyles: LineStyles = {
-    growth: { color: "#16a34a", label: "Growth Index", icon: TrendingUp },
-    stress: {
-      color: "#dc2626",
-      label: "Crop Stress Index",
-      icon: AlertTriangle,
-    },
-    water: { color: "#3b82f6", label: "Water Uptake Index", icon: Droplets },
-    moisture: {
-      color: "#92400e",
-      label: "Soil Moisture Index",
-      icon: Thermometer,
-    },
+    growth: { color: "#22c55e", label: "Growth Index" },
+    stress: { color: "#ef4444", label: "Stress Index" },
+    water: { color: "#3b82f6", label: "Water Index" },
+    moisture: { color: "#f59e0b", label: "Moisture Index" },
   };
 
   const [lineChartData, setLineChartData] = useState<LineChartData[]>([]);
@@ -186,9 +178,12 @@ const OwnerFarmDash: React.FC = () => {
 
   const [metrics, setMetrics] = useState<Metrics>({
     brix: null,
+    brixMin: null,
+    brixMax: null,
     recovery: null,
     area: null,
     biomass: null,
+    totalBiomass: null,
     stressCount: null,
     irrigationEvents: null,
     expectedYield: null,
@@ -202,13 +197,22 @@ const OwnerFarmDash: React.FC = () => {
 
   const [stressEvents, setStressEvents] = useState<StressEvent[]>([]);
   const [showStressEvents] = useState<boolean>(false);
-  const [ndreStressEvents] = useState<StressEvent[]>([]);
-  const [showNDREEvents] = useState<boolean>(false);
+  const [ndreStressEvents, setNdreStressEvents] = useState<StressEvent[]>([]);
+  const [showNDREEvents, setShowNDREEvents] = useState<boolean>(false);
   const [combinedChartData, setCombinedChartData] = useState<LineChartData[]>(
     []
   );
   const [timePeriod, setTimePeriod] = useState<TimePeriod>("weekly");
   const [aggregatedData, setAggregatedData] = useState<LineChartData[]>([]);
+
+  // Mobile layout flag for charts
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const update = () => setIsMobile(window.innerWidth < 640);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
   const [mapKey, setMapKey] = useState<number>(0);
   const [mapCenter, setMapCenter] = useState<[number, number]>([
     17.5789, 75.053,
@@ -297,7 +301,7 @@ const OwnerFarmDash: React.FC = () => {
   // Fetch plots when farmer is selected
   useEffect(() => {
     if (selectedFarmerId) {
-      console.log("ðŸ” Finding farmer with ID:", selectedFarmerId);
+      console.log("🔍 Finding farmer with ID:", selectedFarmerId);
 
       const selectedFarmer = farmersForSelectedOfficer.find(
         (f) =>
@@ -305,13 +309,13 @@ const OwnerFarmDash: React.FC = () => {
       );
 
       if (selectedFarmer) {
-        console.log("âœ… Found selected farmer:", selectedFarmer);
+        console.log("✅ Found selected farmer:", selectedFarmer);
 
         // Extract fastapi_plot_id from plots array
         const farmerPlots = selectedFarmer.plots || [];
         const plotIds = farmerPlots.map((plot: any) => plot.fastapi_plot_id);
 
-        console.log("ðŸ“ Farmer plots data:", {
+        console.log("📍 Farmer plots data:", {
           plotsArray: farmerPlots,
           extractedPlotIds: plotIds,
           plotsCount: plotIds.length,
@@ -322,19 +326,19 @@ const OwnerFarmDash: React.FC = () => {
         // Auto-select first plot if available
         if (plotIds.length > 0) {
           const firstPlotId = plotIds[0];
-          console.log("âœ… Auto-selecting first plot:", firstPlotId);
+          console.log("✅ Auto-selecting first plot:", firstPlotId);
           setSelectedPlotId(firstPlotId);
         } else {
-          console.warn("âš ï¸ No plots found for this farmer");
+          console.warn("⚠️ No plots found for this farmer");
           setSelectedPlotId("");
         }
       } else {
-        console.warn("âš ï¸ Farmer not found with ID:", selectedFarmerId);
+        console.warn("⚠️ Farmer not found with ID:", selectedFarmerId);
         setPlots([]);
         setSelectedPlotId("");
       }
     } else {
-      console.log("â„¹ï¸ No farmer selected");
+      console.log("ℹ️ No farmer selected");
       setPlots([]);
       setSelectedPlotId("");
     }
@@ -355,8 +359,8 @@ const OwnerFarmDash: React.FC = () => {
   }, [lineChartData, timePeriod]);
 
   useEffect(() => {
-    if (lineChartData.length > 0) {
-      const combined = lineChartData.map((point) => {
+    if (aggregatedData.length > 0) {
+      const combined = aggregatedData.map((point) => {
         const stressEvent = showNDREEvents
           ? ndreStressEvents.find((event) => {
               const eventStart = new Date(event.from_date);
@@ -373,80 +377,336 @@ const OwnerFarmDash: React.FC = () => {
           stressEventData: stressEvent,
         };
       });
+
       setCombinedChartData(combined);
     }
-  }, [lineChartData, ndreStressEvents, showNDREEvents]);
+  }, [aggregatedData, ndreStressEvents, showNDREEvents]);
 
-  // Fetch all data for selected plot (same as FarmerDashboard)
+  // Helper function to make axios requests with timeout and retry logic
+  // Optimized with shorter timeout for faster retrieval
+  const makeRequestWithRetry = async (
+    url: string,
+    retries = 1,
+    timeout = 15000
+  ): Promise<any> => {
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => {
+      abortController.abort();
+    }, timeout);
+
+    try {
+      const response = await axios.get(url, {
+        signal: abortController.signal,
+        timeout: timeout,
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+      });
+      clearTimeout(timeoutId);
+      return response.data;
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+
+      // Handle CORS errors
+      if (
+        error.message?.includes("CORS") ||
+        error.message?.includes("Access-Control-Allow-Origin")
+      ) {
+        console.warn(
+          `CORS error for ${url}. This is a server-side configuration issue.`
+        );
+        throw new Error(
+          `CORS error: The server at ${
+            new URL(url).origin
+          } is not configured to allow requests from this origin. Please contact the API administrator.`
+        );
+      }
+
+      // Handle timeout errors (including AbortError from AbortController)
+      if (
+        error.name === "AbortError" ||
+        error.code === "ECONNABORTED" ||
+        error.message?.includes("timeout") ||
+        error.message?.includes("canceled")
+      ) {
+        console.warn(`Request timeout for ${url}`);
+        if (retries > 0) {
+          console.log(`Retrying request (${retries} retries left)...`);
+          await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait 1 second before retry
+          return makeRequestWithRetry(url, retries - 1, timeout);
+        }
+        throw new Error(
+          `Request timeout: The server took too long to respond. Please try again later.`
+        );
+      }
+
+      // Handle network errors
+      if (
+        error.code === "ERR_NETWORK" ||
+        error.message?.includes("ERR_FAILED")
+      ) {
+        console.warn(`Network error for ${url}:`, error.message);
+        if (retries > 0) {
+          console.log(`Retrying request (${retries} retries left)...`);
+          await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
+          return makeRequestWithRetry(url, retries - 1, timeout);
+        }
+        throw new Error(
+          `Network error: Unable to connect to the server. Please check your internet connection.`
+        );
+      }
+
+      // Handle 504 Gateway Timeout
+      if (error.response?.status === 504) {
+        console.warn(`Gateway timeout for ${url}`);
+        if (retries > 0) {
+          console.log(`Retrying request (${retries} retries left)...`);
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          return makeRequestWithRetry(url, retries - 1, timeout);
+        }
+        throw new Error(
+          `Gateway timeout: The server is taking too long to process your request. Please try again later.`
+        );
+      }
+
+      // Re-throw other errors
+      throw error;
+    }
+  };
+
+  // Fetch all data for selected plot - Optimized for faster retrieval
   const fetchAllData = async (): Promise<void> => {
     if (!selectedPlotId) return;
 
     setLoadingData(true);
     try {
-      // --- Consolidated API Call ---
       const today = new Date().toISOString().slice(0, 10);
+
+      // Step 1: Fetch critical data first (agroStats) with caching
       const agroStatsCacheKey = `agroStats_${today}`;
       let allPlotsData = getCache(agroStatsCacheKey);
-      if (!allPlotsData) {
-        const agroStatsRes = await axios.get(
-          `https://dev-events.cropeye.ai/plots/agroStats?end_date=${today}`
-        );
-        allPlotsData = agroStatsRes.data;
-        setCache(agroStatsCacheKey, allPlotsData);
+
+      // Also check plot-specific cache for faster retrieval
+      const plotSpecificCacheKey = `plot_${selectedPlotId}_${today}`;
+      let currentPlotData = getCache(plotSpecificCacheKey);
+
+      if (!allPlotsData || !currentPlotData) {
+        try {
+          // Fetch agroStats with shorter timeout for faster failure/recovery
+          const agroStatsRes = await makeRequestWithRetry(
+            `https://dev-events.cropeye.ai/plots/agroStats?end_date=${today}`,
+            1,
+            12000 // Reduced timeout for faster retrieval
+          );
+          allPlotsData = agroStatsRes;
+          setCache(agroStatsCacheKey, allPlotsData);
+
+          // Extract and cache plot-specific data
+          const quotedPlotId = `"${selectedPlotId.replace("_", '"_"')}"`;
+          currentPlotData =
+            allPlotsData[selectedPlotId] || allPlotsData[quotedPlotId] || null;
+          if (currentPlotData) {
+            setCache(plotSpecificCacheKey, currentPlotData);
+          }
+        } catch (error: any) {
+          console.warn(
+            "Failed to fetch agroStats, continuing with other data:",
+            error.message
+          );
+          if (!allPlotsData) allPlotsData = null;
+          if (!currentPlotData) {
+            const quotedPlotId = `"${selectedPlotId.replace("_", '"_"')}"`;
+            currentPlotData = allPlotsData
+              ? allPlotsData[selectedPlotId] || allPlotsData[quotedPlotId]
+              : null;
+          }
+        }
+      } else {
+        // Use cached plot data
+        const quotedPlotId = `"${selectedPlotId.replace("_", '"_"')}"`;
+        currentPlotData =
+          allPlotsData[selectedPlotId] ||
+          allPlotsData[quotedPlotId] ||
+          currentPlotData;
       }
 
-      // Find the data for the current plot from the bulk response, handling quoted keys
-      const quotedPlotId = `"${selectedPlotId.replace("_", '"_"')}"`;
-      const currentPlotData = allPlotsData
-        ? allPlotsData[selectedPlotId] || allPlotsData[quotedPlotId]
-        : null;
+      // Step 2: Calculate biomass from expectedYield (matching FarmerDashboard)
+      const expectedYieldValue =
+        currentPlotData?.brix_sugar?.sugar_yield?.mean ?? null;
 
-      // Fetch data that is not in the agroStats endpoint
-      const [rawIndices, stressData, irrigationData] = await Promise.all([
-        axios.get(`${BASE_URL}/plots/${selectedPlotId}/indices`).then((res) =>
-          res.data.map((item: any) => ({
-            date: new Date(item.date).toISOString().split("T")[0],
-            growth: item.NDVI,
-            stress: item.NDMI,
-            water: item.NDWI,
-            moisture: item.NDRE,
-          }))
-        ),
-        axios
-          .get(
-            `${BASE_URL}/plots/${selectedPlotId}/stress?index_type=NDRE&threshold=0.15`
-          )
-          .then((res) => res.data),
-        axios
-          .get(
-            `${BASE_URL}/plots/${selectedPlotId}/irrigation?threshold_ndmi=0.05&threshold_ndwi=0.05&min_days_between_events=10`
-          )
-          .then((res) => res.data),
-      ]);
+      let calculatedBiomass = null;
+      let totalBiomassForMetric = null;
 
+      if (expectedYieldValue !== null) {
+        const totalBiomass = expectedYieldValue * 1.27;
+        const underGroundBiomassInTons = totalBiomass * 0.12;
+        calculatedBiomass = underGroundBiomassInTons;
+        totalBiomassForMetric = totalBiomass;
+      }
+
+      // Fetch harvest status from sugarcane-harvest endpoint
+      const harvestCacheKey = `harvest_${selectedPlotId}_${today}`;
+      let harvestStatus = null;
+      let harvestData = getCache(harvestCacheKey);
+
+      if (!harvestData) {
+        try {
+          const harvestRes = await axios.post(
+            `${BASE_URL}/sugarcane-harvest?plot_name=${selectedPlotId}&end_date=${today}`
+          );
+          harvestData = harvestRes.data;
+          setCache(harvestCacheKey, harvestData);
+        } catch (harvestErr) {
+          console.error("Error fetching harvest status:", harvestErr);
+        }
+      }
+
+      // Extract harvest_status from response
+      if (harvestData) {
+        harvestStatus =
+          harvestData?.harvest_summary?.harvest_status ||
+          harvestData?.features?.[0]?.properties?.harvest_status ||
+          null;
+      }
+
+      // Step 3: Update metrics immediately with available data for faster UI response
+      if (currentPlotData) {
+        setMetrics((prev) => ({
+          ...prev,
+          brix: currentPlotData?.brix_sugar?.brix?.mean ?? null,
+          brixMin: currentPlotData?.brix_sugar?.brix?.min ?? null,
+          brixMax: currentPlotData?.brix_sugar?.brix?.max ?? null,
+          recovery: currentPlotData?.brix_sugar?.recovery?.mean ?? null,
+          area: currentPlotData?.area_acres ?? null,
+          biomass: calculatedBiomass,
+          totalBiomass: totalBiomassForMetric,
+          expectedYield: expectedYieldValue,
+          daysToHarvest: currentPlotData?.days_to_harvest ?? null,
+          growthStage: harvestStatus || currentPlotData?.Sugarcane_Status || null,
+          soilPH: currentPlotData?.soil?.phh2o ?? null,
+          organicCarbonDensity:
+            currentPlotData?.soil?.organic_carbon_stock != null
+              ? parseFloat(currentPlotData.soil.organic_carbon_stock.toFixed(2))
+              : null,
+          actualYield: currentPlotData?.brix_sugar?.sugar_yield?.mean ?? null,
+        }));
+      }
+
+      // Step 4: Fetch additional data in parallel with shorter timeouts
+      // Check cache first for each endpoint
+      const indicesCacheKey = `indices_${selectedPlotId}`;
+      const stressCacheKey = `stress_${selectedPlotId}_NDRE_0.15`;
+      const irrigationCacheKey = `irrigation_${selectedPlotId}`;
+
+      let cachedIndices = getCache(indicesCacheKey);
+      let cachedStress = getCache(stressCacheKey);
+      let cachedIrrigation = getCache(irrigationCacheKey);
+
+      // Only fetch what's not cached, with shorter timeouts
+      const fetchPromises = [];
+
+      if (!cachedIndices) {
+        fetchPromises.push(
+          makeRequestWithRetry(
+            `${BASE_URL}/plots/${selectedPlotId}/indices`,
+            1,
+            10000 // Shorter timeout for indices
+          )
+            .then((data) => {
+              const processed = data.map((item: any) => ({
+                date: new Date(item.date).toISOString().split("T")[0],
+                growth: item.NDVI,
+                stress: item.NDMI,
+                water: item.NDWI,
+                moisture: item.NDRE,
+              }));
+              setCache(indicesCacheKey, processed);
+              return { type: "indices", data: processed };
+            })
+            .catch(() => ({ type: "indices", data: null }))
+        );
+      } else {
+        fetchPromises.push(
+          Promise.resolve({ type: "indices", data: cachedIndices })
+        );
+      }
+
+      if (!cachedStress) {
+        fetchPromises.push(
+          makeRequestWithRetry(
+            `${BASE_URL}/plots/${selectedPlotId}/stress?index_type=NDRE&threshold=0.15`,
+            1,
+            10000
+          )
+            .then((data) => {
+              setCache(stressCacheKey, data);
+              return { type: "stress", data };
+            })
+            .catch(() => ({
+              type: "stress",
+              data: { events: [], total_events: 0 },
+            }))
+        );
+      } else {
+        fetchPromises.push(
+          Promise.resolve({ type: "stress", data: cachedStress })
+        );
+      }
+
+      if (!cachedIrrigation) {
+        fetchPromises.push(
+          makeRequestWithRetry(
+            `${BASE_URL}/plots/${selectedPlotId}/irrigation?threshold_ndmi=0.05&threshold_ndwi=0.05&min_days_between_events=10`,
+            1,
+            10000
+          )
+            .then((data) => {
+              setCache(irrigationCacheKey, data);
+              return { type: "irrigation", data };
+            })
+            .catch(() => ({ type: "irrigation", data: { total_events: null } }))
+        );
+      } else {
+        fetchPromises.push(
+          Promise.resolve({ type: "irrigation", data: cachedIrrigation })
+        );
+      }
+
+      // Execute all fetches in parallel
+      const results = await Promise.allSettled(fetchPromises);
+
+      let rawIndices: LineChartData[] = [];
+      let stressData: any = { events: [], total_events: 0 };
+      let irrigationData: any = { total_events: null };
+
+      results.forEach((result) => {
+        if (result.status === "fulfilled" && result.value) {
+          const { type, data } = result.value;
+          if (type === "indices") rawIndices = data || [];
+          if (type === "stress")
+            stressData = data || { events: [], total_events: 0 };
+          if (type === "irrigation")
+            irrigationData = data || { total_events: null };
+        }
+      });
+
+      // Update state with fetched data
       setLineChartData(rawIndices);
       setStressEvents(stressData?.events ?? []);
+      setNdreStressEvents(stressData?.events ?? []);
 
-      setMetrics({
-        brix: currentPlotData?.brix_sugar?.brix?.min ?? null,
-        recovery: currentPlotData?.brix_sugar?.recovery?.min ?? null,
-        area: currentPlotData?.area_acres ?? null,
-        biomass: currentPlotData?.biomass?.mean ?? null,
+      // Update metrics with complete data
+      setMetrics((prev) => ({
+        ...prev,
         stressCount: stressData?.total_events ?? 0,
         irrigationEvents: irrigationData?.total_events ?? null,
-        expectedYield: currentPlotData?.brix_sugar?.sugar_yield?.min ?? null,
-        daysToHarvest: currentPlotData?.days_to_harvest ?? null,
-        growthStage: currentPlotData?.Sugarcane_Status ?? null,
-        soilPH: currentPlotData?.soil?.phh2o ?? null,
-        organicCarbonDensity:
-          currentPlotData?.soil?.organic_carbon_stock != null
-            ? parseFloat(currentPlotData.soil.organic_carbon_stock.toFixed(2))
-            : null,
-        actualYield: currentPlotData?.brix_sugar?.sugar_yield?.min ?? null,
-        cnRatio: null, // This was from the old /analyze call
-      });
-    } catch (err) {
+        cnRatio: null,
+      }));
+    } catch (err: any) {
       console.error("Error fetching data:", err);
+      // You could add a toast notification here to inform the user
+      // For now, we'll just log the error and continue with partial data
     } finally {
       setLoadingData(false);
     }
@@ -458,10 +718,10 @@ const OwnerFarmDash: React.FC = () => {
     try {
       console.log("=".repeat(60));
       console.log(
-        "ðŸ”„ OwnerFarmDash: Fetching owner hierarchy (managers, FOs, farmers)..."
+        "🔄 OwnerFarmDash: Fetching owner hierarchy (managers, FOs, farmers)..."
       );
       console.log(
-        "ðŸ“ Endpoint: https://cropeye-server-1.onrender.com/api/users/owner-hierarchy/"
+        "📍 Endpoint: https://cropeye-server-1.onrender.com/api/users/owner-hierarchy/"
       );
 
       // Use authenticated API call from api.ts
@@ -472,18 +732,18 @@ const OwnerFarmDash: React.FC = () => {
       const managersData = responseData.managers || [];
 
       console.log("=".repeat(60));
-      console.log("âœ… OwnerFarmDash: Raw API response:", responseData);
-      console.log("âœ… OwnerFarmDash: Extracted managers array:", managersData);
+      console.log("✅ OwnerFarmDash: Raw API response:", responseData);
+      console.log("✅ OwnerFarmDash: Extracted managers array:", managersData);
       setManagers(managersData);
 
       // Auto-select first manager if available
       if (managersData.length > 0) {
         setSelectedManagerId(String(managersData[0].id));
       } else {
-        console.warn("âš ï¸ OwnerFarmDash: No managers found for this owner");
+        console.warn("⚠️ OwnerFarmDash: No managers found for this owner");
       }
     } catch (error: any) {
-      console.error("âŒ OwnerFarmDash: Error fetching owner data:", error);
+      console.error("❌ OwnerFarmDash: Error fetching owner data:", error);
       console.error("Error details:", error.response?.data);
 
       // Show user-friendly error message
@@ -678,6 +938,76 @@ const OwnerFarmDash: React.FC = () => {
     });
   };
 
+  const getStressColor = (stress: number): string => {
+    if (stress < 0.1) return "#dc2626";
+    if (stress < 0.15) return "#f97316";
+    return "#eab308";
+  };
+
+  const getStressSeverityLabel = (stress: number): string => {
+    if (stress < 0.1) return "High";
+    if (stress < 0.15) return "Medium";
+    return "Low";
+  };
+
+  const CustomStressDot: React.FC<CustomStressDotProps> = (props) => {
+    const { cx, cy, payload } = props;
+
+    if (!payload || !payload.isStressEvent) return null;
+
+    const color = getStressColor(payload.stressLevel);
+    const radius =
+      payload.stressLevel < 0.1 ? 10 : payload.stressLevel < 0.15 ? 8 : 6;
+
+    return (
+      <g>
+        <circle
+          cx={cx}
+          cy={cy}
+          r={radius + 1}
+          fill="white"
+          stroke={color}
+          strokeWidth={2}
+          fillOpacity={0.9}
+        />
+        <circle
+          cx={cx}
+          cy={cy}
+          r={radius}
+          fill={color}
+          fillOpacity={0.8}
+          stroke={color}
+          strokeWidth={1}
+        />
+      </g>
+    );
+  };
+
+  const fetchNDREStressEvents = async (): Promise<void> => {
+    if (!selectedPlotId) {
+      console.warn(
+        "⚠️ OwnerFarmDash: No plot ID available for NDRE stress events"
+      );
+      return;
+    }
+
+    try {
+      const data = await makeRequestWithRetry(
+        `${BASE_URL}/plots/${selectedPlotId}/stress?index_type=NDRE&threshold=0.15`,
+        1,
+        15000
+      );
+      setNdreStressEvents(data.events ?? []);
+      setShowNDREEvents(true);
+    } catch (err: any) {
+      console.error("Error fetching NDRE stress events:", err);
+      // Optionally show user-friendly error message
+      if (err.message) {
+        console.warn("NDRE stress events fetch failed:", err.message);
+      }
+    }
+  };
+
   // Map auto-center component (from Harvest Dashboard)
   function MapAutoCenter({ center }: { center: [number, number] }) {
     const map = useMap();
@@ -697,33 +1027,61 @@ const OwnerFarmDash: React.FC = () => {
 
   // Biomass data setup (same as FarmerDashboard)
   const currentBiomass = metrics.biomass || 0;
-  const expectedBiomass = OPTIMAL_BIOMASS;
+  const totalBiomass = metrics.totalBiomass || 0;
 
   const biomassData = [
     {
-      name: "Expected",
-      value: expectedBiomass,
+      name: "Total Biomass",
+      value: totalBiomass,
       fill: "#3b82f6",
     },
     {
-      name: "Actual",
+      name: "Underground Biomass",
       value: currentBiomass,
       fill: "#10b981",
     },
   ];
 
+  // Recovery Rate Comparison data (matching FarmerDashboard)
+  const recoveryComparisonData = [
+    {
+      name: "Your Farm",
+      value: metrics.recovery || 0,
+      fill: "#10b981",
+      label: "Your Recovery Rate",
+    },
+    {
+      name: "Regional Average",
+      value: OTHER_FARMERS_RECOVERY.regional_average,
+      fill: "#3b82f6",
+      label: "Regional Average",
+    },
+    {
+      name: "Top 25%",
+      value: OTHER_FARMERS_RECOVERY.top_quartile,
+      fill: "#22c55e",
+      label: "Top Quartile",
+    },
+    {
+      name: "Similar Farms",
+      value: OTHER_FARMERS_RECOVERY.similar_farms,
+      fill: "#f59e0b",
+      label: "Similar Farms",
+    },
+  ];
+
   // Time period toggle component
   const TimePeriodToggle: React.FC = () => (
-    <div className="flex bg-white rounded-lg p-1 shadow-sm border">
+    <div className="flex flex-wrap gap-1 mb-3">
       {(["daily", "weekly", "monthly", "yearly"] as TimePeriod[]).map(
         (period) => (
           <button
             key={period}
             onClick={() => setTimePeriod(period)}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+            className={`px-3 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
               timePeriod === period
-                ? "bg-blue-500 text-white shadow-md"
-                : "text-gray-600 hover:text-gray-800 hover:bg-gray-50"
+                ? "bg-blue-500 text-white shadow-md transform scale-105"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow-sm"
             }`}
           >
             {period.charAt(0).toUpperCase() + period.slice(1)}
@@ -735,25 +1093,30 @@ const OwnerFarmDash: React.FC = () => {
 
   // Enhanced chart legend
   const ChartLegend: React.FC = () => (
-    <div className="flex flex-wrap gap-2 mb-4">
-      {Object.entries(lineStyles).map(([key, { color, label, icon: Icon }]) => (
+    <div className="flex flex-wrap gap-1 text-xs font-medium mb-2">
+      {Object.entries(lineStyles).map(([key, { color, label }]) => (
         <button
           key={key}
           onClick={() => toggleLine(key)}
-          className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 ${
+          className={`flex items-center gap-1 px-2 py-1 rounded-full transition-all duration-200 ${
             visibleLines[key as keyof VisibleLines]
-              ? "bg-white shadow-sm border-2 border-blue-200"
-              : "bg-gray-50 opacity-60 hover:opacity-80"
+              ? "bg-white shadow-sm transform scale-105"
+              : "bg-gray-100 opacity-50 hover:opacity-75"
           }`}
         >
-          <Icon className="w-4 h-4" style={{ color }} />
           <span
-            className="w-3 h-3 rounded-full"
+            className="w-1.5 h-1.5 rounded-full"
             style={{ backgroundColor: color }}
           />
-          <span className="text-sm font-medium text-gray-700">{label}</span>
+          <span className="text-gray-700 text-xs">{label}</span>
         </button>
       ))}
+      {showNDREEvents && (
+        <div className="flex items-center gap-1 ml-1 px-2 py-1 bg-orange-100 rounded-md border border-orange-300">
+          <div className="w-2 h-2 rounded-full bg-orange-500 border border-orange-600"></div>
+          <span className="text-orange-800 font-semibold text-xs">Stress</span>
+        </div>
+      )}
     </div>
   );
 
@@ -765,22 +1128,44 @@ const OwnerFarmDash: React.FC = () => {
   }) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-lg backdrop-blur-sm">
-          <p className="text-sm font-semibold text-gray-800 mb-2">
-            {formatDate(label || "")}
+        <div className="bg-white p-2 border border-gray-200 rounded-lg shadow-lg backdrop-blur-sm">
+          <p className="text-xs font-semibold text-gray-800 mb-1">
+            {timePeriod === "monthly" ? label : formatDate(label || "")}
           </p>
           {payload.map((entry, index) => {
-            const lineStyle = lineStyles[entry.dataKey as keyof LineStyles];
-            if (!lineStyle) return null;
+            let displayValue = "";
+            let displayLabel = "";
+
+            if (
+              entry.dataKey === "stressLevel" &&
+              entry.payload?.isStressEvent
+            ) {
+              displayValue = `${Number(entry.value).toFixed(
+                4
+              )} (${getStressSeverityLabel(entry.value)})`;
+              displayLabel = "NDRE Stress Level";
+            } else if (lineStyles[entry.dataKey as keyof LineStyles]) {
+              const value = entry.value;
+              const numericValue =
+                typeof value === "number" ? value : parseFloat(value);
+              displayValue = !isNaN(numericValue)
+                ? numericValue.toFixed(4)
+                : "N/A";
+              displayLabel =
+                lineStyles[entry.dataKey as keyof LineStyles]?.label ||
+                entry.dataKey;
+            } else {
+              return null;
+            }
 
             return (
-              <div key={index} className="flex items-center gap-2 mb-1">
+              <div key={index} className="flex items-center gap-1 mb-1">
                 <span
-                  className="w-3 h-3 rounded-full"
+                  className="w-2 h-2 rounded-full"
                   style={{ backgroundColor: entry.color }}
                 />
-                <span className="text-sm text-gray-600">
-                  {lineStyle.label}: {Number(entry.value).toFixed(4)}
+                <span className="text-xs text-gray-600">
+                  {displayLabel}: {displayValue}
                 </span>
               </div>
             );
@@ -788,6 +1173,7 @@ const OwnerFarmDash: React.FC = () => {
         </div>
       );
     }
+
     return null;
   };
 
@@ -875,7 +1261,7 @@ const OwnerFarmDash: React.FC = () => {
   // );
 
   // Log farmers state before rendering
-  console.log("ðŸŽ¨ FarmCropStatus Render - Current State:", {
+  console.log("🎨 FarmCropStatus Render - Current State:", {
     // officerCount: fieldOfficers.length,
     // totalFarmers: totalFarmers,
     selectedFarmerId,
@@ -904,8 +1290,8 @@ const OwnerFarmDash: React.FC = () => {
                       "https://cropeye-server-1.onrender.com/api/farms/recent-farmers/",
                     method: "GET",
                     bearerToken: localStorage.getItem("token")
-                      ? "âœ… Present"
-                      : "âŒ Missing",
+                      ? "✅ Present"
+                      : "❌ Missing",
                     tokenPreview:
                       localStorage.getItem("token")?.substring(0, 30) + "...",
                     // totalFarmers: farmers.length,
@@ -927,7 +1313,7 @@ const OwnerFarmDash: React.FC = () => {
               </pre>
             </div>
             <p className="text-xs text-gray-400 mt-2">
-              ðŸ’¡ Check the browser console for detailed API request/response
+              💡 Check the browser console for detailed API request/response
               logs
             </p>
           </div>
@@ -1012,7 +1398,7 @@ const OwnerFarmDash: React.FC = () => {
                     value={selectedFarmerId}
                     onChange={(e) => {
                       console.log(
-                        "ðŸ”„ Farmer selection changed to:",
+                        "🔄 Farmer selection changed to:",
                         e.target.value
                       );
                       setSelectedFarmerId(e.target.value);
@@ -1038,7 +1424,7 @@ const OwnerFarmDash: React.FC = () => {
                           const plotsCount = farmer.plots?.length || 0;
 
                           console.log(
-                            `ðŸ” Rendering farmer ${index + 1} in dropdown:`,
+                            `🔍 Rendering farmer ${index + 1} in dropdown:`,
                             {
                               id: farmerId,
                               name: farmerName,
@@ -1069,11 +1455,11 @@ const OwnerFarmDash: React.FC = () => {
                     value={selectedPlotId}
                     onChange={(e) => {
                       const newPlotId = e.target.value;
-                      console.log("ðŸ”„ Plot selection changed to:", newPlotId);
+                      console.log("🔄 Plot selection changed to:", newPlotId);
                       setSelectedPlotId(newPlotId);
                       if (newPlotId) {
                         console.log(
-                          "ðŸ“ Fetching coordinates for plot:",
+                          "📍 Fetching coordinates for plot:",
                           newPlotId
                         );
                         // Immediately fetch coordinates and update map
@@ -1091,7 +1477,7 @@ const OwnerFarmDash: React.FC = () => {
                         <option value="">Select a plot</option>
                         {plots.map((plotId, index) => {
                           console.log(
-                            `ðŸ” Rendering plot ${index + 1}:`,
+                            `🔍 Rendering plot ${index + 1}:`,
                             plotId
                           );
                           return (
@@ -1133,7 +1519,7 @@ const OwnerFarmDash: React.FC = () => {
                     metrics.area?.toFixed(2) || "-"
                   )}
                 </div>
-                <div className="text-sm font-semibold text-green-600">acre</div>
+                <div className="text-sm font-semibold text-green-600">Ha</div>
               </div>
             </div>
             <p className="text-xs text-gray-600 font-medium">Field Area</p>
@@ -1180,17 +1566,46 @@ const OwnerFarmDash: React.FC = () => {
             <div className="flex items-center justify-between mb-2">
               <Beaker className="w-6 h-6 text-blue-600" />
               <div className="text-right">
-                <div className="text-2xl font-bold text-gray-800">
+                <div className="text-xl font-bold text-gray-800">
                   {loadingData ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
-                    metrics.brix?.toFixed(1) || "-"
+                    <>
+                      {metrics.brix || "-"}
+                      <span className="text-xl font-bold text-blue-600">
+                        {"\u00B0"}Brix(Avg)
+                      </span>
+                    </>
                   )}
                 </div>
-                <div className="text-sm font-semibold text-blue-600">Â°Brix</div>
               </div>
             </div>
-            <p className="text-xs text-gray-600 font-medium">Sugar Content</p>
+
+            <div className="flex items-center justify-between text-xl text-gray-600">
+              <p className="text-xs text-gray-600 font-medium">Sugar Content</p>
+              <div className="flex gap-4">
+                <div className="text-center">
+                  <div className="font-semibold text-red-600">
+                    {loadingData ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      metrics.brixMax || "-"
+                    )}
+                  </div>
+                  <div className="text-gray-500">Max</div>
+                </div>
+                <div className="text-center">
+                  <div className="font-semibold text-green-600">
+                    {loadingData ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      metrics.brixMin || "-"
+                    )}
+                  </div>
+                  <div className="text-gray-500">Min</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1257,7 +1672,7 @@ const OwnerFarmDash: React.FC = () => {
                   {loadingData ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
-                    metrics.irrigationEvents || "-"
+                    metrics.irrigationEvents ?? 0
                   )}
                 </div>
                 <div className="text-sm font-semibold text-cyan-600">
@@ -1270,24 +1685,30 @@ const OwnerFarmDash: React.FC = () => {
             </p>
           </div>
 
-          <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-4 border border-yellow-200 hover:shadow-xl transition-all duration-300">
-            <div className="flex items-center justify-between mb-2">
-              <AlertTriangle className="w-6 h-6 text-yellow-600" />
-              <div className="text-right">
-                <div className="text-2xl font-bold text-gray-800">
-                  {loadingData ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    metrics.stressCount || "-"
-                  )}
-                </div>
-                <div className="text-sm font-semibold text-yellow-600">
-                  Events
+          <button
+            onClick={fetchNDREStressEvents}
+            onDoubleClick={() => setShowNDREEvents(!showNDREEvents)}
+            className="w-full"
+          >
+            <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-4 border border-red-200 hover:shadow-xl transition-all duration-300">
+              <div className="flex items-center justify-between mb-2">
+                <Activity className="w-5 h-5 text-red-600" />
+                <div className="text-right">
+                  <div className="text-lg font-bold text-gray-800">
+                    {loadingData ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      metrics.stressCount ?? 0
+                    )}
+                  </div>
+                  <div className="text-xs font-semibold text-red-600">
+                    Events
+                  </div>
                 </div>
               </div>
+              <p className="text-xs text-gray-600">Stress Events</p>
             </div>
-            <p className="text-xs text-gray-600 font-medium">Stress Events</p>
-          </div>
+          </button>
 
           <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-4 border border-pink-200 hover:shadow-xl transition-all duration-300">
             <div className="flex items-center justify-between mb-2">
@@ -1300,7 +1721,7 @@ const OwnerFarmDash: React.FC = () => {
                     metrics.biomass?.toFixed(1) || "-"
                   )}
                 </div>
-                <div className="text-sm font-semibold text-pink-600">kg/acre</div>
+                <div className="text-sm font-semibold text-pink-600">kg/ha</div>
               </div>
             </div>
             <p className="text-xs text-gray-600 font-medium">Avg Biomass</p>
@@ -1360,7 +1781,7 @@ const OwnerFarmDash: React.FC = () => {
                 <MapAutoCenter center={mapCenter} />
                 <TileLayer
                   url="http://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
-                  attribution="Â© Google"
+                  attribution="© Google"
                   maxZoom={20}
                   maxNativeZoom={18}
                   minZoom={10}
@@ -1408,52 +1829,66 @@ const OwnerFarmDash: React.FC = () => {
 
           {/* Performance Gauges */}
           <div className="space-y-4">
-            <div className="bg-white rounded-xl shadow-lg p-4">
-              <div className="flex items-center gap-2 mb-4">
+            <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
                 <Target className="w-5 h-5 text-purple-600" />
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Sugar Yield Projection
+                <h3 className="text-sm font-semibold text-gray-800">
+                  Sugarcane Yield Projection
                 </h3>
               </div>
-              <PieChartWithNeedle
-                value={metrics.expectedYield || 0}
-                max={400}
-                title="Expected Yield"
-                unit="T/acre"
-                width={220}
-                height={140}
-              />
-              <div className="mt-4 text-center">
-                <div className="text-sm text-gray-600">
-                  Performance:{" "}
-                  <span className="font-semibold text-purple-600">
+              <div className="flex flex-col items-center">
+                <PieChartWithNeedle
+                  value={metrics.expectedYield || 0}
+                  max={400}
+                  title="Sugarcane Yield Forecast"
+                  unit=" T/acre"
+                  width={260}
+                  height={130}
+                />
+                <div className="mt-2 text-center">
+                  <div className="flex items-center justify-center gap-2 text-xs flex-wrap">
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 rounded bg-purple-500"></div>
+                      <span className="text-purple-700 font-semibold">
+                        Projected: {(metrics.expectedYield || 0).toFixed(1)}{" "}
+                        T/acre
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 rounded bg-green-500"></div>
+                      <span className="text-green-700 font-semibold">
+                        Optimal: 400 T/acre
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-1 text-xs text-gray-500">
+                    Performance:{" "}
                     {(((metrics.expectedYield || 0) / 400) * 100).toFixed(1)}%
-                  </span>{" "}
-                  of optimal
+                    of optimal yield
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Biomass Performance */}
-            <div className="bg-white rounded-xl shadow-lg p-4">
+            <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-5 sm:p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Activity className="w-5 h-5 text-green-600" />
-                <h3 className="text-lg font-semibold text-gray-900">
+                <Activity className="w-6 h-6 sm:w-7 sm:h-7 text-green-600" />
+                <h3 className="text-base sm:text-lg font-semibold text-gray-800">
                   Biomass Performance
                 </h3>
               </div>
-
-              <div className="h-36 flex flex-col items-center justify-center relative">
+              <div className="h-48 sm:h-56 md:h-64 flex flex-col items-center justify-center relative">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={biomassData}
                       cx="50%"
-                      cy="60%"
+                      cy="80%"
                       startAngle={180}
                       endAngle={0}
-                      outerRadius={80}
-                      innerRadius={50}
+                      outerRadius={110}
+                      innerRadius={70}
                       dataKey="value"
                       labelLine={false}
                     >
@@ -1463,44 +1898,98 @@ const OwnerFarmDash: React.FC = () => {
                     </Pie>
                     <text
                       x="50%"
-                      y="60%"
+                      y="70%"
                       textAnchor="middle"
                       dominantBaseline="middle"
-                      className="text-sm font-semibold fill-green-600"
+                      className="text-base sm:text-lg font-semibold fill-blue-600"
                     >
-                      {currentBiomass.toFixed(1)} kg/acre
+                      {totalBiomass.toFixed(1)} T/acre
                     </text>
                     <Tooltip
                       wrapperStyle={{ zIndex: 50 }}
-                      contentStyle={{ fontSize: "10px" }}
+                      contentStyle={{ fontSize: "12px" }}
                       formatter={(value: number, name: string) => [
-                        `${value.toFixed(1)} kg/acre`,
+                        `${value.toFixed(1)} T/acre`,
                         name,
                       ]}
                     />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-
-              <div className="mt-4 text-center">
-                <div className="text-sm text-gray-600">
-                  Performance:{" "}
-                  <span className="font-semibold text-green-600">
-                    {((currentBiomass / expectedBiomass) * 100).toFixed(1)}%
-                  </span>{" "}
-                  of optimal
+              <p className="text-sm sm:text-base text-gray-700 font-medium text-center mb-3">
+                Biomass Distribution Chart
+              </p>
+              <div className="text-center">
+                <div className="flex items-center justify-center gap-3 text-sm sm:text-base flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded bg-blue-500"></div>
+                    <span className="text-blue-700 font-semibold">
+                      Total: {totalBiomass.toFixed(1)} T/acre
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded bg-green-500"></div>
+                    <span className="text-green-700 font-semibold">
+                      Underground: {currentBiomass.toFixed(1)} T/acre
+                    </span>
+                  </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Recovery Rate Comparison */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-4">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-3">
+                <div className="flex items-center gap-2 mb-2 lg:mb-0">
+                  <Users className="w-5 h-5 text-blue-600" />
+                  <h3 className="text-sm font-semibold text-gray-800">
+                    Recovery Rate Comparison
+                  </h3>
+                </div>
+              </div>
+              <div className="h-36 flex items-center justify-center">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={recoveryComparisonData}
+                    margin={{ top: 1, right: 5, left: -20, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="2 2" stroke="#e5e7eb" />
+                    <XAxis dataKey="name" tick={{ fontSize: 9 }} height={10} />
+                    <YAxis tick={{ fontSize: 8 }} domain={[0, 10]} />
+                    <Tooltip
+                      formatter={(value: number) => [
+                        `${value.toFixed(1)}%`,
+                        "Recovery Rate",
+                      ]}
+                    />
+                    <Bar dataKey="value" fill="#3b82f6" radius={[3, 3, 0, 0]}>
+                      {recoveryComparisonData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-2 text-center text-xs text-gray-600">
+                <span className="font-semibold text-green-700">
+                  Your Farm: {(metrics.recovery || 0).toFixed(1)}%
+                </span>
+                {" vs "}
+                <span className="font-semibold text-blue-700">
+                  Regional Avg:{" "}
+                  {OTHER_FARMERS_RECOVERY.regional_average.toFixed(1)}%
+                </span>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Chart Section */}
-        <section className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-            <div className="flex items-center gap-3">
-              <LineChartIcon className="w-6 h-6 text-blue-600" />
-              <h3 className="text-xl font-semibold text-gray-900">
+        {/* Field Indices Analysis Chart */}
+        <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-2 sm:p-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-3">
+            <div className="flex items-center gap-2 mb-2 lg:mb-0">
+              <LineChartIcon className="w-5 h-5 text-blue-600" />
+              <h3 className="text-lg font-bold text-gray-800">
                 Field Indices Analysis
               </h3>
             </div>
@@ -1509,30 +1998,77 @@ const OwnerFarmDash: React.FC = () => {
 
           <ChartLegend />
 
-          <div className="h-96 ">
+          <div className="h-80 sm:h-96 md:h-[28rem] bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg px-0 sm:px-3 -mx-2 sm:mx-0">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart
-                data={aggregatedData}
-                margin={{ top: 15, right: 10, left: -30, bottom: 20 }}
+                data={combinedChartData}
+                margin={{ top: 10, right: 6, left: 9, bottom: 10 }}
+                layout={isMobile ? "vertical" : "horizontal"}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e0e7ff" />
-                <XAxis
-                  dataKey="date"
-                  tickFormatter={(tick: string) => {
-                    const d = new Date(tick);
-                    return d.toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    });
-                  }}
-                  stroke="#6b7280"
-                  tick={{ fontSize: 12 }}
-                />
-                <YAxis
-                  domain={[-0.75, 0.8]}
-                  stroke="#6b7280"
-                  tick={{ fontSize: 12 }}
-                />
+                {isMobile ? (
+                  <>
+                    <XAxis
+                      type="number"
+                      domain={[-0.75, 0.8]}
+                      stroke="#6b7280"
+                      tick={{ fontSize: 12 }}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey={
+                        timePeriod === "monthly" ? "displayDate" : "date"
+                      }
+                      tickFormatter={(tick: string) => {
+                        if (timePeriod === "monthly") return tick;
+                        if (timePeriod === "daily") {
+                          const d = new Date(tick);
+                          return d.toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                          });
+                        }
+                        const d = new Date(tick);
+                        const yy = d.getFullYear().toString().slice(-2);
+                        return `${d.toLocaleString("default", {
+                          month: "short",
+                        })}-${yy}`;
+                      }}
+                      stroke="#6b7280"
+                      tick={{ fontSize: 12 }}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <XAxis
+                      dataKey={
+                        timePeriod === "monthly" ? "displayDate" : "date"
+                      }
+                      tickFormatter={(tick: string) => {
+                        if (timePeriod === "monthly") return tick;
+                        if (timePeriod === "daily") {
+                          const d = new Date(tick);
+                          return d.toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                          });
+                        }
+                        const d = new Date(tick);
+                        const yy = d.getFullYear().toString().slice(-2);
+                        return `${d.toLocaleString("default", {
+                          month: "short",
+                        })}-${yy}`;
+                      }}
+                      stroke="#6b7280"
+                      tick={{ fontSize: 12 }}
+                    />
+                    <YAxis
+                      domain={[-0.75, 0.8]}
+                      stroke="#6b7280"
+                      tick={{ fontSize: 12 }}
+                    />
+                  </>
+                )}
                 <Tooltip content={<CustomTooltip />} />
 
                 {/* Performance zone annotations - Dynamic based on visible indices */}
@@ -1600,79 +2136,160 @@ const OwnerFarmDash: React.FC = () => {
 
                   return (
                     <>
-                      {/* Good performance zone */}
-                      <ReferenceArea
-                        y1={goodRange[0]}
-                        y2={goodRange[1]}
-                        fill="#90EE90"
-                        fillOpacity={0.7}
-                        stroke="none"
-                      />
-                      {/* Bad performance zone */}
-                      <ReferenceArea
-                        y1={badRange[0]}
-                        y2={badRange[1]}
-                        fill="#FF6347"
-                        fillOpacity={0.5}
-                        stroke="none"
-                      />
-
-                      {/* Debug: Always show a test zone to verify colors work
-                      <ReferenceArea
-                        y1={0.8}
-                        y2={1.0}
-                        fill="#0000FF"
-                        fillOpacity={0.3}
-                        stroke="none"
-                      /> */}
-
-                      {/* Zone labels */}
-                      <text
-                        x="95%"
-                        y="15%"
-                        textAnchor="end"
-                        className="text-xs font-medium fill-green-600"
-                        style={{ fontSize: "10px" }}
-                      >
-                        {labelText} Good ({goodRange[0].toFixed(2)} -{" "}
-                        {goodRange[1].toFixed(2)})
-                      </text>
-                      <text
-                        x="95%"
-                        y="85%"
-                        textAnchor="end"
-                        className="text-xs font-medium fill-red-600"
-                        style={{ fontSize: "10px" }}
-                      >
-                        {labelText} Bad ({badRange[0].toFixed(2)} -{" "}
-                        {badRange[1].toFixed(2)})
-                      </text>
+                      {isMobile ? (
+                        <>
+                          <ReferenceArea
+                            x1={goodRange[0]}
+                            x2={goodRange[1]}
+                            fill="#1ad3e8"
+                            fillOpacity={0.7}
+                            stroke="none"
+                          />
+                          <ReferenceArea
+                            x1={badRange[0]}
+                            x2={badRange[1]}
+                            fill="#dae81a"
+                            fillOpacity={0.7}
+                            stroke="none"
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <ReferenceArea
+                            y1={goodRange[0]}
+                            y2={goodRange[1]}
+                            fill="#1ad3e8"
+                            fillOpacity={0.7}
+                            stroke="none"
+                          />
+                          <ReferenceArea
+                            y1={badRange[0]}
+                            y2={badRange[1]}
+                            fill="#dae81a"
+                            fillOpacity={0.7}
+                            stroke="none"
+                          />
+                        </>
+                      )}
+                      {isMobile ? (
+                        <>
+                          {/* Mobile: two-line labels using tspans */}
+                          <text
+                            x="79"
+                            y="25%"
+                            textAnchor="middle"
+                            className="text-xs font-left fill-green-600"
+                            style={{ fontSize: "10px" }}
+                          >
+                            <tspan x="79%" dy="0">
+                              Average
+                            </tspan>
+                            <tspan x="79%" dy="12">
+                              Good ({goodRange[0].toFixed(2)} -{" "}
+                              {goodRange[1].toFixed(2)})
+                            </tspan>
+                          </text>
+                          <text
+                            x="79%"
+                            y="35%"
+                            textAnchor="middle"
+                            className="text-xs font-right fill-red-600"
+                            style={{ fontSize: "10px" }}
+                          >
+                            <tspan x="30%" dy="0">
+                              Average
+                            </tspan>
+                            <tspan x="35%" dy="12">
+                              Bad ({badRange[0].toFixed(2)} -{" "}
+                              {badRange[1].toFixed(2)})
+                            </tspan>
+                          </text>
+                        </>
+                      ) : (
+                        <>
+                          <text
+                            x="95%"
+                            y="25%"
+                            textAnchor="end"
+                            className="text-xs font-medium fill-green-600"
+                            style={{ fontSize: "10px" }}
+                          >
+                            {labelText} Good ({goodRange[0].toFixed(2)} -{" "}
+                            {goodRange[1].toFixed(2)})
+                          </text>
+                          <text
+                            x="95%"
+                            y="75%"
+                            textAnchor="end"
+                            className="text-xs font-medium fill-red-600"
+                            style={{ fontSize: "10px" }}
+                          >
+                            {labelText} Bad ({badRange[0].toFixed(2)} -{" "}
+                            {badRange[1].toFixed(2)})
+                          </text>
+                        </>
+                      )}
                     </>
                   );
                 })()}
 
-                {/* Stress event areas */}
                 {showStressEvents &&
                   stressEvents.map((event, index) => (
                     <React.Fragment key={index}>
-                      <ReferenceArea
-                        x1={event.from_date}
-                        x2={event.to_date}
-                        fill="#dc2626"
-                        fillOpacity={0.1}
+                      <ReferenceLine
+                        {...(isMobile
+                          ? { y: event.from_date }
+                          : { x: event.from_date })}
+                        stroke="#dc2626"
+                        strokeDasharray="5 5"
+                        strokeWidth={1}
+                        label={{
+                          value: `Start: ${formatDate(event.from_date)}`,
+                          position: "top",
+                          fontSize: 8,
+                          fill: "#dc2626",
+                        }}
                       />
+                      <ReferenceLine
+                        {...(isMobile
+                          ? { y: event.to_date }
+                          : { x: event.to_date })}
+                        stroke="#dc2626"
+                        strokeDasharray="5 5"
+                        strokeWidth={1}
+                        label={{
+                          value: `End: ${formatDate(event.to_date)}`,
+                          position: "top",
+                          fontSize: 8,
+                          fill: "#dc2626",
+                        }}
+                      />
+                      {isMobile ? (
+                        <ReferenceArea
+                          y1={event.from_date}
+                          y2={event.to_date}
+                          fill="#dc2626"
+                          fillOpacity={0.1}
+                        />
+                      ) : (
+                        <ReferenceArea
+                          x1={event.from_date}
+                          x2={event.to_date}
+                          fill="#dc2626"
+                          fillOpacity={0.1}
+                        />
+                      )}
                     </React.Fragment>
                   ))}
 
-                {/* Chart lines */}
                 {visibleLines.growth && (
                   <Line
                     type="monotone"
                     dataKey="growth"
                     stroke={lineStyles.growth.color}
-                    strokeWidth={3}
-                    dot={{ r: 4, fill: lineStyles.growth.color }}
-                    activeDot={{ r: 6, fill: lineStyles.growth.color }}
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: lineStyles.growth.color }}
+                    activeDot={{ r: 4, fill: lineStyles.growth.color }}
                   />
                 )}
                 {visibleLines.stress && (
@@ -1680,9 +2297,9 @@ const OwnerFarmDash: React.FC = () => {
                     type="monotone"
                     dataKey="stress"
                     stroke={lineStyles.stress.color}
-                    strokeWidth={3}
-                    dot={{ r: 4, fill: lineStyles.stress.color }}
-                    activeDot={{ r: 6, fill: lineStyles.stress.color }}
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: lineStyles.stress.color }}
+                    activeDot={{ r: 4, fill: lineStyles.stress.color }}
                   />
                 )}
                 {visibleLines.water && (
@@ -1690,9 +2307,9 @@ const OwnerFarmDash: React.FC = () => {
                     type="monotone"
                     dataKey="water"
                     stroke={lineStyles.water.color}
-                    strokeWidth={3}
-                    dot={{ r: 4, fill: lineStyles.water.color }}
-                    activeDot={{ r: 6, fill: lineStyles.water.color }}
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: lineStyles.water.color }}
+                    activeDot={{ r: 4, fill: lineStyles.water.color }}
                   />
                 )}
                 {visibleLines.moisture && (
@@ -1700,15 +2317,23 @@ const OwnerFarmDash: React.FC = () => {
                     type="monotone"
                     dataKey="moisture"
                     stroke={lineStyles.moisture.color}
-                    strokeWidth={3}
-                    dot={{ r: 4, fill: lineStyles.moisture.color }}
-                    activeDot={{ r: 6, fill: lineStyles.moisture.color }}
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: lineStyles.moisture.color }}
+                    activeDot={{ r: 4, fill: lineStyles.moisture.color }}
+                  />
+                )}
+
+                {showNDREEvents && (
+                  <Scatter
+                    dataKey="stressLevel"
+                    fill="#f97316"
+                    shape={<CustomStressDot />}
                   />
                 )}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
-        </section>
+        </div>
       </div>
     </div>
   );
