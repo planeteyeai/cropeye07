@@ -372,7 +372,7 @@
 // };
 
 import React, { useEffect, useState } from 'react';
-import { Download, Edit, Search, Trash2, List, Calendar, RefreshCw, Users } from 'lucide-react';
+import { Download, Edit, Search, Trash2, List, Calendar, RefreshCw, Users, ClipboardList } from 'lucide-react';
 import { getTasksForUser } from '../api';
 
 const ITEMS_PER_PAGE = 5;
@@ -620,8 +620,25 @@ export const Tasklist: React.FC<TasklistProps> = ({
   );
 
   return (
-    <div className="max-w-7xl mx-auto p-3 sm:p-6 bg-gray-100 min-h-screen space-y-6">
-      <div className="bg-white rounded-lg shadow-md p-4">
+    <div 
+      className="min-h-screen bg-cover bg-center bg-fixed"
+      style={{
+        backgroundImage: `url('/icons/sugarcane main slide.jpg')`
+      }}
+    >
+      <div className="min-h-screen bg-black bg-opacity-40">
+        <div className="max-w-7xl mx-auto px-4 py-12">
+          {/* Title Section */}
+          <div className="mb-8 text-center">
+            <div className="flex items-center justify-center space-x-4">
+              <ClipboardList className="h-12 w-12 text-white" />
+              <h1 className="text-4xl font-bold text-white">Task List</h1>
+            </div>
+          </div>
+
+          {/* Content Card */}
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg shadow-md p-4 bg-opacity-95">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-2.5 text-gray-400 h-4 w-4" />
@@ -640,7 +657,6 @@ export const Tasklist: React.FC<TasklistProps> = ({
             className="flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
           </button>
         </div>
       </div>
@@ -662,7 +678,6 @@ export const Tasklist: React.FC<TasklistProps> = ({
             className="flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
           >
             <Download className="w-4 h-4 mr-2" />
-            Download
           </button>
         </div>
 
@@ -854,14 +869,12 @@ export const Tasklist: React.FC<TasklistProps> = ({
                 className="flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
               >
                 <RefreshCw className={`w-4 h-4 mr-2 ${foLoading ? 'animate-spin' : ''}`} />
-                Refresh
               </button>
               <button 
                 onClick={handleFoDownload} 
                 className="flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
               >
                 <Download className="w-4 h-4 mr-2" />
-                Download
               </button>
             </div>
           </div>
@@ -1003,6 +1016,9 @@ export const Tasklist: React.FC<TasklistProps> = ({
           )}
         </div>
       )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

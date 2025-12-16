@@ -27,10 +27,6 @@ const WaterUptakeCard: React.FC = () => {
   const [efficiency, setEfficiency] = useState<number | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  // Dynamically calculate average from today's water requirement
-  const average = ((waterReqLiters * 23) / 1000).toFixed(2);
-
-  const currentDate = new Date().toISOString().split("T")[0];
 
   useEffect(() => {
     const fetchEfficiency = async () => {
@@ -43,7 +39,7 @@ const WaterUptakeCard: React.FC = () => {
         setLoading(true);
         setError(null);
         
-        const url = `https://dev-plot.cropeye.ai/wateruptake?plot_name=${plotName}&end_date=${currentDate}&days_back=7`;
+        const url = `https://dev-plot.cropeye.ai/wateruptake?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`;
         const response = await fetch(
           url,
           {
@@ -83,7 +79,7 @@ const WaterUptakeCard: React.FC = () => {
     };
 
     fetchEfficiency();
-  }, [plotName, currentDate]);
+  }, [plotName]);
 
   // Circle visuals
   const minRadius = 70;

@@ -1,5 +1,6 @@
 // Authentication utility functions
 export const AUTH_TOKEN_KEY = 'token';
+export const REFRESH_TOKEN_KEY = 'refresh_token'; // Add refresh token key
 export const USER_ROLE_KEY = 'role';
 export const USER_DATA_KEY = 'userData';
 export const IS_AUTHENTICATED_KEY = 'isAuthenticated';
@@ -56,17 +57,36 @@ export const removeUserData = (): void => {
   localStorage.removeItem(USER_DATA_KEY);
 };
 
+// Get refresh token from localStorage
+export const getRefreshToken = (): string | null => {
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+};
+
+// Set refresh token in localStorage
+export const setRefreshToken = (token: string): void => {
+  localStorage.setItem(REFRESH_TOKEN_KEY, token);
+};
+
+// Remove refresh token from localStorage
+export const removeRefreshToken = (): void => {
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+};
+
 // Clear all authentication data
 export const clearAuthData = (): void => {
   removeAuthToken();
+  removeRefreshToken();
   removeUserRole();
   removeUserData();
   localStorage.removeItem(IS_AUTHENTICATED_KEY);
 };
 
 // Set all authentication data after successful login
-export const setAuthData = (token: string, role: string, userData?: any): void => {
+export const setAuthData = (token: string, role: string, userData?: any, refreshToken?: string): void => {
   setAuthToken(token);
+  if (refreshToken) {
+    setRefreshToken(refreshToken);
+  }
   setUserRole(role);
   if (userData) {
     setUserData(userData);

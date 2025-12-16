@@ -6,12 +6,14 @@ import {
   getContactDetails,
   getUsers,
   getCurrentUser,
+  getTeamConnect,
 } from '../api';
 import { getAuthToken } from '../utils/auth';
 
 type CategoryKey =
   | 'farmers'
   | 'fieldOfficers'
+  | 'managers'
   | 'owners'
   | 'vendors'
   | 'stock'
@@ -31,6 +33,7 @@ interface TeamMember {
 const EMPTY_TEAM_DATA = (): Record<CategoryKey, TeamMember[]> => ({
   farmers: [],
   fieldOfficers: [],
+  managers: [],
   owners: [],
   vendors: [],
   stock: [],
@@ -41,6 +44,7 @@ const EMPTY_TEAM_DATA = (): Record<CategoryKey, TeamMember[]> => ({
 const CATEGORY_ORDER: CategoryKey[] = [
   'farmers',
   'fieldOfficers',
+  'managers',
   'owners',
   'vendors',
   'stock',
@@ -62,10 +66,15 @@ const CATEGORY_INFO: Record<
     color: '#f97316',
     description: 'Field officers fetched from the user directory',
   },
+  managers: {
+    label: 'Managers',
+    color: '#8b5cf6',
+    description: 'Managers from the user directory',
+  },
   owners: {
-    label: 'Owners',
+    label: 'Factory Head Office',
     color: '#16a34a',
-    description: 'Owners and admins from the user directory',
+    description: 'Factory Head Office and admins from the user directory',
   },
   vendors: {
     label: 'Vendors',
@@ -89,8 +98,8 @@ const CATEGORY_INFO: Record<
   },
 };
 
-const REMOTE_API_BASE = 'https://cropeye-server-1.onrender.com/api';
-const LOCAL_API_BASE = 'http://localhost:5000';
+const REMOTE_API_BASE = 'http://192.168.41.86:8000/api';
+const LOCAL_API_BASE = 'http://localhost:8000';
 
 const ensureArray = (payload: any): any[] => {
   if (!payload) return [];
@@ -166,8 +175,43 @@ const fetchFromEndpointList = async (
   if (token) {
     baseHeaders.Authorization = `Bearer ${token}`;
   }
-  const data = await response.json();
-  return ensureArray(data);
+  const tryFetch = async (url: string) => {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: baseHeaders,
+    });
+    if (!response.ok) {
+      throw new Error(`Request failed (${response.status}) for ${url}`);
+    }
+    const data = await response.json();
+    return ensureArray(data);
+  };
+
+  let lastError: Error | null = null;
+
+  for (const path of remotePaths) {
+    try {
+      return await tryFetch(path);
+    } catch (error: any) {
+      lastError = error;
+      console.warn(`Failed remote fetch from ${path}:`, error?.message || error);
+    }
+  }
+
+  for (const path of localPaths) {
+    try {
+      return await tryFetch(path);
+    } catch (error: any) {
+      lastError = error;
+      console.warn(`Failed local fetch from ${path}:`, error?.message || error);
+    }
+  }
+
+  if (lastError) {
+    throw lastError;
+  }
+
+  return [];
 };
 
 const mapUserRecord = (
@@ -226,10 +270,10 @@ const mapUserRecord = (
 
 const fetchFarmersData = async (): Promise<TeamMember[]> => {
   const response = await getRecentFarmers();
-  let farmersData = response?.data;
+  const farmers = ensureArray(response?.data ?? response);
 
   return farmers.map((farmer: any, index: number) => {
-    let meta: Record<string, string> | undefined;
+    const meta: Record<string, string> = {};
     const farms = Array.isArray(farmer?.farms)
       ? farmer.farms
       : Array.isArray(farmer?.plots)
@@ -237,30 +281,34 @@ const fetchFarmersData = async (): Promise<TeamMember[]> => {
       : [];
 
     const firstFarm = farms?.[0];
-    if (firstFarm) {
-      const areaRaw =
-        firstFarm?.area_size ??
-        firstFarm?.area ??
-        farmer?.area_size ??
-        farmer?.area;
-      const crop = firstFarm?.crop_type ?? farmer?.crop_type;
-      const plantation = firstFarm?.plantation_type ?? farmer?.plantation_type;
-      meta = {};
-      if (areaRaw !== undefined && areaRaw !== null) {
-        meta['Area'] = toStringValue(areaRaw, 'N/A');
-      }
-      if (crop) {
-        meta['Crop'] = toStringValue(crop, 'N/A');
-      }
-      if (plantation) {
-        meta['Plantation'] = toStringValue(plantation, 'N/A');
-      }
+    const areaSource =
+      firstFarm?.area_size ??
+      firstFarm?.area ??
+      farmer?.area_size ??
+      farmer?.area;
+    const areaAcres = areaSource
+      ? hectaresToAcres(areaSource)
+      : parseNumericValue(farmer?.area);
+
+    if (Number.isFinite(areaAcres)) {
+      meta['Area (acres)'] = `${areaAcres.toFixed(2)} acres`;
     }
 
-    meta['Location'] = [farmer?.village, farmer?.taluka, farmer?.district]
-      .map((part) => toStringValue(part, '').trim())
-      .filter(Boolean)
-      .join(', ') || 'N/A';
+    const crop = firstFarm?.crop_type ?? farmer?.crop_type;
+    const plantation = firstFarm?.plantation_type ?? farmer?.plantation_type;
+
+    if (crop) {
+      meta['Crop'] = toStringValue(crop, 'N/A');
+    }
+    if (plantation) {
+      meta['Plantation'] = toStringValue(plantation, 'N/A');
+    }
+
+    meta['Location'] =
+      [farmer?.village, farmer?.taluka, farmer?.district]
+        .map((part) => toStringValue(part, '').trim())
+        .filter(Boolean)
+        .join(', ') || 'N/A';
 
     if (farmer?.created_at || farmer?.date_joined) {
       meta['Created'] = new Date(
@@ -311,7 +359,7 @@ const fetchContactsData = async (): Promise<{
     fieldOfficersRaw.push(...contacts.fieldOfficers);
 
   const owners = ownersRaw.map((record, index) =>
-    mapUserRecord(record, 'Owner', index, { role: 'Owner' })
+    mapUserRecord(record, 'Factory Head Office', index, { role: 'Factory Head Office' })
   );
 
   const fieldOfficers = fieldOfficersRaw.map((record, index) =>
@@ -321,9 +369,251 @@ const fetchContactsData = async (): Promise<{
   return { owners, fieldOfficers };
 };
 
+// Fetch team connect data from the new API endpoint
+const fetchTeamConnectData = async (industryId?: number | string): Promise<{
+  owners: TeamMember[];
+  fieldOfficers: TeamMember[];
+  farmers: TeamMember[];
+  managers: TeamMember[];
+}> => {
+  try {
+    if (!industryId) {
+      throw new Error('industry_id is required for team-connect API');
+    }
+    
+    console.log('📡 Fetching team connect data from API with industry_id:', industryId);
+    const response = await getTeamConnect(industryId);
+    const data = response?.data;
+    
+    console.log('📡 Team connect API response:', data);
+    console.log('📡 Team connect API response structure:', {
+      hasUsersByRole: !!data?.users_by_role,
+      hasOwners: !!data?.owners || !!data?.users_by_role?.owners,
+      hasFieldOfficers: !!data?.field_officers || !!data?.fieldOfficers || !!data?.users_by_role?.field_officers,
+      hasFarmers: !!data?.farmers || !!data?.users_by_role?.farmers,
+      hasManagers: !!data?.managers || !!data?.users_by_role?.managers,
+      hasResults: !!data?.results,
+      isArray: Array.isArray(data),
+      keys: data ? Object.keys(data) : [],
+      usersByRoleKeys: data?.users_by_role ? Object.keys(data.users_by_role) : [],
+    });
+    
+    // Handle different response formats
+    let ownersRaw: any[] = [];
+    let fieldOfficersRaw: any[] = [];
+    let farmersRaw: any[] = [];
+    let managersRaw: any[] = [];
+    
+    // Check if data has role-based arrays
+    if (data) {
+      // Format 1: { users_by_role: { owners: [], field_officers: [], farmers: [] } }
+      if (data.users_by_role) {
+        if (Array.isArray(data.users_by_role.owners)) {
+          ownersRaw = data.users_by_role.owners;
+          console.log('✅ Found users_by_role.owners array:', ownersRaw.length);
+        }
+        if (Array.isArray(data.users_by_role.field_officers)) {
+          fieldOfficersRaw = data.users_by_role.field_officers;
+          console.log('✅ Found users_by_role.field_officers array:', fieldOfficersRaw.length);
+        }
+        if (Array.isArray(data.users_by_role.farmers)) {
+          farmersRaw = data.users_by_role.farmers;
+          console.log('✅ Found users_by_role.farmers array:', farmersRaw.length);
+        }
+        if (Array.isArray(data.users_by_role.managers)) {
+          managersRaw = data.users_by_role.managers;
+          console.log('✅ Found users_by_role.managers array:', managersRaw.length);
+        }
+      }
+      
+      // Format 2: { owners: [], field_officers: [], farmers: [] } (direct format)
+      if (Array.isArray(data.owners)) {
+        ownersRaw = data.owners;
+        console.log('✅ Found owners array:', ownersRaw.length);
+      }
+      if (Array.isArray(data.field_officers)) {
+        fieldOfficersRaw = data.field_officers;
+        console.log('✅ Found field_officers array:', fieldOfficersRaw.length);
+      }
+      if (Array.isArray(data.fieldOfficers)) {
+        fieldOfficersRaw = data.fieldOfficers;
+        console.log('✅ Found fieldOfficers array:', fieldOfficersRaw.length);
+      }
+      if (Array.isArray(data.farmers)) {
+        farmersRaw = data.farmers;
+        console.log('✅ Found farmers array:', farmersRaw.length);
+      }
+      if (Array.isArray(data.managers)) {
+        managersRaw = data.managers;
+        console.log('✅ Found managers array:', managersRaw.length);
+      }
+      
+      // Format 2: { results: [] } with role field in each item
+      if (Array.isArray(data.results)) {
+        console.log('📋 Processing results array:', data.results.length);
+        data.results.forEach((user: any) => {
+          const roleName = extractRoleName(user).toLowerCase();
+          const roleId = user?.role_id ?? user?.role?.id;
+          
+          console.log('👤 User:', {
+            id: user?.id,
+            username: user?.username,
+            roleName,
+            roleId,
+            role: user?.role,
+          });
+          
+          // Check by role_id first (1=farmer, 2=fieldofficer, 3=manager, 4=owner)
+          if (roleId === 4 || roleName.includes('owner') || roleName === 'admin' || roleName === 'administrator') {
+            ownersRaw.push(user);
+          } else if (roleId === 2 || (roleName.includes('field') && roleName.includes('officer'))) {
+            fieldOfficersRaw.push(user);
+          } else if (roleId === 1 || roleName.includes('farmer') || roleName === 'farmer') {
+            farmersRaw.push(user);
+          } else if (roleId === 3 || roleName.includes('manager') || roleName === 'manager') {
+            managersRaw.push(user);
+          }
+        });
+      }
+      
+      // Format 3: Direct array with role field
+      if (Array.isArray(data)) {
+        console.log('📋 Processing direct array:', data.length);
+        data.forEach((user: any) => {
+          const roleName = extractRoleName(user).toLowerCase();
+          const roleId = user?.role_id ?? user?.role?.id;
+          
+          // Check by role_id first (1=farmer, 2=fieldofficer, 3=manager, 4=owner)
+          if (roleId === 4 || roleName.includes('owner') || roleName === 'admin' || roleName === 'administrator') {
+            ownersRaw.push(user);
+          } else if (roleId === 2 || (roleName.includes('field') && roleName.includes('officer'))) {
+            fieldOfficersRaw.push(user);
+          } else if (roleId === 1 || roleName.includes('farmer') || roleName === 'farmer') {
+            farmersRaw.push(user);
+          } else if (roleId === 3 || roleName.includes('manager') || roleName === 'manager') {
+            managersRaw.push(user);
+          }
+        });
+      }
+      
+      // Format 4: Check for nested data structures (data.data)
+      if (data.data && Array.isArray(data.data)) {
+        console.log('📋 Processing nested data.data array:', data.data.length);
+        data.data.forEach((user: any) => {
+          const roleName = extractRoleName(user).toLowerCase();
+          const roleId = user?.role_id ?? user?.role?.id;
+          
+          // Check by role_id first (1=farmer, 2=fieldofficer, 3=manager, 4=owner)
+          if (roleId === 4 || roleName.includes('owner') || roleName === 'admin' || roleName === 'administrator') {
+            ownersRaw.push(user);
+          } else if (roleId === 2 || (roleName.includes('field') && roleName.includes('officer'))) {
+            fieldOfficersRaw.push(user);
+          } else if (roleId === 1 || roleName.includes('farmer') || roleName === 'farmer') {
+            farmersRaw.push(user);
+          } else if (roleId === 3 || roleName.includes('manager') || roleName === 'manager') {
+            managersRaw.push(user);
+          }
+        });
+      }
+    }
+    
+    console.log('📊 Raw data counts before mapping:', {
+      owners: ownersRaw.length,
+      fieldOfficers: fieldOfficersRaw.length,
+      farmers: farmersRaw.length,
+      managers: managersRaw.length,
+    });
+    
+    // Map to TeamMember format
+    const owners = ownersRaw.map((user, index) =>
+      mapUserRecord(user, 'Factory Head Office', index, {
+        role: 'Factory Head Office',
+        meta: {
+          'Full Name': [user?.first_name, user?.last_name]
+            .map((part: any) => toStringValue(part, '').trim())
+            .filter(Boolean)
+            .join(' ') || 'N/A',
+        },
+      })
+    );
+    
+    const fieldOfficers = fieldOfficersRaw.map((user, index) =>
+      mapUserRecord(user, 'Field Officer', index, {
+        role: 'Field Officer',
+        meta: {
+          'Full Name': [user?.first_name, user?.last_name]
+            .map((part: any) => toStringValue(part, '').trim())
+            .filter(Boolean)
+            .join(' ') || 'N/A',
+        },
+      })
+    );
+    
+    const farmers = farmersRaw.map((user, index) => {
+      const meta: Record<string, string> = {};
+      if (user?.village || user?.taluka || user?.district) {
+        meta['Location'] = [user?.village, user?.taluka, user?.district]
+          .map((part) => toStringValue(part, '').trim())
+          .filter(Boolean)
+          .join(', ') || 'N/A';
+      }
+      if (user?.created_at || user?.date_joined) {
+        meta['Created'] = new Date(
+          user?.created_at ?? user?.date_joined
+        ).toLocaleDateString();
+      }
+      
+      return mapUserRecord(user, 'Farmer', index, {
+        role: 'Farmer',
+        meta,
+        password: 'N/A',
+      });
+    });
+    
+    const managers = managersRaw.map((user, index) =>
+      mapUserRecord(user, 'Manager', index, {
+        role: 'Manager',
+        meta: {
+          'Full Name': [user?.first_name, user?.last_name]
+            .map((part: any) => toStringValue(part, '').trim())
+            .filter(Boolean)
+            .join(' ') || 'N/A',
+        },
+      })
+    );
+    
+    console.log('✅ Team connect data processed:', {
+      owners: owners.length,
+      fieldOfficers: fieldOfficers.length,
+      farmers: farmers.length,
+      managers: managers.length,
+    });
+    
+    // Log sample data to verify structure
+    if (owners.length > 0) {
+      console.log('👤 Sample owner:', owners[0]);
+    }
+    if (fieldOfficers.length > 0) {
+      console.log('👤 Sample field officer:', fieldOfficers[0]);
+    }
+    if (farmers.length > 0) {
+      console.log('👤 Sample farmer:', farmers[0]);
+    }
+    if (managers.length > 0) {
+      console.log('👤 Sample manager:', managers[0]);
+    }
+    
+    return { owners, fieldOfficers, farmers, managers };
+  } catch (error: any) {
+    console.error('❌ Error fetching team connect data:', error);
+    throw error;  
+  }
+};
+
 const fetchOwnersAndFieldOfficersFromUsers = async (): Promise<{
   owners: TeamMember[];
   fieldOfficers: TeamMember[];
+  managers: TeamMember[];
 }> => {
   const response = await getUsers();
   let records = response?.data;
@@ -341,9 +631,11 @@ const fetchOwnersAndFieldOfficersFromUsers = async (): Promise<{
   const usersArray = ensureArray(records);
   const owners: TeamMember[] = [];
   const fieldOfficers: TeamMember[] = [];
+  const managers: TeamMember[] = [];
 
   let ownerIndex = 0;
   let fieldOfficerIndex = 0;
+  let managerIndex = 0;
 
   usersArray.forEach((user: any) => {
     const roleName = extractRoleName(user).toLowerCase();
@@ -354,8 +646,23 @@ const fetchOwnersAndFieldOfficersFromUsers = async (): Promise<{
       roleName === 'administrator'
     ) {
       owners.push(
-        mapUserRecord(user, 'Owner', ownerIndex++, {
-          role: 'Owner',
+        mapUserRecord(user, 'Factory Head Office', ownerIndex++, {
+          role: 'Factory Head Office',
+          meta: {
+            'Full Name': [user?.first_name, user?.last_name]
+              .map((part: any) => toStringValue(part, '').trim())
+              .filter(Boolean)
+              .join(' ') || 'N/A',
+          },
+        })
+      );
+      return;
+    }
+
+    if (roleName.includes('manager') || roleName === 'manager') {
+      managers.push(
+        mapUserRecord(user, 'Manager', managerIndex++, {
+          role: 'Manager',
           meta: {
             'Full Name': [user?.first_name, user?.last_name]
               .map((part: any) => toStringValue(part, '').trim())
@@ -382,7 +689,7 @@ const fetchOwnersAndFieldOfficersFromUsers = async (): Promise<{
     }
   });
 
-  return { owners, fieldOfficers };
+  return { owners, fieldOfficers, managers };
 };
 
 const fetchCurrentUserOwner = async (): Promise<TeamMember | null> => {
@@ -397,8 +704,8 @@ const fetchCurrentUserOwner = async (): Promise<TeamMember | null> => {
       roleName === 'admin' ||
       roleName === 'administrator'
     ) {
-      return mapUserRecord(user, 'Owner', 0, {
-        role: 'Owner',
+      return mapUserRecord(user, 'Factory Head Office', 0, {
+        role: 'Factory Head Office',
         meta: {
           'Full Name': [user?.first_name, user?.last_name]
             .map((part: any) => toStringValue(part, '').trim())
@@ -560,31 +867,100 @@ const TeamList: React.FC = () => {
 
     const nextData: Record<CategoryKey, TeamMember[]> = EMPTY_TEAM_DATA();
 
+    // STEP 1: Get current user's industry_id
+    let industryId: number | string | undefined = undefined;
     try {
-      nextData.farmers = await fetchFarmersData();
+      const currentUserResponse = await getCurrentUser();
+      const currentUser = currentUserResponse?.data;
+      console.log('👤 Current user data:', currentUser);
+      
+      if (currentUser) {
+        // Try different possible field names for industry_id
+        industryId = 
+          currentUser?.industry_id ?? 
+          currentUser?.industry?.id ?? 
+          currentUser?.industryId ?? 
+          currentUser?.industry?.industry_id;
+        
+        console.log('🏭 Current user industry_id:', industryId);
+        
+        // If still no industry_id, log all user fields for debugging
+        if (!industryId) {
+          console.warn('⚠️ No industry_id found in user data. Available fields:', Object.keys(currentUser));
+          console.warn('⚠️ Full user object:', JSON.stringify(currentUser, null, 2));
+        }
+      }
     } catch (err) {
-      console.error('Failed to load farmers:', err);
-      errors.push('farmers');
+      console.warn('⚠️ Could not fetch current user for industry_id:', err);
     }
 
+    // PRIORITY: Try to fetch from team-connect API first with industry_id
     try {
-      const { owners, fieldOfficers } =
-        await fetchOwnersAndFieldOfficersFromUsers();
-      nextData.owners = owners;
-      nextData.fieldOfficers = fieldOfficers;
-    } catch (err) {
-      console.error('Failed to load users via /users/ endpoint:', err);
-      errors.push('user directory');
+      if (!industryId) {
+        throw new Error('industry_id is required but not found in current user data');
+      }
+      
+      console.log('🔄 Fetching from team-connect API with industry_id:', industryId);
+      const teamConnectData = await fetchTeamConnectData(industryId);
+      nextData.owners = teamConnectData.owners;
+      nextData.fieldOfficers = teamConnectData.fieldOfficers;
+      nextData.managers = teamConnectData.managers;
+      
+      // If team-connect API returns farmers, use them; otherwise fallback to getRecentFarmers
+      if (teamConnectData.farmers.length > 0) {
+        nextData.farmers = teamConnectData.farmers;
+        console.log('✅ Using farmers from team-connect API:', teamConnectData.farmers.length);
+      } else {
+        // Fallback to getRecentFarmers if team-connect doesn't return farmers
+        console.log('⚠️ No farmers from team-connect API, trying fallback...');
+        try {
+          nextData.farmers = await fetchFarmersData();
+        } catch (err) {
+          console.error('Failed to load farmers:', err);
+          errors.push('farmers');
+        }
+      }
+    } catch (teamConnectErr: any) {
+      console.warn('⚠️ Team-connect API failed, using fallback methods:', teamConnectErr);
+      console.warn('⚠️ Error details:', {
+        message: teamConnectErr?.message,
+        response: teamConnectErr?.response?.data,
+        status: teamConnectErr?.response?.status,
+        url: teamConnectErr?.config?.url,
+      });
+      errors.push('team-connect');
+      
+      // Fallback 1: Try getRecentFarmers for farmers
       try {
-        const { owners, fieldOfficers } = await fetchContactsData();
+        nextData.farmers = await fetchFarmersData();
+      } catch (err) {
+        console.error('Failed to load farmers:', err);
+        errors.push('farmers');
+      }
+
+      // Fallback 2: Try getUsers for owners, field officers, managers
+      try {
+        const { owners, fieldOfficers, managers } =
+          await fetchOwnersAndFieldOfficersFromUsers();
         nextData.owners = owners;
         nextData.fieldOfficers = fieldOfficers;
-      } catch (fallbackError) {
-        console.error('Failed to load contact users:', fallbackError);
-        errors.push('contact users');
+        nextData.managers = managers;
+      } catch (err) {
+        console.error('Failed to load users via /users/ endpoint:', err);
+        errors.push('user directory');
+        // Fallback 3: Try getContactDetails
+        try {
+          const { owners, fieldOfficers } = await fetchContactsData();
+          nextData.owners = owners;
+          nextData.fieldOfficers = fieldOfficers;
+        } catch (fallbackError) {
+          console.error('Failed to load contact users:', fallbackError);
+          errors.push('contact users');
+        }
       }
     }
 
+    // If still no owners found, try to get current user
     if (nextData.owners.length === 0) {
       const selfOwner = await fetchCurrentUserOwner();
       if (selfOwner) {

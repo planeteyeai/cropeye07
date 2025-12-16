@@ -249,7 +249,7 @@ const OfficerDashboard: React.FC = () => {
   // Fetch plots when farmer is selected
   useEffect(() => {
     if (selectedFarmerId) {
-      console.log("🔍 Finding farmer with ID:", selectedFarmerId);
+      console.log("ðŸ” Finding farmer with ID:", selectedFarmerId);
 
       const selectedFarmer = farmers.find(
         (f) =>
@@ -257,13 +257,13 @@ const OfficerDashboard: React.FC = () => {
       );
 
       if (selectedFarmer) {
-        console.log("✅ Found selected farmer:", selectedFarmer);
+        console.log("âœ… Found selected farmer:", selectedFarmer);
 
         // Extract fastapi_plot_id from plots array
         const farmerPlots = selectedFarmer.plots || [];
         const plotIds = farmerPlots.map((plot: any) => plot.fastapi_plot_id);
 
-        console.log("📍 Farmer plots data:", {
+        console.log("ðŸ“ Farmer plots data:", {
           plotsArray: farmerPlots,
           extractedPlotIds: plotIds,
           plotsCount: plotIds.length,
@@ -274,19 +274,19 @@ const OfficerDashboard: React.FC = () => {
         // Auto-select first plot if available
         if (plotIds.length > 0) {
           const firstPlotId = plotIds[0];
-          console.log("✅ Auto-selecting first plot:", firstPlotId);
+          console.log("âœ… Auto-selecting first plot:", firstPlotId);
           setSelectedPlotId(firstPlotId);
         } else {
-          console.warn("⚠️ No plots found for this farmer");
+          console.warn("âš ï¸ No plots found for this farmer");
           setSelectedPlotId("");
         }
       } else {
-        console.warn("⚠️ Farmer not found with ID:", selectedFarmerId);
+        console.warn("âš ï¸ Farmer not found with ID:", selectedFarmerId);
         setPlots([]);
         setSelectedPlotId("");
       }
     } else {
-      console.log("ℹ️ No farmer selected");
+      console.log("â„¹ï¸ No farmer selected");
       setPlots([]);
       setSelectedPlotId("");
     }
@@ -410,19 +410,19 @@ const OfficerDashboard: React.FC = () => {
     try {
       console.log("=".repeat(60));
       console.log(
-        "🔄 FarmCropStatus: Fetching farmers under logged-in field officer..."
+        "ðŸ”„ FarmCropStatus: Fetching farmers under logged-in field officer..."
       );
       console.log(
-        "📍 Endpoint: https://cropeye-server-1.onrender.com/api/farms/recent-farmers/"
+        "ðŸ“ Endpoint: https://cropeye-server-1.onrender.com/api/farms/recent-farmers/"
       );
 
       const token = localStorage.getItem("token");
       console.log(
-        "🔑 Bearer Token Status:",
-        token ? "✅ Token found in localStorage" : "❌ No token found"
+        "ðŸ”‘ Bearer Token Status:",
+        token ? "âœ… Token found in localStorage" : "âŒ No token found"
       );
       if (token) {
-        console.log("🔑 Token preview:", `${token.substring(0, 30)}...`);
+        console.log("ðŸ”‘ Token preview:", `${token.substring(0, 30)}...`);
       }
 
       // Use authenticated API call from api.ts (automatically includes Bearer token)
@@ -433,10 +433,10 @@ const OfficerDashboard: React.FC = () => {
       const farmersData = apiResponse.farmers || apiResponse || [];
 
       console.log("=".repeat(60));
-      console.log("✅ FarmCropStatus: Raw API response:", apiResponse);
-      console.log("✅ FarmCropStatus: Extracted farmers array:", farmersData);
+      console.log("âœ… FarmCropStatus: Raw API response:", apiResponse);
+      console.log("âœ… FarmCropStatus: Extracted farmers array:", farmersData);
       console.log(
-        "📊 FarmCropStatus: Total farmers found:",
+        "ðŸ“Š FarmCropStatus: Total farmers found:",
         farmersData.length
       );
 
@@ -445,7 +445,7 @@ const OfficerDashboard: React.FC = () => {
         const farmerPlots = farmer.plots || [];
         const plotIds = farmerPlots.map((plot: any) => plot.fastapi_plot_id);
 
-        console.log(`👨‍🌾 Farmer ${index + 1}:`, {
+        console.log(`ðŸ‘¨â€ðŸŒ¾ Farmer ${index + 1}:`, {
           id: farmer.id,
           name: `${farmer.first_name} ${farmer.last_name}`,
           email: farmer.email,
@@ -456,12 +456,12 @@ const OfficerDashboard: React.FC = () => {
       });
 
       console.log(
-        "⚡ Setting farmers state with",
+        "âš¡ Setting farmers state with",
         farmersData.length,
         "farmers"
       );
       setFarmers(farmersData);
-      console.log("✅ Farmers state updated successfully");
+      console.log("âœ… Farmers state updated successfully");
 
       // Auto-select first farmer if available
       if (farmersData.length > 0) {
@@ -470,7 +470,7 @@ const OfficerDashboard: React.FC = () => {
         const farmerPlots = firstFarmer.plots || [];
         const plotIds = farmerPlots.map((plot: any) => plot.fastapi_plot_id);
 
-        console.log("✅ FarmCropStatus: Auto-selecting first farmer:", {
+        console.log("âœ… FarmCropStatus: Auto-selecting first farmer:", {
           id: farmerId,
           name: `${firstFarmer.first_name} ${firstFarmer.last_name}`,
           email: firstFarmer.email,
@@ -482,11 +482,11 @@ const OfficerDashboard: React.FC = () => {
         setSelectedFarmerId(farmerId);
       } else {
         console.warn(
-          "⚠️ FarmCropStatus: No farmers found under this field officer"
+          "âš ï¸ FarmCropStatus: No farmers found under this field officer"
         );
       }
     } catch (error: any) {
-      console.error("❌ FarmCropStatus: Error fetching farmers:", error);
+      console.error("âŒ FarmCropStatus: Error fetching farmers:", error);
       console.error("Error details:", error.response?.data);
 
       // Show user-friendly error message
@@ -873,7 +873,7 @@ const OfficerDashboard: React.FC = () => {
   }
 
   // Log farmers state before rendering
-  console.log("🎨 FarmCropStatus Render - Current State:", {
+  console.log("ðŸŽ¨ FarmCropStatus Render - Current State:", {
     farmersCount: farmers.length,
     farmersArray: farmers,
     selectedFarmerId,
@@ -902,8 +902,8 @@ const OfficerDashboard: React.FC = () => {
                       "https://cropeye-server-1.onrender.com/api/farms/recent-farmers/",
                     method: "GET",
                     bearerToken: localStorage.getItem("token")
-                      ? "✅ Present"
-                      : "❌ Missing",
+                      ? "âœ… Present"
+                      : "âŒ Missing",
                     tokenPreview:
                       localStorage.getItem("token")?.substring(0, 30) + "...",
                     totalFarmers: farmers.length,
@@ -925,7 +925,7 @@ const OfficerDashboard: React.FC = () => {
               </pre>
             </div>
             <p className="text-xs text-gray-400 mt-2">
-              💡 Check the browser console for detailed API request/response
+              ðŸ’¡ Check the browser console for detailed API request/response
               logs
             </p>
           </div>
@@ -946,7 +946,7 @@ const OfficerDashboard: React.FC = () => {
                     value={selectedFarmerId}
                     onChange={(e) => {
                       console.log(
-                        "🔄 Farmer selection changed to:",
+                        "ðŸ”„ Farmer selection changed to:",
                         e.target.value
                       );
                       setSelectedFarmerId(e.target.value);
@@ -967,7 +967,7 @@ const OfficerDashboard: React.FC = () => {
                           const plotsCount = farmer.plots?.length || 0;
 
                           console.log(
-                            `🔍 Rendering farmer ${index + 1} in dropdown:`,
+                            `ðŸ” Rendering farmer ${index + 1} in dropdown:`,
                             {
                               id: farmerId,
                               name: farmerName,
@@ -998,11 +998,11 @@ const OfficerDashboard: React.FC = () => {
                     value={selectedPlotId}
                     onChange={(e) => {
                       const newPlotId = e.target.value;
-                      console.log("🔄 Plot selection changed to:", newPlotId);
+                      console.log("ðŸ”„ Plot selection changed to:", newPlotId);
                       setSelectedPlotId(newPlotId);
                       if (newPlotId) {
                         console.log(
-                          "📍 Fetching coordinates for plot:",
+                          "ðŸ“ Fetching coordinates for plot:",
                           newPlotId
                         );
                         // Immediately fetch coordinates and update map
@@ -1020,7 +1020,7 @@ const OfficerDashboard: React.FC = () => {
                         <option value="">Select a plot</option>
                         {plots.map((plotId, index) => {
                           console.log(
-                            `🔍 Rendering plot ${index + 1}:`,
+                            `ðŸ” Rendering plot ${index + 1}:`,
                             plotId
                           );
                           return (
@@ -1062,7 +1062,7 @@ const OfficerDashboard: React.FC = () => {
                     metrics.area?.toFixed(2) || "-"
                   )}
                 </div>
-                <div className="text-sm font-semibold text-green-600">Ha</div>
+                <div className="text-sm font-semibold text-green-600">acre</div>
               </div>
             </div>
             <p className="text-xs text-gray-600 font-medium">Field Area</p>
@@ -1116,7 +1116,7 @@ const OfficerDashboard: React.FC = () => {
                     metrics.brix?.toFixed(1) || "-"
                   )}
                 </div>
-                <div className="text-sm font-semibold text-blue-600">°Brix</div>
+                <div className="text-sm font-semibold text-blue-600">Â°Brix</div>
               </div>
             </div>
             <p className="text-xs text-gray-600 font-medium">Sugar Content</p>
@@ -1154,7 +1154,7 @@ const OfficerDashboard: React.FC = () => {
                   )}
                 </div>
                 <div className="text-sm font-semibold text-indigo-600">
-                  T/Ha
+                  T/acre
                 </div>
               </div>
             </div>
@@ -1229,7 +1229,7 @@ const OfficerDashboard: React.FC = () => {
                     metrics.biomass?.toFixed(1) || "-"
                   )}
                 </div>
-                <div className="text-sm font-semibold text-pink-600">kg/ha</div>
+                <div className="text-sm font-semibold text-pink-600">kg/acre</div>
               </div>
             </div>
             <p className="text-xs text-gray-600 font-medium">Avg Biomass</p>
@@ -1289,7 +1289,7 @@ const OfficerDashboard: React.FC = () => {
                 <MapAutoCenter center={mapCenter} />
                 <TileLayer
                   url="http://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
-                  attribution="© Google"
+                  attribution="Â© Google"
                   maxZoom={20}
                   maxNativeZoom={18}
                   minZoom={10}
@@ -1348,7 +1348,7 @@ const OfficerDashboard: React.FC = () => {
                 value={metrics.expectedYield || 0}
                 max={400}
                 title="Expected Yield"
-                unit="T/Ha"
+                unit="T/acre"
                 width={220}
                 height={140}
               />
@@ -1372,7 +1372,7 @@ const OfficerDashboard: React.FC = () => {
                 </h3>
               </div>
 
-              <div className="h-[220px] flex flex-col items-center justify-center relative">
+              <div className="h-36 flex flex-col items-center justify-center relative">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -1397,7 +1397,7 @@ const OfficerDashboard: React.FC = () => {
                       dominantBaseline="middle"
                       className="text-sm font-semibold fill-green-600"
                     >
-                      {currentBiomass.toFixed(1)} kg/ha
+                      {currentBiomass.toFixed(1)} kg/acre
                     </text>
                     <Tooltip
                       wrapperStyle={{ zIndex: 50 }}

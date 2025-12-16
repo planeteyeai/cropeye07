@@ -12,8 +12,9 @@ import {
   LandPlot,
 } from 'lucide-react';
 import { BiWater } from 'react-icons/bi';
-import { GiGrowth, GiPriceTag, GiSugarCane } from 'react-icons/gi';
+import { GiGrowth, GiSugarCane } from 'react-icons/gi';
 import { MdPestControl } from 'react-icons/md';
+import { getUserData, getUserRole } from '../utils/auth';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -33,6 +34,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   expandedMenu,
 }) => {
   const [openMenus, setOpenMenus] = useState<string[]>([]);
+
+  // Get current user data
+  const currentUser = getUserData();
+  const currentUserRole = getUserRole();
+  const username = currentUser?.username || currentUser?.first_name || 'User';
+  const displayRole = currentUserRole || userRole || '';
 
   // Effect to expand a specific menu when expandedMenu prop changes
   React.useEffect(() => {
@@ -92,6 +99,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           renderMenu('Irrigation', <BiWater size={20} />),
           renderMenu('Pest & Disease', <MdPestControl size={20} />),
           renderMenu('Fertilizer', <GiGrowth size={20} />),
+          renderMenu('Contactuser', <Users size={20} />,),
+
           // renderMenu('BlogCard',<GiPriceTag size={20}/>),
         ];
       case 'admin':
@@ -121,6 +130,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           renderMenu('ViewFarmerPlot', <LandPlot size={20}  />),
           renderMenu('User Desk', <Users size={20} />, ['AddFarm', 'Farmlist','Contactuser']),
           renderMenu('MyTask', <Calendar size={20} />, ['TaskCalendar', 'Tasklist']),
+          renderMenu('Resoucres Planning', <ShoppingBag size={20} />, [
+            'Add Vendor',
+            'Vendor list',
+            'Add order',
+            'order list',
+            'Add Stock',
+            'stock list',
+          ]),
           renderMenu('Plan & Book', <Calendar size={20} />, ['Add Booking', 'Booking List']),
         ];
       case 'manager':
@@ -150,6 +167,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
+  // Check if logout should be shown (for all roles including farmer)
+  const shouldShowLogout = ['farmer', 'fieldofficer', 'manager', 'owner', 'admin'].includes(userRole);
+
   return (
     <aside
       className={`fixed top-0 left-0 h-full w-64 bg-white shadow-lg flex flex-col transition-transform duration-300 ${
@@ -158,25 +178,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
     >
       
       <div className="p-4 border-b flex items-center justify-between">
-        <h2 className="text-lg font-bold text-gray-700">CROPEYE</h2>
+        <img 
+          src="/icons/CROPEYE Updated.png" 
+          alt="CROPEYE Logo" 
+          className="h-8 w-auto object-contain"
+        />
         <button onClick={onHomeClick} className="text-gray-600 hover:text-gray-900">
           <Home size={20} />
         </button>
       </div>
 
-     
+      {/* User Info Section - Show for all roles */}
+      {shouldShowLogout && (
+        <div className="p-4 border-b bg-gray-50">
+          <div className="flex flex-col space-y-1">
+            <div className="text-sm font-semibold text-gray-800">
+              {username}
+            </div>
+            <div className="text-xs text-gray-600 capitalize">
+              {displayRole}
+            </div>
+          </div>
+        </div>
+      )}
+
       <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
         {getMenuItems()}
       </nav>
 
-      
-      <div
-        className="p-4 border-t flex items-center space-x-2 hover:bg-gray-100 cursor-pointer"
-        onClick={onLogout}
-      >
-        <LogOut size={20} className="text-gray-600" />
-        <span className="text-gray-700 font-medium">Logout</span>
-      </div>
+      {/* Logout Button - Show for all roles including farmer */}
+      {shouldShowLogout && (
+        <div
+          className="p-4 border-t flex items-center space-x-2 hover:bg-gray-100 cursor-pointer"
+          onClick={onLogout}
+        >
+          <LogOut size={20} className="text-gray-600" />
+          <span className="text-gray-700 font-medium">Logout</span>
+        </div>
+      )}
     </aside>
   );
 };

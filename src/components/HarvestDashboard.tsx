@@ -73,7 +73,7 @@ interface HarvestData {
   "Sugarcane Status": string;
   "Area (Hect)": number;
   Days: number;
-  "Prediction Yield (T/Ha)": number;
+  "Prediction Yield (T/acre)": number;
   "Brix (Degree)": number;
   "Recovery (Degree)": number;
   "Distance (km)": number;
@@ -262,7 +262,7 @@ const CombinedChart: React.FC<CombinedChartProps> = ({
             <strong>Days:</strong> {entry.day}
           </div>
           <div className="text-sm">
-            <strong>Avg Yield (T/Ha):</strong> {entry.area?.toFixed(2)}
+            <strong>Avg Yield (T/acre):</strong> {entry.area?.toFixed(2)}
           </div>
           <div className="text-sm">
             <strong>Plot Count:</strong> {entry.count}
@@ -336,7 +336,7 @@ const CombinedChart: React.FC<CombinedChartProps> = ({
                 tick={{ fontSize: 12 }}
                 axisLine={{ stroke: "#e5e7eb" }}
                 label={{
-                  value: "Yield (T/Ha)",
+                  value: "Yield (T/acre)",
                   angle: -90,
                   position: "insideLeft",
                   offset: 10,
@@ -573,7 +573,7 @@ const HarvestDashboard: React.FC = () => {
                     "Sugarcane Status": status,
                     "Area (Hect)": area,
                     Days: days,
-                    "Prediction Yield (T/Ha)": yieldPerHa,
+                    "Prediction Yield (T/acre)": yieldPerHa,
                     "Brix (Degree)": brix,
                     "Recovery (Degree)": recovery,
                     "Distance (km)": Math.random() * 10 + 1,
@@ -692,7 +692,7 @@ const HarvestDashboard: React.FC = () => {
       position: [item.Latitude, item.Longitude] as [number, number],
       status: item["Sugarcane Status"],
       plotNo: item["Plot No"] || item["plot in no."] || `P${idx + 1}`,
-      area: `${item["Area (Hect)"]} Ha`,
+      area: `${item["Area (Hect)"]} acre`,
       raw: item,
     }));
   }, [filteredData, activeChart, harvestRange]);
@@ -725,7 +725,7 @@ const HarvestDashboard: React.FC = () => {
       (acc: { [key: number]: number[] }, item) => {
         if (
           typeof item.Days === "number" &&
-          typeof item["Prediction Yield (T/Ha)"] === "number"
+          typeof item["Prediction Yield (T/acre)"] === "number"
         ) {
           if (!acc[item.Days]) {
             acc[item.Days] = [];
@@ -806,7 +806,7 @@ const HarvestDashboard: React.FC = () => {
 
     return [
       {
-        label: "Total Area (Ha)",
+        label: "Total Area (acre)",
         value: totalArea ? totalArea.toFixed(2) : "-",
         icon: BarChart3,
       },
@@ -823,7 +823,7 @@ const HarvestDashboard: React.FC = () => {
         icon: MapPin,
       },
       {
-        label: "Expected Yield (T/Ha)",
+        label: "Expected Yield (T/acre)",
         value: avgYield,
         icon: TrendingUp,
       },

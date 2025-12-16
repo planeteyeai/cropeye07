@@ -760,7 +760,6 @@ const SoilAnalysis: React.FC<SoilAnalysisProps> = ({
           </div>
           <button className="flex items-center gap-1 px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs">
             <Download className="w-3 h-3" />
-            Download
           </button>
         </div>
       </div>

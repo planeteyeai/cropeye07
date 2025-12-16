@@ -191,8 +191,7 @@ const ManagerHomeGrid: React.FC<ManagerHomeGridProps> = ({
                 setCurrentPage("add-booking");
               } else if (item.title === "Harvesting Planning") {
                 // Open HarvestDashboard page in full window
-                onMenuClick("harvesting-planning"); // Notify App component
-                // setCurrentPage("harvesting-planning"); // This is now handled by the onMenuClick logic
+                setCurrentPage("harvesting-planning");
               } else if (item.title === "Farm Crop Status") {
                 onMenuClick("Farm Crop Status");
               } else {

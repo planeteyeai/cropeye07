@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ClipboardList, Trash2 } from 'lucide-react';
+import { addOrder, getVendors } from '../api';
 
 interface Item {
   id: string;
@@ -7,6 +8,14 @@ interface Item {
   yearOfMake: string;
   estimateCost: string;
   remark: string;
+}
+
+interface Vendor {
+  id: number;
+  vendor_name: string;
+  email?: string;
+  mobile?: string;
+  phone?: string;
 }
 
 interface AddOrderProps {
@@ -19,6 +28,11 @@ export const Addorder: React.FC<AddOrderProps> = ({ items, setItems }) => {
   const [invoiceDate, setInvoiceDate] = React.useState('');
   const [invoiceNumber, setInvoiceNumber] = React.useState('');
   const [selectedState, setSelectedState] = React.useState('');
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState('');
+  const [error, setError] = useState('');
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [loadingVendors, setLoadingVendors] = useState(false);
 
   const indianStates = [
     'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
@@ -27,6 +41,47 @@ export const Addorder: React.FC<AddOrderProps> = ({ items, setItems }) => {
     'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu',
     'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal'
   ];
+
+  // Fetch vendors on component mount
+  useEffect(() => {
+    const fetchVendors = async () => {
+      setLoadingVendors(true);
+      try {
+        const response = await getVendors();
+        const data = response?.data;
+        
+        // Handle different response formats
+        let vendorsList: any[] = [];
+        if (Array.isArray(data)) {
+          vendorsList = data;
+        } else if (Array.isArray(data?.results)) {
+          vendorsList = data.results;
+        } else if (Array.isArray(data?.data)) {
+          vendorsList = data.data;
+        } else if (data?.vendors && Array.isArray(data.vendors)) {
+          vendorsList = data.vendors;
+        }
+        
+        // Transform to Vendor interface
+        const transformedVendors: Vendor[] = vendorsList.map((vendor: any) => ({
+          id: vendor.id,
+          vendor_name: vendor.vendor_name || vendor.name || '',
+          email: vendor.email || '',
+          mobile: vendor.mobile || vendor.phone || '',
+        }));
+        
+        setVendors(transformedVendors);
+        console.log('✅ Loaded vendors:', transformedVendors);
+      } catch (err: any) {
+        console.error('❌ Failed to fetch vendors:', err);
+        setError('Failed to load vendors. Please refresh the page.');
+      } finally {
+        setLoadingVendors(false);
+      }
+    };
+
+    fetchVendors();
+  }, []);
 
   const addNewRow = () => {
     setItems([...items, {
@@ -50,31 +105,53 @@ export const Addorder: React.FC<AddOrderProps> = ({ items, setItems }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Flatten each item into the correct structure for OrderList
-    const orders = items.map((item) => ({
-      id: Number(item.id),
-      vendorName: selectedVendor,
-      invoiceDate,
-      invoiceNumber,
-      state: selectedState,
-      itemName: item.itemName,
-      yearMake: item.yearOfMake,
-      estimateCost: item.estimateCost,
-      remark: item.remark,
-    }));
+    
+    // Validate that at least one item is filled
+    const validItems = items.filter(item => item.itemName.trim() !== '');
+    if (validItems.length === 0) {
+      setError('Please add at least one item to the order.');
+      return;
+    }
+
+    setLoading(true);
+    setSuccess('');
+    setError('');
 
     try {
-      // Post each order item separately
-      for (const order of orders) {
-        await fetch('http://localhost:5000/orderlist', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(order),
-        });
+      // Validate vendor selection
+      if (!selectedVendor) {
+        setError('Please select a vendor.');
+        setLoading(false);
+        return;
       }
-      alert('Order(s) Submitted!');
+
+      const vendorId = parseInt(selectedVendor, 10);
+      if (isNaN(vendorId)) {
+        setError('Invalid vendor selected. Please select a vendor again.');
+        setLoading(false);
+        return;
+      }
+
+      // Prepare data for API (convert frontend field names to backend field names)
+      const apiData = {
+        vendor: vendorId, // Use vendor ID, not name
+        invoice_date: invoiceDate,
+        invoice_number: invoiceNumber,
+        state: selectedState,
+        items: validItems.map((item) => ({
+          item_name: item.itemName,
+          year_of_make: item.yearOfMake,
+          estimate_cost: item.estimateCost,
+          remark: item.remark || ''
+        }))
+      };
+
+      console.log('📦 Adding order with data:', apiData);
+      const response = await addOrder(apiData);
+      console.log('✅ Order added successfully:', response.data);
+
+      setSuccess('Order(s) submitted successfully! The order list will be updated automatically.');
+      
       // Reset form fields and items
       setSelectedVendor('');
       setInvoiceDate('');
@@ -89,38 +166,89 @@ export const Addorder: React.FC<AddOrderProps> = ({ items, setItems }) => {
           remark: ''
         }
       ]);
-    } catch (error) {
-      console.error('Error posting order:', error);
-      alert('Failed to submit order.');
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setSuccess('');
+      }, 3000);
+    } catch (err: any) {
+      console.error('❌ Error posting order:', err);
+      console.error('❌ Error response:', err?.response);
+      console.error('❌ Error data:', err?.response?.data);
+      console.error('❌ Error status:', err?.response?.status);
+      console.error('❌ Request data that was sent:', apiData);
+      
+      let errorMessage = 'Failed to submit order. Please try again.';
+      
+      if (err?.response?.status === 404) {
+        errorMessage = 'API endpoint not found (404). Please check the server configuration.';
+      } else if (err?.response?.status === 400) {
+        const errorData = err?.response?.data;
+        if (errorData) {
+          // Extract field-specific errors
+          const fieldErrors = Object.entries(errorData)
+            .filter(([key]) => key !== 'detail' && key !== 'message')
+            .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+            .join('; ');
+          
+          errorMessage = errorData.detail || errorData.message || fieldErrors || 'Invalid data format. Please check all fields.';
+        } else {
+          errorMessage = 'Invalid request format (400). Please check all required fields are filled.';
+        }
+      } else if (err?.response?.data) {
+        errorMessage = err.response.data.detail || err.response.data.message || err.message || errorMessage;
+      } else {
+        errorMessage = err?.message || errorMessage;
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Header */}
-      <div className="h-48 bg-[url('https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?q=80&w=2000')] bg-cover bg-center relative">
-        <div className="absolute inset-0 bg-black/50">
-          <div className="max-w-6xl mx-auto px-4 h-full flex items-center">
-            <ClipboardList className="h-10 w-10 text-white mr-3" />
-            <h1 className="text-4xl font-bold text-white">Accounting</h1>
+    <div 
+      className="min-h-screen bg-cover bg-center bg-fixed"
+      style={{
+        backgroundImage: `url('/icons/sugarcane main slide.jpg')`
+      }}
+    >
+      <div className="min-h-screen bg-black bg-opacity-40">
+        <div className="max-w-6xl mx-auto px-4 py-12">
+          {/* Title Section */}
+          <div className="mb-8 text-center">
+            <div className="flex items-center justify-center space-x-4">
+              <ClipboardList className="h-12 w-12 text-white" />
+              <h1 className="text-4xl font-bold text-white">Accounting</h1>
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* Form */}
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-xl p-6">
+          {/* Form Card */}
+          <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-xl p-6 bg-opacity-95">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             {/* Inputs */}
             <div>
               <label className="text-sm font-medium">Vendor Name *</label>
-              <select className="w-full rounded-md border p-2" value={selectedVendor} onChange={(e) => setSelectedVendor(e.target.value)} required>
-                <option value="">Select Vendor</option>
-                <option value="Snigdha">Snigdha</option>
-                <option value="Sid">Sid</option>
-                <option value="Kalyani">Kalyani</option>
-                <option value="Tukaram">Tukaram</option>
+              <select 
+                className="w-full rounded-md border p-2" 
+                value={selectedVendor} 
+                onChange={(e) => setSelectedVendor(e.target.value)} 
+                required
+                disabled={loadingVendors}
+              >
+                <option value="">
+                  {loadingVendors ? 'Loading vendors...' : 'Select Vendor'}
+                </option>
+                {vendors.map((vendor) => (
+                  <option key={vendor.id} value={vendor.id.toString()}>
+                    {vendor.vendor_name} {vendor.email ? `(${vendor.email})` : ''}
+                  </option>
+                ))}
               </select>
+              {vendors.length === 0 && !loadingVendors && (
+                <p className="text-xs text-gray-500 mt-1">No vendors available. Please add a vendor first.</p>
+              )}
             </div>
             <div>
               <label className="text-sm font-medium">Invoice Date *</label>
@@ -183,9 +311,28 @@ export const Addorder: React.FC<AddOrderProps> = ({ items, setItems }) => {
 
           {/* Buttons */}
           <div className="flex justify-end gap-4 mt-6">
-            <button type="submit" className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Add Order</button>
+            <button 
+              type="submit" 
+              disabled={loading}
+              className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Submitting...' : 'Add Order'}
+            </button>
           </div>
-        </form>
+          
+          {success && (
+            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-800">
+              {success}
+            </div>
+          )}
+          
+          {error && (
+            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
+              {error}
+            </div>
+          )}
+          </form>
+        </div>
       </div>
     </div>
   );

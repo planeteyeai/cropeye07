@@ -4,10 +4,6 @@ import { ImageModal } from './meter/ImageModal';
 import { pestsData } from './meter/pestsData';
 import { diseasesData } from './meter/diseasesData';
 import { weedsData } from './meter/Weeds';
-import {
-  categorizeWeedsBySeason,
-  getCurrentMonthLower,
-} from './meter/weedRiskUtils';
 import { DetectionCard } from './meter/PestCard';
 import { 
   generateRiskAssessment, 
@@ -18,12 +14,12 @@ import {
   WeatherData,
   PestDetectionData 
 } from './meter/riskAssessmentService';
-import { useAppContext } from '../../context/AppContext';
-import { useFarmerProfile } from '../../hooks/useFarmerProfile';
+import {
+  getCurrentMonthLower,
+  categorizeWeedsBySeason,
+} from './meter/weedRiskUtils';
 
 export const PestDisease: React.FC = () => {
-  const { selectedPlotName, setSelectedPlotName } = useAppContext();
-  const { profile, loading: profileLoading } = useFarmerProfile();
   const [riskAssessment, setRiskAssessment] = useState<RiskAssessmentResult | null>(null);
   const [pestDetectionData, setPestDetectionData] = useState<PestDetectionData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,29 +28,19 @@ export const PestDisease: React.FC = () => {
   const [selectedRiskLevel, setSelectedRiskLevel] = useState<'High' | 'Moderate' | 'Low' | null>(null);
 
   const [chemModal, setChemModal] = useState<{ open: boolean; title: string; chemicals: string[] }>({ open: false, title: '', chemicals: [] });
-  const currentMonthLower = useMemo(getCurrentMonthLower, []);
-  const weedRiskBuckets = useMemo(
-    () => categorizeWeedsBySeason(weedsData, currentMonthLower),
-    [currentMonthLower]
-  );
 
   useEffect(() => {
     loadRiskAssessment();
-  }, [selectedPlotName]);
+  }, []);
 
   const loadRiskAssessment = async () => {
-    if (!selectedPlotName) {
-      setIsLoading(false);
-      return;
-    }
-
     try {
       setIsLoading(true);
       
-      // Fetch plantation date, weather data, and pest detection data for selected plot
-      const plantationDate = await fetchPlantationDate(selectedPlotName);
-      const weatherData = await fetchCurrentWeather(selectedPlotName);
-      const pestData = await fetchPestDetectionData(selectedPlotName);
+      // Fetch plantation date, weather data, and pest detection data
+      const plantationDate = await fetchPlantationDate();
+      const weatherData = await fetchCurrentWeather();
+      const pestData = await fetchPestDetectionData();
       
       // Generate risk assessment
       const assessment = await generateRiskAssessment(plantationDate, weatherData);
@@ -140,6 +126,10 @@ export const PestDisease: React.FC = () => {
   const totalDiseasesDetected = riskAssessment ? 
     riskAssessment.diseases.High.length + riskAssessment.diseases.Moderate.length + riskAssessment.diseases.Low.length : 0;
 
+  // Categorize weeds by current month
+  const currentMonthLower = useMemo(getCurrentMonthLower, []);
+  const weedRiskBuckets = useMemo(() => categorizeWeedsBySeason(weedsData, currentMonthLower), [currentMonthLower]);
+
   const handleRiskClick = (category: 'Pests' | 'Diseases' | 'Weeds', level: 'High' | 'Moderate' | 'Low') => {
     // If clicking the same category and level, deselect
     if (selectedCategory === category && selectedRiskLevel === level) {
@@ -181,52 +171,6 @@ export const PestDisease: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-3 sm:p-4 md:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
-        {/* Plot Selector */}
-        {profile && !profileLoading && (
-          <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
-            <div className="flex items-center gap-4 flex-wrap">
-              <label className="font-semibold text-gray-700">Select Plot:</label>
-              <select
-                value={selectedPlotName || ""}
-                onChange={(e) => {
-                  setSelectedPlotName(e.target.value);
-                }}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {profile.plots?.map(plot => {
-                  let displayName = '';
-                  
-                  if (plot.gat_number && plot.plot_number && 
-                      plot.gat_number.trim() !== "" && plot.plot_number.trim() !== "" &&
-                      !plot.gat_number.startsWith('GAT_') && !plot.plot_number.startsWith('PLOT_')) {
-                    displayName = `${plot.gat_number}_${plot.plot_number}`;
-                  } else if (plot.gat_number && plot.gat_number.trim() !== "" && !plot.gat_number.startsWith('GAT_')) {
-                    displayName = plot.gat_number;
-                  } else if (plot.plot_number && plot.plot_number.trim() !== "" && !plot.plot_number.startsWith('PLOT_')) {
-                    displayName = plot.plot_number;
-                  } else {
-                    const village = plot.address?.village;
-                    const taluka = plot.address?.taluka;
-                    
-                    if (village) {
-                      displayName = `Plot in ${village}`;
-                      if (taluka) displayName += `, ${taluka}`;
-                    } else {
-                      displayName = 'Plot (No GAT/Plot Number)';
-                    }
-                  }
-                  
-                  return (
-                    <option key={plot.fastapi_plot_id} value={plot.fastapi_plot_id}>
-                      {displayName}
-                    </option>
-                  );
-                }) || []}
-              </select>
-            </div>
-          </div>
-        )}
-
         <div className="mb-6 sm:mb-8">
           <h2 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-800 text-center mb-4 sm:mb-6 px-2">
             Risk Assessment
@@ -240,7 +184,7 @@ export const PestDisease: React.FC = () => {
               highCount={counts.high}
               moderateCount={counts.moderate}
               lowCount={counts.low}
-              // icon="🦗"
+              // icon="??"
               onRiskClick={handleRiskClick}
               selectedCategory={selectedCategory}
               selectedRiskLevel={selectedRiskLevel}
@@ -252,7 +196,7 @@ export const PestDisease: React.FC = () => {
               highCount={riskAssessment?.diseases.High.length || 0}
               moderateCount={riskAssessment?.diseases.Moderate.length || 0}
               lowCount={riskAssessment?.diseases.Low.length || 0}
-              // icon="🦠"
+              // icon="??"
               onRiskClick={handleRiskClick}
               selectedCategory={selectedCategory}
               selectedRiskLevel={selectedRiskLevel}
@@ -264,7 +208,7 @@ export const PestDisease: React.FC = () => {
               highCount={weedRiskBuckets.high.length}
               moderateCount={weedRiskBuckets.moderate.length}
               lowCount={weedRiskBuckets.low.length}
-              // icon="🌿"
+              // icon="??"
               onRiskClick={handleRiskClick}
               selectedCategory={selectedCategory}
               selectedRiskLevel={selectedRiskLevel}
@@ -340,12 +284,12 @@ export const PestDisease: React.FC = () => {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
               {(() => {
-                const filteredWeeds =
-                  selectedRiskLevel === 'High'
-                    ? weedRiskBuckets.high
-                    : selectedRiskLevel === 'Moderate'
-                      ? weedRiskBuckets.moderate
-                      : weedRiskBuckets.low;
+                // Filter weeds based on selected risk level using month-based categorization
+                const filteredWeeds = selectedRiskLevel === 'High'
+                  ? weedRiskBuckets.high
+                  : selectedRiskLevel === 'Moderate'
+                    ? weedRiskBuckets.moderate
+                    : weedRiskBuckets.low;
                 
                 return filteredWeeds.map((weed, index) => (
                   <div key={index} className="bg-[#fbf3ea] rounded-lg sm:rounded-xl p-4 sm:p-6 shadow border border-orange-200">
@@ -399,7 +343,7 @@ export const PestDisease: React.FC = () => {
           <div className="bg-white rounded-lg p-4 sm:p-6 w-11/12 max-w-md shadow-lg">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-lg font-bold text-gray-800">Chemical Recommendations</h4>
-              <button className="text-gray-500 hover:text-gray-700" onClick={() => setChemModal({ open: false, title: '', chemicals: [] })}>✕</button>
+              <button className="text-gray-500 hover:text-gray-700" onClick={() => setChemModal({ open: false, title: '', chemicals: [] })}>?</button>
             </div>
             <div className="text-sm text-gray-700 mb-2 font-semibold">{chemModal.title}</div>
             <ul className="list-disc ml-5 text-sm text-gray-700 space-y-1">

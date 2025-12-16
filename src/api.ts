@@ -1,8 +1,8 @@
 import axios from "axios";
-import { getAuthToken, setAuthToken as setAuthTokenUtil, isValidToken } from "./utils/auth";
+import { getAuthToken, setAuthToken as setAuthTokenUtil, isValidToken, getRefreshToken, setRefreshToken, clearAuthData } from "./utils/auth";
 
 // Set base URL for backend
-const API_BASE_URL = "https://cropeye-server-1.onrender.com/api"; // changed to root API URL
+const API_BASE_URL = "http://192.168.41.86:8000/api"; // changed to root API URL
 
 // KML/GeoJSON API URL
 const KML_API_URL = "http://192.168.41.51";
@@ -32,16 +32,106 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Add response interceptor to handle authentication errors
+// Token refresh flag to prevent infinite loops
+let isRefreshing = false;
+let failedQueue: Array<{ resolve: (value?: any) => void; reject: (reason?: any) => void }> = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  
+  failedQueue = [];
+};
+
+// Add response interceptor to handle authentication errors and token refresh
 api.interceptors.response.use(
   (response) => {
     return response;
   },
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config;
+
     // Suppress console errors for silent errors
     if (error.isSilent) {
-      // Don't log silent errors to console
       return Promise.reject(error);
+    }
+
+    // Handle token refresh for 401 errors
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      // Check if it's a token validation error
+      const errorData = error.response?.data;
+      const isTokenError = errorData?.code === 'token_not_valid' || 
+                          errorData?.detail?.includes('token') ||
+                          errorData?.messages;
+
+      if (isTokenError) {
+        if (isRefreshing) {
+          // If already refreshing, queue this request
+          return new Promise((resolve, reject) => {
+            failedQueue.push({ resolve, reject });
+          })
+            .then(token => {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+              return api(originalRequest);
+            })
+            .catch(err => {
+              return Promise.reject(err);
+            });
+        }
+
+        originalRequest._retry = true;
+        isRefreshing = true;
+
+        const refreshToken = getRefreshToken();
+        
+        if (refreshToken) {
+          try {
+            // Try to refresh the token
+            const response = await axios.post(`${API_BASE_URL}/token/refresh/`, {
+              refresh: refreshToken
+            });
+
+            const { access } = response.data;
+            
+            if (access) {
+              setAuthTokenUtil(access);
+              originalRequest.headers.Authorization = `Bearer ${access}`;
+              
+              // Process queued requests
+              processQueue(null, access);
+              isRefreshing = false;
+              
+              return api(originalRequest);
+            }
+          } catch (refreshError) {
+            // Refresh failed - clear auth and redirect to login
+            processQueue(refreshError, null);
+            isRefreshing = false;
+            clearAuthData();
+            
+            // Redirect to login page
+            if (window.location.pathname !== '/login') {
+              window.location.href = '/login';
+            }
+            
+            return Promise.reject(refreshError);
+          }
+        } else {
+          // No refresh token - clear auth and redirect
+          processQueue(error, null);
+          isRefreshing = false;
+          clearAuthData();
+          
+          if (window.location.pathname !== '/login') {
+            window.location.href = '/login';
+          }
+        }
+      }
     }
     
     // Only log non-silent errors
@@ -67,9 +157,14 @@ api.interceptors.response.use(
 //return api.post('/verify-otp/', { email, otp });
 //};
 
-//Login function - backend expects email field
-export const login = (email: string, password: string) => {
-  return api.post("/login/", { email, password });
+//Login function - backend expects phone_number field
+export const login = (phone_number: string, password: string) => {
+  return api.post("/login/", { phone_number, password });
+};
+
+// Token refresh function
+export const refreshToken = (refresh: string) => {
+  return axios.post(`${API_BASE_URL}/token/refresh/`, { refresh });
 };
 
 export const addUser = (data: {
@@ -79,7 +174,7 @@ export const addUser = (data: {
   phone_number: string;
   email: string;
   password?: string;
-  role: string;
+  role_id: number; // Changed from 'role: string' to 'role_id: number' - backend expects integer (1=farmer, 2=fieldofficer, 3=manager, 4=owner)
 }) => {
   return api.post("/users/", data);
 };
@@ -122,11 +217,15 @@ export const updateTaskStatus = (taskId: number, status: string) => {
 export const addVendor = (data: {
   vendor_name: string;
   email: string;
-  mobile: string;
-  gstin: string;
-  state: string;
-  city: string;
+  phone?: string;
+  mobile?: string;
+  contact_person?: string;
+  gstin?: string;
+  gstin_number?: string;
+  state?: string;
+  city?: string;
   address: string;
+  rating?: number;
 }) => {
   return api.post("/vendors/", data);
 };
@@ -135,8 +234,18 @@ export const getVendors = () => {
   return api.get("/vendors/");
 };
 
+// Update vendor using PATCH method (partial update)
+export const patchVendor = (id: string | number, data: any) => {
+  return api.patch(`/vendors/${id}/`, data);
+};
+
+// Delete vendor
+export const deleteVendor = (id: string | number) => {
+  return api.delete(`/vendors/${id}/`);
+};
+
 export const addOrder = (data: {
-  vendor_name: string;
+  vendor: number; // Vendor ID
   invoice_date: string;
   invoice_number: string;
   state: string;
@@ -147,9 +256,22 @@ export const addOrder = (data: {
     remark: string;
   }[];
 }) => {
-  return api.post("/addorder", data);
+  return api.post("/orders/", data);
 };
 
+export const getorders=()=>{
+  return api.get("/orders/");
+}
+
+// Update order using PATCH method (partial update)
+export const patchOrder = (id: string | number, data: any) => {
+  return api.patch(`/orders/${id}/`, data);
+};
+
+// Delete order
+export const deleteOrder = (id: string | number) => {
+  return api.delete(`/orders/${id}/`);
+};
 export const addStock = (data: {
   item_name: string;
   item_type: string;
@@ -159,9 +281,21 @@ export const addStock = (data: {
   status: string;
   remark: string;
 }) => {
-  return api.post("/addstock", data);
+  return api.post("/stock/", data);
+};
+export const getstock=()=>{
+  return api.get("/stock/");
+}
+
+// Update stock using PATCH method (partial update)
+export const patchStock = (id: string | number, data: any) => {
+  return api.patch(`/stock/${id}/`, data);
 };
 
+// Delete stock
+export const deleteStock = (id: string | number) => {
+  return api.delete(`/stock/${id}/`);
+};
 export const addBooking = (data: {
   item_name: string;
   user_role: string;
@@ -170,6 +304,17 @@ export const addBooking = (data: {
   status: string;
 }) => {
   return api.post("/addbooking", data);
+};
+export const getbookings=()=>{
+  return api.get("/bookings/");
+}
+export const patchBooking = (id: string | number, data: any) => {
+  return api.patch(`/bookings/${id}/`, data);
+};
+
+// Delete booking
+export const deleteBooking = (id: string | number) => {
+  return api.delete(`/bookings/${id}/`);
 };
 
 // ==================== FARM MANAGEMENT API ====================
@@ -259,7 +404,22 @@ export const updateFarm = (id: string, data: any) => {
   return api.put(`/farms/${id}/`, data);
 };
 
-// Update farm registration
+// Update farm using PATCH method (partial update)
+export const patchFarm = (id: string, data: any) => {
+  return api.patch(`/farms/${id}/`, data);
+};
+
+// Update plot using PATCH method (partial update)
+export const patchPlot = (id: string, data: any) => {
+  return api.patch(`/plots/${id}/`, data);
+};
+
+// Update irrigation using PATCH method (partial update)
+export const patchIrrigation = (id: string, data: any) => {
+  return api.patch(`/irrigations/${id}/`, data);
+};
+
+// Update farm registration 
 export const updateFarmRegistration = (
   id: string,
   data: {
@@ -352,8 +512,46 @@ export const getUsers = () => {
   return api.get("/users/");
 };
 
+// Update user using PATCH method (partial update)
+export const updateUser = (id: string, data: any) => {
+  return api.patch(`/users/${id}/`, data);
+};
+
 export const getContactDetails = () => {
   return api.get("/users/contact-details/");
+};
+
+// Get total counts for dashboard
+export const getTotalCounts = () => {
+  return api.get("/users/total-count/");
+};
+
+// Get team connect data (owners, field officers, farmers)
+export const getTeamConnect = (industryId?: number | string) => {
+  const url = industryId 
+    ? `/users/team-connect/?industry_id=${industryId}`
+    : `/users/team-connect/`;
+  return api.get(url);
+};
+
+// Messaging API functions
+export const sendMessage = (data: {
+  recipient_id: number[];
+  content: string;
+}) => {
+  return api.post("/messages/", data);
+};
+
+export const getConversationWithUser = (userId: number) => {
+  return api.get(`/conversations/with-user/${userId}/`);
+};
+
+export const getConversations = () => {
+  return api.get("/conversations/");
+};
+
+export const getMessages = (conversationId: number) => {
+  return api.get(`/conversations/${conversationId}/messages/`);
 };
 
 // Farmer Registration API (role_id = 1 for Farmer) - No authentication required

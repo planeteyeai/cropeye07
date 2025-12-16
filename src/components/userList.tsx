@@ -459,8 +459,8 @@
 
 
 import React, { useState, useEffect } from 'react';
-import { Download, Edit, Search, Trash2, Save, X } from 'lucide-react';
-import { getContactDetails } from '../api';
+import { Download, Edit, Search, Trash2, Save, X, Loader2, Users } from 'lucide-react';
+import { getContactDetails, getUsers, updateUser } from '../api';
 
 interface User {
   id: number;
@@ -468,9 +468,11 @@ interface User {
   first_name: string;
   last_name: string;
   email: string;
-  phone: string;
-  address: string;
-  role: string;
+  phone_number?: string;
+  phone?: string;
+  address?: string;
+  role?: string;
+  role_id?: number;
   created_by?: number;
 }
 
@@ -482,34 +484,58 @@ interface UserListProps {
 export const UserList: React.FC<UserListProps> = ({ currentUserId, currentUserRole }) => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 5;
   const [editId, setEditId] = useState<number | null>(null);
   const [editFormData, setEditFormData] = useState<Partial<User>>({});
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchFieldOfficers();
+    fetchUsers();
   }, [currentUserId]);
 
-  const fetchFieldOfficers = async () => {
+  const fetchUsers = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const response = await getContactDetails();
-      const contactData = response.data.contacts;
+      // Try to get all users first
+      let usersData: any[] = [];
       
-      // Get field officers created by this owner
-      let fieldOfficers = contactData.field_officers || [];
-      
-      // If you need to filter by created_by (if backend provides this field)
-      // fieldOfficers = fieldOfficers.filter((officer: any) => 
-      //   officer.created_by === currentUserId
-      // );
-      
-      console.log('Field Officers loaded:', fieldOfficers.length);
-      setUsers(fieldOfficers);
-    } catch (error) {
-      console.error('Error fetching field officers:', error);
+      try {
+        const response = await getUsers();
+        usersData = response.data.results || response.data || [];
+        console.log('Users loaded from /users/:', usersData.length);
+      } catch (err) {
+        console.warn('Failed to fetch from /users/, trying getContactDetails...');
+        // Fallback to getContactDetails
+        const response = await getContactDetails();
+        const contactData = response.data.contacts;
+        usersData = contactData.field_officers || contactData.owners || [];
+        console.log('Users loaded from contact-details:', usersData.length);
+      }
+
+      // Transform the data to match our interface
+      const transformedUsers: User[] = usersData.map((user: any) => ({
+        id: user.id,
+        username: user.username || '',
+        first_name: user.first_name || '',
+        last_name: user.last_name || '',
+        email: user.email || '',
+        phone_number: user.phone_number || user.phone || '',
+        phone: user.phone_number || user.phone || '',
+        address: user.address || '',
+        role: user.role?.name || user.role || '',
+        role_id: user.role?.id || user.role_id,
+        created_by: user.created_by,
+      }));
+
+      setUsers(transformedUsers);
+    } catch (error: any) {
+      console.error('Error fetching users:', error);
+      setError(error.message || 'Failed to fetch users');
       setUsers([]);
     } finally {
       setLoading(false);
@@ -517,14 +543,25 @@ export const UserList: React.FC<UserListProps> = ({ currentUserId, currentUserRo
   };
 
   const handleEdit = (id: number) => {
-    setEditId(id);
     const user = users.find(u => u.id === id);
-    if (user) setEditFormData({ ...user });
+    if (user) {
+      setEditId(id);
+      setEditFormData({
+        username: user.username || '',
+        first_name: user.first_name || '',
+        last_name: user.last_name || '',
+        email: user.email || '',
+        phone_number: user.phone_number || user.phone || '',
+        address: user.address || '',
+      });
+      setEditError(null);
+    }
   };
 
   const handleCancel = () => {
     setEditId(null);
     setEditFormData({});
+    setEditError(null);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -534,15 +571,63 @@ export const UserList: React.FC<UserListProps> = ({ currentUserId, currentUserRo
 
   const handleSave = async () => {
     if (editId === null) return;
-    
-    // TODO: Add API call to update field officer
-    // await updateUser(editId, editFormData);
-    
-    setUsers(users.map(user => 
-      user.id === editId ? { ...user, ...editFormData } : user
-    ));
-    setEditId(null);
-    setEditFormData({});
+
+    setSavingEdit(true);
+    setEditError(null);
+
+    try {
+      const userToEdit = users.find(u => u.id === editId);
+      if (!userToEdit) {
+        setEditError('User not found');
+        setSavingEdit(false);
+        return;
+      }
+
+      // Prepare update data (PATCH - only send changed fields)
+      const updateData: any = {};
+
+      if (editFormData.username && editFormData.username !== userToEdit.username) {
+        updateData.username = editFormData.username;
+      }
+
+      if (editFormData.first_name && editFormData.first_name !== userToEdit.first_name) {
+        updateData.first_name = editFormData.first_name;
+      }
+
+      if (editFormData.last_name && editFormData.last_name !== userToEdit.last_name) {
+        updateData.last_name = editFormData.last_name;
+      }
+
+      if (editFormData.email && editFormData.email !== userToEdit.email) {
+        updateData.email = editFormData.email;
+      }
+
+      const phoneValue = editFormData.phone_number || editFormData.phone;
+      const currentPhone = userToEdit.phone_number || userToEdit.phone;
+      if (phoneValue && phoneValue !== currentPhone) {
+        updateData.phone_number = phoneValue;
+      }
+
+      if (editFormData.address && editFormData.address !== userToEdit.address) {
+        updateData.address = editFormData.address;
+      }
+
+      // Update user if there are changes
+      if (Object.keys(updateData).length > 0) {
+        await updateUser(editId.toString(), updateData);
+        
+        // Refresh the data
+        await fetchUsers();
+      }
+
+      setEditId(null);
+      setEditFormData({});
+    } catch (err: any) {
+      console.error('Error updating user:', err);
+      setEditError(err.response?.data?.detail || err.message || 'Failed to update user. Please try again.');
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   const handleDelete = async (id: number) => {
@@ -557,27 +642,33 @@ export const UserList: React.FC<UserListProps> = ({ currentUserId, currentUserRo
   const handleDownload = () => {
     const csv = [
       ['Username', 'First Name', 'Last Name', 'Email', 'Phone Number', 'Address', 'Role'],
-      ...users.map(({ username, first_name, last_name, email, phone, address, role }) => [
-        username, first_name, last_name, email, phone, address, role
+      ...users.map(({ username, first_name, last_name, email, phone_number, phone, address, role }) => [
+        username || '', 
+        first_name || '', 
+        last_name || '', 
+        email || '', 
+        phone_number || phone || '', 
+        address || '', 
+        role || ''
       ])
     ]
-      .map(row => row.join(','))
+      .map(row => row.map(field => `"${field}"`).join(','))
       .join('\n');
 
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'field-officers-list.csv';
+    a.download = 'user-list.csv';
     a.click();
   };
 
-  const filtered = users.filter(user =>
-    user.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.phone?.includes(searchTerm) ||
-    user.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.last_name?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filtered = (users || []).filter(user =>
+    (user.username?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+    (user.email?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+    (user.phone_number || user.phone || '').includes(searchTerm) ||
+    (user.address?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+    (user.first_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+    (user.last_name?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
@@ -620,9 +711,9 @@ export const UserList: React.FC<UserListProps> = ({ currentUserId, currentUserRo
               className="border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
             />
             <input
-              name="phone"
+              name="phone_number"
               placeholder="Phone Number"
-              value={editFormData.phone || ''}
+              value={editFormData.phone_number || editFormData.phone || ''}
               onChange={handleInputChange}
               className="border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
             />
@@ -634,17 +725,33 @@ export const UserList: React.FC<UserListProps> = ({ currentUserId, currentUserRo
               className="border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
             />
           </div>
+          {editError && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded text-sm">
+              {editError}
+            </div>
+          )}
           <div className="flex justify-end space-x-2 pt-2">
             <button
               onClick={handleSave}
-              className="flex items-center px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
+              disabled={savingEdit}
+              className="flex items-center px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Save className="w-4 h-4 mr-1" />
-              Save
+              {savingEdit ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 mr-1" />
+                  Save
+                </>
+              )}
             </button>
             <button
               onClick={handleCancel}
-              className="flex items-center px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm"
+              disabled={savingEdit}
+              className="flex items-center px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm disabled:opacity-50"
             >
               <X className="w-4 h-4 mr-1" />
               Cancel
@@ -674,10 +781,10 @@ export const UserList: React.FC<UserListProps> = ({ currentUserId, currentUserRo
             </div>
           </div>
           <div className="space-y-2 text-sm">
-            <div><span className="font-medium text-gray-700">Email:</span> {user.email}</div>
-            <div><span className="font-medium text-gray-700">Phone:</span> {user.phone}</div>
-            <div><span className="font-medium text-gray-700">Address:</span> {user.address}</div>
-            <div><span className="font-medium text-gray-700">Role:</span> {user.role}</div>
+            <div><span className="font-medium text-gray-700">Email:</span> {user.email || 'N/A'}</div>
+            <div><span className="font-medium text-gray-700">Phone:</span> {user.phone_number || user.phone || 'N/A'}</div>
+            <div><span className="font-medium text-gray-700">Address:</span> {user.address || 'N/A'}</div>
+            <div><span className="font-medium text-gray-700">Role:</span> {user.role || 'N/A'}</div>
           </div>
         </div>
       )}
@@ -685,17 +792,31 @@ export const UserList: React.FC<UserListProps> = ({ currentUserId, currentUserRo
   );
 
   return (
-    <div className="p-4 sm:p-6 bg-gray-50 min-h-screen">
-      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 max-w-7xl mx-auto">
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 space-y-4 sm:space-y-0">
-          <h2 className="text-xl font-bold text-gray-700">Field Officers List</h2>
+    <div 
+      className="min-h-screen bg-cover bg-center bg-fixed"
+      style={{
+        backgroundImage: `url('/icons/sugarcane main slide.jpg')`
+      }}
+    >
+      <div className="min-h-screen bg-black bg-opacity-40">
+        <div className="max-w-7xl mx-auto px-4 py-12">
+          {/* Title Section */}
+          <div className="mb-8 text-center">
+            <div className="flex items-center justify-center space-x-4">
+              <Users className="h-12 w-12 text-white" />
+              <h1 className="text-4xl font-bold text-white">User List</h1>
+            </div>
+          </div>
+
+          {/* Content Card */}
+          <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 bg-opacity-95">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 space-y-4 sm:space-y-0">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
             <button
               onClick={handleDownload}
               className="flex items-center justify-center px-4 py-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded border border-green-200"
             >
               <Download className="w-4 h-4 mr-2" />
-              Download CSV
             </button>
             <div className="relative">
               <Search className="absolute left-3 top-2.5 text-gray-400 h-4 w-4" />
@@ -712,8 +833,12 @@ export const UserList: React.FC<UserListProps> = ({ currentUserId, currentUserRo
 
         {loading ? (
           <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="mt-2 text-gray-500">Loading field officers...</p>
+            <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600" />
+            <p className="mt-2 text-gray-500">Loading users...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-8 text-red-600">
+            Error: {error}
           </div>
         ) : (
           <>
@@ -757,6 +882,7 @@ export const UserList: React.FC<UserListProps> = ({ currentUserId, currentUserRo
                                 value={editFormData.username || ''}
                                 onChange={handleInputChange}
                                 className="border border-gray-300 rounded px-2 py-1 w-full text-sm focus:ring-2 focus:ring-blue-500"
+                                disabled={savingEdit}
                               />
                             </td>
                             <td className="px-4 py-3">
@@ -765,6 +891,7 @@ export const UserList: React.FC<UserListProps> = ({ currentUserId, currentUserRo
                                 value={editFormData.first_name || ''}
                                 onChange={handleInputChange}
                                 className="border border-gray-300 rounded px-2 py-1 w-full text-sm focus:ring-2 focus:ring-blue-500"
+                                disabled={savingEdit}
                               />
                             </td>
                             <td className="px-4 py-3">
@@ -773,6 +900,7 @@ export const UserList: React.FC<UserListProps> = ({ currentUserId, currentUserRo
                                 value={editFormData.last_name || ''}
                                 onChange={handleInputChange}
                                 className="border border-gray-300 rounded px-2 py-1 w-full text-sm focus:ring-2 focus:ring-blue-500"
+                                disabled={savingEdit}
                               />
                             </td>
                             <td className="px-4 py-3">
@@ -781,14 +909,16 @@ export const UserList: React.FC<UserListProps> = ({ currentUserId, currentUserRo
                                 value={editFormData.email || ''}
                                 onChange={handleInputChange}
                                 className="border border-gray-300 rounded px-2 py-1 w-full text-sm focus:ring-2 focus:ring-blue-500"
+                                disabled={savingEdit}
                               />
                             </td>
                             <td className="px-4 py-3">
                               <input
-                                name="phone"
-                                value={editFormData.phone || ''}
+                                name="phone_number"
+                                value={editFormData.phone_number || editFormData.phone || ''}
                                 onChange={handleInputChange}
                                 className="border border-gray-300 rounded px-2 py-1 w-full text-sm focus:ring-2 focus:ring-blue-500"
+                                disabled={savingEdit}
                               />
                             </td>
                             <td className="px-4 py-3">
@@ -797,22 +927,31 @@ export const UserList: React.FC<UserListProps> = ({ currentUserId, currentUserRo
                                 value={editFormData.address || ''}
                                 onChange={handleInputChange}
                                 className="border border-gray-300 rounded px-2 py-1 w-full text-sm focus:ring-2 focus:ring-blue-500"
+                                disabled={savingEdit}
                               />
                             </td>
                             <td className="px-4 py-3">
-                              <span className="text-gray-600">{user.role}</span>
+                              <span className="text-gray-600">{user.role || 'N/A'}</span>
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex space-x-2">
                                 <button
                                   onClick={handleSave}
-                                  className="flex items-center px-2 py-1 text-green-600 hover:text-green-800 hover:bg-green-50 rounded"
+                                  disabled={savingEdit}
+                                  className="flex items-center px-2 py-1 text-green-600 hover:text-green-800 hover:bg-green-50 rounded disabled:opacity-50"
+                                  title="Save"
                                 >
-                                  <Save className="w-4 h-4" />
+                                  {savingEdit ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Save className="w-4 h-4" />
+                                  )}
                                 </button>
                                 <button
                                   onClick={handleCancel}
-                                  className="flex items-center px-2 py-1 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded"
+                                  disabled={savingEdit}
+                                  className="flex items-center px-2 py-1 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded disabled:opacity-50"
+                                  title="Cancel"
                                 >
                                   <X className="w-4 h-4" />
                                 </button>
@@ -821,13 +960,13 @@ export const UserList: React.FC<UserListProps> = ({ currentUserId, currentUserRo
                           </>
                         ) : (
                           <>
-                            <td className="px-4 py-3 font-medium">{user.username}</td>
-                            <td className="px-4 py-3">{user.first_name}</td>
-                            <td className="px-4 py-3">{user.last_name}</td>
-                            <td className="px-4 py-3">{user.email}</td>
-                            <td className="px-4 py-3">{user.phone}</td>
-                            <td className="px-4 py-3">{user.address}</td>
-                            <td className="px-4 py-3">{user.role}</td>
+                            <td className="px-4 py-3 font-medium">{user.username || 'N/A'}</td>
+                            <td className="px-4 py-3">{user.first_name || 'N/A'}</td>
+                            <td className="px-4 py-3">{user.last_name || 'N/A'}</td>
+                            <td className="px-4 py-3">{user.email || 'N/A'}</td>
+                            <td className="px-4 py-3">{user.phone_number || user.phone || 'N/A'}</td>
+                            <td className="px-4 py-3">{user.address || 'N/A'}</td>
+                            <td className="px-4 py-3">{user.role || 'N/A'}</td>
                             <td className="px-4 py-3">
                               <div className="flex space-x-2">
                                 <button
@@ -878,6 +1017,8 @@ export const UserList: React.FC<UserListProps> = ({ currentUserId, currentUserRo
             </div>
           </>
         )}
+          </div>
+        </div>
       </div>
     </div>
   );

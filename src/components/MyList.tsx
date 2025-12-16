@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Edit, Search, Trash2, Save, Calendar, User, Users, FileText, MessageSquare } from 'lucide-react';
+import { Download, Edit, Search, Trash2, Save, Calendar, User, Users, FileText, MessageSquare, ListTodo } from 'lucide-react';
 
 const ITEMS_PER_PAGE = 5;
 
@@ -278,12 +278,27 @@ const MyList: React.FC = () => {
   );
 
   return (
-    <div className="p-4 sm:p-6 bg-gray-50 min-h-screen">
-      <div className="bg-white rounded-lg shadow-sm">
-        {/* Header */}
-        <div className="p-4 sm:p-6 border-b border-gray-200">
-          <div className="flex flex-col space-y-4">
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900">My Tasks</h2>
+    <div 
+      className="min-h-screen bg-cover bg-center bg-fixed"
+      style={{
+        backgroundImage: `url('/icons/sugarcane main slide.jpg')`
+      }}
+    >
+      <div className="min-h-screen bg-black bg-opacity-40">
+        <div className="max-w-7xl mx-auto px-4 py-12">
+          {/* Title Section */}
+          <div className="mb-8 text-center">
+            <div className="flex items-center justify-center space-x-4">
+              <ListTodo className="h-12 w-12 text-white" />
+              <h1 className="text-4xl font-bold text-white">My Tasks</h1>
+            </div>
+          </div>
+
+          {/* Content Card */}
+          <div className="bg-white rounded-lg shadow-sm bg-opacity-95">
+            {/* Header */}
+            <div className="p-4 sm:p-6 border-b border-gray-200">
+              <div className="flex flex-col space-y-4">
             
             {/* Search and Export */}
             <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
@@ -303,7 +318,7 @@ const MyList: React.FC = () => {
                 className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
               >
                 <Download className="w-4 h-4" />
-                <span className="sm:inline">Export CSV</span>
+                <span className="sm:inline"></span>
               </button>
             </div>
           </div>
@@ -489,6 +504,8 @@ const MyList: React.FC = () => {
             </div>
           </div>
         )}
+          </div>
+        </div>
       </div>
     </div>
   );

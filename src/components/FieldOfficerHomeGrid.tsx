@@ -1,6 +1,6 @@
 // src/FieldOfficerHomeGrid.tsx
 import React from 'react';
-import {Calendar,Book,Users, LandPlot } from 'lucide-react';
+import {Calendar,Book,Users, LandPlot,Truck } from 'lucide-react';
 
 interface FieldOfficerHomeGridProps {
   onMenuClick: (menuTitle: string) => void;
@@ -29,6 +29,12 @@ const FieldOfficerHomeGrid: React.FC<FieldOfficerHomeGridProps> = ({ onMenuClick
       hoverColor: 'hover:bg-purple-100'
     },
     {
+      title: "Resources Planning",
+      icon: <Truck size={32} className="text-orange-600" />,
+      bgColor: "bg-orange-50",
+      hoverColor: "hover:bg-orange-100",
+    },
+    {
       title: 'Plan & Book',
       icon: <Book size={32} className="text-yellow-600" />,
       bgColor: 'bg-yellow-50',
@@ -54,6 +60,10 @@ const FieldOfficerHomeGrid: React.FC<FieldOfficerHomeGridProps> = ({ onMenuClick
                 // Open sidebar and expand Plan & Book menu
                 console.log('🔧 FieldOfficerHomeGrid: Plan & Book clicked, calling onOpenSidebarWithMenu');
                 onOpenSidebarWithMenu('Plan & Book');
+              } else if (item.title === 'Resources Planning') {
+                // Open sidebar and expand Resources Planning menu
+                // Note: Using "Resoucres Planning" to match Sidebar menu item spelling
+                onOpenSidebarWithMenu('Resoucres Planning');
               } else {
                 // Use regular menu click for other cards
                 onMenuClick(item.title);

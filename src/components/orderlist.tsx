@@ -1,18 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Edit, Search, Trash2, Check, X, Satellite } from 'lucide-react';
+import { Download, Edit, Search, Trash2, Check, X, Loader2, ClipboardList } from 'lucide-react';
 import { debounce } from 'lodash';
+import { getorders, patchOrder, deleteOrder } from '../api';
 
 const ITEMS_PER_PAGE = 5;
 
 interface User {
   id: number;
-  vendorName: string;
-  invoiceDate: string;
-  invoiceNumber: string;
+  vendorName?: string;
+  vendor_name?: string;
+  invoiceDate?: string;
+  invoice_date?: string;
+  invoiceNumber?: string;
+  invoice_number?: string;
   state: string;
-  itemName: string;
-  yearMake: string;
-  estimateCost: string;
+  itemName?: string;
+  item_name?: string;
+  yearMake?: string;
+  year_of_make?: string;
+  estimateCost?: string;
+  estimate_cost?: string;
   remark: string;
 }
 
@@ -26,7 +33,75 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [editId, setEditId] = useState<number | null>(null);
   const [editFormData, setEditFormData] = useState<Partial<User>>({});
-  const [loading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch orders on component mount
+  useEffect(() => {
+    const fetchOrders = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await getorders();
+        const data = response?.data;
+        
+        // Handle different response formats
+        let orders: any[] = [];
+        if (Array.isArray(data)) {
+          orders = data;
+        } else if (Array.isArray(data?.results)) {
+          orders = data.results;
+        } else if (Array.isArray(data?.data)) {
+          orders = data.data;
+        } else if (data?.orders && Array.isArray(data.orders)) {
+          orders = data.orders;
+        }
+        
+        // Transform API response to match User interface
+        // Handle items array if present
+        const transformedOrders: User[] = orders.map((order: any) => {
+          const items = order?.items || [];
+          const firstItem = items[0] || {};
+          
+          // Handle vendor - can be ID (number) or object with vendor_name
+          let vendorName = '';
+          if (typeof order.vendor === 'object' && order.vendor !== null) {
+            vendorName = order.vendor.vendor_name || order.vendor.name || '';
+          } else if (order.vendor_name) {
+            vendorName = order.vendor_name;
+          } else if (order.vendorName) {
+            vendorName = order.vendorName;
+          } else if (order.vendor) {
+            // If vendor is just an ID, we'll show it as "Vendor #ID"
+            vendorName = `Vendor #${order.vendor}`;
+          }
+          
+          return {
+            id: order.id,
+            vendorName: vendorName,
+            invoiceDate: order.invoice_date || order.invoiceDate || '',
+            invoiceNumber: order.invoice_number || order.invoiceNumber || '',
+            state: order.state || '',
+            itemName: firstItem.item_name || order.item_name || order.itemName || '',
+            yearMake: firstItem.year_of_make || order.year_of_make || order.yearMake || '',
+            estimateCost: firstItem.estimate_cost || order.estimate_cost || order.estimateCost || '',
+            remark: firstItem.remark || order.remark || '',
+          };
+        });
+        
+        setItems(transformedOrders);
+      } catch (err: any) {
+        console.error('Failed to fetch orders:', err);
+        setError(err?.response?.data?.message || err?.message || 'Failed to fetch orders');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrders();
+  }, [setItems]);
 
   const handleEditClick = (user: User) => {
     setEditId(user.id);
@@ -46,26 +121,152 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
     }));
   };
 
-  const handleSaveClick = () => {
+  const handleSaveClick = async () => {
     if (editId === null) return;
 
-    // Validate if needed here
-    if (!editFormData.vendorName || !editFormData.invoiceDate) {
-      alert('Vendor Name and Invoice Date are required!');
+    setSaving(true);
+    setError(null);
+    try {
+      // Prepare data for API (convert frontend field names to backend field names)
+      // Note: For PATCH, we only send the fields that are being updated
+      const apiData: any = {};
+      
+      // Only include fields that have actual values
+      if (editFormData.invoiceDate || editFormData.invoice_date) {
+        apiData.invoice_date = editFormData.invoiceDate || editFormData.invoice_date;
+      }
+      
+      if (editFormData.invoiceNumber || editFormData.invoice_number) {
+        apiData.invoice_number = editFormData.invoiceNumber || editFormData.invoice_number;
+      }
+      
+      if (editFormData.state) {
+        apiData.state = editFormData.state;
+      }
+
+      // Validate that at least one field is being updated
+      if (Object.keys(apiData).length === 0) {
+        setError('Please modify at least one field before saving.');
+        setSaving(false);
+        return;
+      }
+
+      // Remove empty strings
+      Object.keys(apiData).forEach(key => {
+        if (apiData[key] === undefined || apiData[key] === '' || apiData[key] === null) {
+          delete apiData[key];
+        }
+      });
+
+      console.log('📦 Updating order with data:', apiData);
+      console.log('📦 Order ID:', editId);
+      
+      await patchOrder(editId, apiData);
+      
+      // Refresh data from API to ensure consistency
+      const fetchOrders = async () => {
+        try {
+          const response = await getorders();
+          const data = response?.data;
+          
+          let orders: any[] = [];
+          if (Array.isArray(data)) {
+            orders = data;
+          } else if (Array.isArray(data?.results)) {
+            orders = data.results;
+          } else if (Array.isArray(data?.data)) {
+            orders = data.data;
+          } else if (data?.orders && Array.isArray(data.orders)) {
+            orders = data.orders;
+          }
+          
+          const transformedOrders: User[] = orders.map((order: any) => {
+            const items = order?.items || [];
+            const firstItem = items[0] || {};
+            
+            let vendorName = '';
+            if (typeof order.vendor === 'object' && order.vendor !== null) {
+              vendorName = order.vendor.vendor_name || order.vendor.name || '';
+            } else if (order.vendor_name) {
+              vendorName = order.vendor_name;
+            } else if (order.vendorName) {
+              vendorName = order.vendorName;
+            } else if (order.vendor) {
+              vendorName = `Vendor #${order.vendor}`;
+            }
+            
+            return {
+              id: order.id,
+              vendorName: vendorName,
+              invoiceDate: order.invoice_date || order.invoiceDate || '',
+              invoiceNumber: order.invoice_number || order.invoiceNumber || '',
+              state: order.state || '',
+              itemName: firstItem.item_name || order.item_name || order.itemName || '',
+              yearMake: firstItem.year_of_make || order.year_of_make || order.yearMake || '',
+              estimateCost: firstItem.estimate_cost || order.estimate_cost || order.estimateCost || '',
+              remark: firstItem.remark || order.remark || '',
+            };
+          });
+          
+          setItems(transformedOrders);
+        } catch (fetchErr) {
+          console.error('Failed to refresh orders:', fetchErr);
+        }
+      };
+      
+      await fetchOrders();
+      
+      setEditId(null);
+      setEditFormData({});
+    } catch (err: any) {
+      console.error('❌ Failed to update order:', err);
+      console.error('❌ Error response:', err?.response);
+      console.error('❌ Error data:', err?.response?.data);
+      console.error('❌ Error status:', err?.response?.status);
+      
+      let errorMessage = 'Failed to update order. Please try again.';
+      
+      if (err?.response?.status === 400) {
+        const errorData = err?.response?.data;
+        if (errorData) {
+          // Extract field-specific errors
+          const fieldErrors = Object.entries(errorData)
+            .filter(([key]) => key !== 'detail' && key !== 'message')
+            .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+            .join('; ');
+          
+          errorMessage = errorData.detail || errorData.message || fieldErrors || 'Invalid data format. Please check all fields.';
+        } else {
+          errorMessage = 'Invalid request format (400). Please check all required fields are filled correctly.';
+        }
+      } else if (err?.response?.data) {
+        errorMessage = err.response.data.detail || err.response.data.message || err.message || errorMessage;
+      } else {
+        errorMessage = err?.message || errorMessage;
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this order?')) {
       return;
     }
 
-    const newItems = items.map((item) =>
-      item.id === editId ? { ...item, ...editFormData } : item
-    );
-
-    setItems(newItems);
-    setEditId(null);
-    setEditFormData({});
-  };
-
-  const handleDelete = (id: number) => {
-    setItems(items.filter((item) => item.id !== id));
+    setDeleting(id);
+    setError(null);
+    try {
+      await deleteOrder(id);
+      setItems(items.filter((item) => item.id !== id));
+    } catch (err: any) {
+      console.error('Failed to delete order:', err);
+      setError(err?.response?.data?.message || err?.message || 'Failed to delete order');
+    } finally {
+      setDeleting(null);
+    }
   };
 
   const handleDownload = () => {
@@ -74,7 +275,7 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
       header.join(','),
       ...items.map(({ vendorName, invoiceNumber, invoiceDate, estimateCost, yearMake, state, itemName, remark }) =>
         [vendorName, invoiceNumber, invoiceDate, estimateCost, yearMake, state, itemName, remark].map(val =>
-          `"${val.replace(/"/g, '""')}"`
+          `"${(val || '').replace(/"/g, '""')}"`
         ).join(',')
       ),
     ];
@@ -110,17 +311,32 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
   const paginatedData = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   return (
-    <div className="p-4 sm:p-6 bg-gray-50 min-h-screen">
-      <div className="bg-white rounded shadow-md p-4 max-w-7xl mx-auto mt-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 space-y-3 sm:space-y-0">
-          <h2 className="text-xl font-bold text-gray-700">Order List</h2>
+    <div 
+      className="min-h-screen bg-cover bg-center bg-fixed"
+      style={{
+        backgroundImage: `url('/icons/sugarcane main slide.jpg')`
+      }}
+    >
+      <div className="min-h-screen bg-black bg-opacity-40">
+        <div className="max-w-7xl mx-auto px-4 py-12">
+          {/* Title Section */}
+          <div className="mb-8 text-center">
+            <div className="flex items-center justify-center space-x-4">
+              <ClipboardList className="h-12 w-12 text-white" />
+              <h1 className="text-4xl font-bold text-white">Order List</h1>
+            </div>
+          </div>
+
+          {/* Content Card */}
+          <div className="bg-white rounded shadow-md p-4 bg-opacity-95">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 space-y-3 sm:space-y-0">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
             <button 
               onClick={handleDownload} 
               className="text-green-600 hover:text-green-800 flex items-center justify-center py-2 px-4 border border-green-600 rounded hover:bg-green-50"
             >
-              <Download className="w-5 h-5 mr-1" /> Download
+              <Download className="w-5 h-5 mr-1" /> 
             </button>
             <div className="relative">
               <Search className="absolute left-3 top-2.5 text-gray-400 h-4 w-4" />
@@ -135,9 +351,15 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
         </div>
 
         {loading && (
-          <div className="text-center text-gray-600 flex items-center justify-center">
-            <Satellite className="w-4 h-4 animate-spin mr-2" />
-            Loading...
+          <div className="text-center text-gray-600 flex items-center justify-center py-8">
+            <Loader2 className="w-5 h-5 animate-spin mr-2" />
+            Loading orders...
+          </div>
+        )}
+
+        {error && (
+          <div className="text-center py-4 text-red-600 bg-red-50 rounded mb-4">
+            {error}
           </div>
         )}
 
@@ -240,10 +462,19 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
                           />
                         </td>
                         <td className="px-4 py-2 space-x-2">
-                          <button onClick={handleSaveClick} className="text-green-600 hover:text-green-800" title="Save">
-                            <Check className="w-5 h-5" />
+                          <button
+                            onClick={handleSaveClick}
+                            disabled={saving}
+                            className="text-green-600 hover:text-green-800 disabled:opacity-50"
+                            title="Save"
+                          >
+                            {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
                           </button>
-                          <button onClick={handleCancelClick} className="text-gray-600 hover:text-gray-800" title="Cancel">
+                          <button
+                            onClick={handleCancelClick}
+                            className="text-gray-600 hover:text-gray-800"
+                            title="Cancel"
+                          >
                             <X className="w-5 h-5" />
                           </button>
                         </td>
@@ -262,8 +493,13 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
                           <button onClick={() => handleEditClick(user)} className="text-blue-600 hover:text-blue-800" title="Edit">
                             <Edit className="w-5 h-5" />
                           </button>
-                          <button onClick={() => handleDelete(user.id)} className="text-red-600 hover:text-red-800" title="Delete">
-                            <Trash2 className="w-5 h-5" />
+                          <button
+                            onClick={() => handleDelete(user.id)}
+                            disabled={deleting === user.id}
+                            className="text-red-600 hover:text-red-800 disabled:opacity-50"
+                            title="Delete"
+                          >
+                            {deleting === user.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
                           </button>
                         </td>
                       </>
@@ -365,10 +601,17 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
                       />
                     </div>
                     <div className="flex justify-end space-x-2 pt-2">
-                      <button onClick={handleSaveClick} className="text-green-600 hover:text-green-800 px-3 py-1 rounded border">
-                        <Check className="w-4 h-4" />
+                      <button
+                        onClick={handleSaveClick}
+                        disabled={saving}
+                        className="text-green-600 hover:text-green-800 px-3 py-1 rounded border disabled:opacity-50"
+                      >
+                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                       </button>
-                      <button onClick={handleCancelClick} className="text-gray-600 hover:text-gray-800 px-3 py-1 rounded border">
+                      <button
+                        onClick={handleCancelClick}
+                        className="text-gray-600 hover:text-gray-800 px-3 py-1 rounded border"
+                      >
                         <X className="w-4 h-4" />
                       </button>
                     </div>
@@ -413,8 +656,12 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
                       <button onClick={() => handleEditClick(user)} className="text-blue-600 hover:text-blue-800 px-3 py-1 rounded border">
                         <Edit className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleDelete(user.id)} className="text-red-600 hover:text-red-800 px-3 py-1 rounded border">
-                        <Trash2 className="w-4 h-4" />
+                      <button
+                        onClick={() => handleDelete(user.id)}
+                        disabled={deleting === user.id}
+                        className="text-red-600 hover:text-red-800 px-3 py-1 rounded border disabled:opacity-50"
+                      >
+                        {deleting === user.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                       </button>
                     </div>
                   </>
@@ -446,6 +693,8 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
           >
             Next
           </button>
+        </div>
+          </div>
         </div>
       </div>
     </div>

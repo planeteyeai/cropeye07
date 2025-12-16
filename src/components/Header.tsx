@@ -9,7 +9,6 @@ import {
   MapPin,
   Navigation,
 } from "lucide-react";
-import cropeyecLogo from "./icons/Cropeye-new.png";
 import "./Header.css";
 import {
   fetchCurrentWeather,
@@ -507,7 +506,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right side - Fixed Logo */}
           <div className="logo-container">
-            <img src={cropeyecLogo} alt="CropEye Logo" className="logo-image" />
+            <img src="/icons/Cropeye-new.png" alt="CropEye Logo" className="logo-image" />
           </div>
         </div>
       </header>

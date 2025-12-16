@@ -463,7 +463,7 @@ const AgroDashboard: React.FC = () => {
             </div>
             <div className="flex flex-col p-2 bg-white rounded-lg border border-gray-200 shadow-md">
               <DropdownFilter
-                label="Yield Forecast (T/Ha)"
+                label="Yield Forecast (T/acre)"
                 options={["All", "20-30", "30-40", "40-50", "50+"]}
                 value={filters.yieldForecast}
                 onChange={(value) => handleFilterChange("yieldForecast", value)}
@@ -568,7 +568,7 @@ const AgroDashboard: React.FC = () => {
                   <GaugeChart
                     value={totalArea}
                     maxValue={areaGaugeMaxValue.toFixed(2)}
-                    label="Total Area (Ha)"
+                    label="Total Area (acre)"
                     color="#10b981"
                   />
                   {/* Filter indicator */}
@@ -721,7 +721,7 @@ const AgroDashboard: React.FC = () => {
                             <div className="text-gray-600">
                               Yield Forecast:{" "}
                               <span className="font-medium">
-                                {plot.yieldForecast.toFixed(1)} T/Ha
+                                {plot.yieldForecast.toFixed(1)} T/acre
                               </span>
                             </div>
                           </div>

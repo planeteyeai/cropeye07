@@ -192,30 +192,21 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
         break;
       case "Vendor list":
         nextView = View.VendorList;
-        fetch("http://localhost:5000/vendorlist")
-          .then((response) => response.json())
-          .then((data) => setUsers(data))
-          .catch((error) => setUsers([]));
+        // Component handles its own data fetching via useEffect
         break;
       case "Add order":
         nextView = View.Addorder;
         break;
       case "order list":
         nextView = View.orderlist;
-        fetch("http://localhost:5000/orderlist")
-          .then((response) => response.json())
-          .then((data) => setItems(data))
-          .catch((error) => setItems([]));
+        // Component handles its own data fetching via useEffect
         break;
       case "Add Stock":
         nextView = View.Addstock;
         break;
       case "stock list":
         nextView = View.stocklist;
-        fetch("http://localhost:5000/stocklist")
-          .then((response) => response.json())
-          .then((data) => setStocks(data))
-          .catch((error) => setStocks([]));
+        // Component handles its own data fetching via useEffect
         break;
       case "Add Booking":
         nextView = View.AddBooking;

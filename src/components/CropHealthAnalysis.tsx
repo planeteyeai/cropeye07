@@ -7,18 +7,17 @@ import { Download, Info } from 'lucide-react';
 import { pestsData } from './pestt/meter/pestsData';
 import { diseasesData } from './pestt/meter/diseasesData';
 import { weedsData } from './pestt/meter/Weeds';
-import {
-  buildWeedRiskLevelMap,
-  categorizeWeedsBySeason,
-  getCurrentMonthLower,
-  WeedRiskLevel,
-} from './pestt/meter/weedRiskUtils';
 import { 
   generateRiskAssessment, 
   fetchPlantationDate, 
   fetchCurrentWeather,
   RiskAssessmentResult
 } from './pestt/meter/riskAssessmentService';
+import {
+  getCurrentMonthLower,
+  categorizeWeedsBySeason,
+  buildWeedRiskLevelMap,
+} from './pestt/meter/weedRiskUtils';
 
 interface Disease {
   name: string;
@@ -131,7 +130,7 @@ const MeasureWithInfo: React.FC<{ measure: string }> = ({ measure }) => {
   );
 };
 
-const FALLBACK_WEED_RISK: WeedRiskLevel = 'Low';
+// Removed getWeedRiskLevel - now using month-based categorization from weedRiskUtils
 
 // Enhanced InfoTooltip component with better responsive behavior
 const InfoTooltip: React.FC<{ text: string }> = ({ text }) => {
@@ -203,12 +202,6 @@ const CropHealthAnalysis: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'pests' | 'diseases' | 'weeds'>('pests');
   const [riskAssessment, setRiskAssessment] = useState<RiskAssessmentResult | null>(null);
   const [loading, setLoading] = useState(true);
-  const currentMonthLower = useMemo(getCurrentMonthLower, []);
-  const weedRiskBuckets = useMemo(
-    () => categorizeWeedsBySeason(weedsData, currentMonthLower),
-    [currentMonthLower]
-  );
-  const weedRiskMap = useMemo(() => buildWeedRiskLevelMap(weedRiskBuckets), [weedRiskBuckets]);
 
   useEffect(() => {
     loadRiskAssessment();
@@ -335,6 +328,18 @@ const CropHealthAnalysis: React.FC = () => {
   const pestControls = generatePestControls();
   const diseaseRisks = generateDiseaseRisks();
 
+  // Categorize weeds by current month (matching Pest & Disease component logic)
+  // Weeds matching the current month are categorized as "High" risk
+  // Remaining weeds are categorized as "Moderate" (first one) and "Low" (rest)
+  const currentMonthLower = useMemo(getCurrentMonthLower, []);
+  const weedRiskBuckets = useMemo(() => categorizeWeedsBySeason(weedsData, currentMonthLower), [currentMonthLower]);
+  const weedRiskMap = useMemo(() => buildWeedRiskLevelMap(weedRiskBuckets), [weedRiskBuckets]);
+  
+  // Debug: Log current month and weed risk buckets to verify categorization
+  // console.log('Current month:', currentMonthLower);
+  // console.log('Weed risk buckets:', weedRiskBuckets);
+  // console.log('Weed risk map:', Array.from(weedRiskMap.entries()));
+
   const handleDownloadPestsPDF = () => {
     const doc = new jsPDF();
     doc.setFontSize(16);
@@ -401,7 +406,6 @@ const CropHealthAnalysis: React.FC = () => {
             className="flex items-center gap-2 bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 text-sm w-full md:w-auto justify-center"
           >
             <Download className="w-4 h-4" />
-            Download
           </button>
         )}
         {activeTab === 'diseases' && (
@@ -433,7 +437,7 @@ const CropHealthAnalysis: React.FC = () => {
 
       <div className="p-2 md:p-4 flex-1 overflow-hidden">
         {activeTab === 'pests' && (
-          <div className="overflow-x-auto overflow-y-auto w-full pest-tab-scroll">
+          <div className="overflow-x-auto w-full scroll-hide pest-tab-scroll">
             {pestControls.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-gray-500 font-medium">No pests detected in current conditions</p>
@@ -534,7 +538,12 @@ const CropHealthAnalysis: React.FC = () => {
               </thead>
               <tbody>
                 {weedsData.map((weed, idx) => {
-                  const riskLevel = weedRiskMap.get(weed.name) ?? FALLBACK_WEED_RISK;
+                  // Get risk level from month-based categorization map
+                  // This uses the same logic as Pest & Disease component:
+                  // - Weeds matching current month → "High" risk
+                  // - First remaining weed → "Moderate" risk  
+                  // - All other weeds → "Low" risk
+                  const riskLevel = weedRiskMap.get(weed.name) || 'Low';
                   const chemicalText = Array.isArray(weed.chemical) ? weed.chemical[0] : '';
                   // Extract chemical name and dosage from the string (format: "Chemical - Dosage")
                   const chemicalParts = chemicalText.split(' - ');

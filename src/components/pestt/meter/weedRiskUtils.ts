@@ -20,7 +20,7 @@ const matchesCurrentMonth = (weed: WeedType, currentMonthLower: string): boolean
   if (!Array.isArray(weed.months) || weed.months.length === 0) {
     return false;
   }
-  return weed.months.some((month) => normalizeMonth(month) === currentMonthLower);
+  return weed.months.some((month: string) => normalizeMonth(month) === currentMonthLower);
 };
 
 export const categorizeWeedsBySeason = (

@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Satellite, Leaf, Mail, Lock } from 'lucide-react';
-import { setAuthData } from '../utils/auth';
+import { setAuthData, setRefreshToken } from '../utils/auth';
 import { login } from '../api';
 
 export type UserRole = "manager" | "admin" | "fieldofficer" | "farmer" | "owner";
@@ -12,7 +12,7 @@ interface LoginProps {
 }
 
 const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
-  const [email, setEmail] = useState('');
+  const [phone_number, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -209,14 +209,15 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     setError('');
 
     try {
-      console.log('🔐 Attempting login with email:', email.trim());
+      console.log('🔐 Attempting login with phone_number:', phone_number.trim());
       
       // Using the API function to login with email as username
-      const response = await login(email.trim(), password.trim());
+      const response = await login(phone_number.trim(), password.trim());
       const result = response.data;
       
       console.log('✅ Login response received:', result);
       const token = result.access || result.token;
+      const refreshToken = result.refresh; // Get refresh token from response
       
       if (!token) {
         throw new Error('No authentication token received');
@@ -253,8 +254,8 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       const userDataToStore = {
         first_name: userData.first_name || '',
         last_name: userData.last_name || '',
-        email: userData.email || email,
-        username: userData.username || email,
+        phone_number: userData.phone_number || phone_number,
+        username: userData.username ||phone_number,
         id: userData.id || ''
       };
       
@@ -264,7 +265,12 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         userData: userDataToStore
       });
       
-      setAuthData(token, userRole, userDataToStore);
+      // Store refresh token if available
+      if (refreshToken) {
+        setRefreshToken(refreshToken);
+      }
+      
+      setAuthData(token, userRole, userDataToStore, refreshToken);
       
       // Success - call the callback with role and token
       onLoginSuccess(userRole, token);
@@ -281,9 +287,9 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         console.error('Server error response:', { status, data });
         
         if (status === 400) {
-          setError('Invalid email or password. Please check your credentials.');
+          setError('Invalid phone_number or password. Please check your credentials.');
         } else if (status === 401) {
-          setError('Authentication failed. Please check your email and password.');
+          setError('Authentication failed. Please check your phone_number and password.');
         } else if (status === 403) {
           setError('Access denied. Please contact your administrator.');
         } else if (status >= 500) {
@@ -292,7 +298,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           setError(data?.detail || data?.message || `Login failed (${status})`);
         }
       } else if (err.request) {
-        // Network error
+        // Network error      
         console.error('Network error:', err.request);
         setError('Network error. Please check your internet connection.');
       } else {
@@ -317,7 +323,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 0.4 }}
       style={{
-        backgroundImage: `url('/src/components/icons/sugarcane main slide.jpg')`,
+        backgroundImage: `url('/icons/sugarcane main slide.jpg')`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
       }}
@@ -325,7 +331,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     />
    <div className="absolute top-0 left-0 w-full flex justify-center items-center p-2 md:p-4 z-20">
 <img
-  src="src/components/icons/cropw.png"
+  src="/icons/cropw.png"
   alt="SmartCropLogo"
   className="w-56 h-48 md:w-72 md:h-60 object-contain max-w-[60vw] md:max-w-[288px]"
   style={{ maxWidth: '60vw', height: 'auto' }}
@@ -343,7 +349,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             animate={{ x: 0, opacity: 1 }}
             className="w-full md:w-1/2 bg-emerald-600 p-6 md:p-12 flex flex-col justify-center items-center text-white relative overflow-hidden"
           >
-            <div className="absolute inset-0 bg-[url('/src/components/icons/sugarcane-plant.jpg')] bg-cover bg-center opacity-10" />
+            <div className="absolute inset-0 bg-[url('/icons/sugarcane-plant.jpg')] bg-cover bg-center opacity-10" />
             <div className="relative z-10">
             <div className="flex items-center justify-center mb-8">
                 <h1 className="text-4xl font-bold tracking-wide">CROPEYE</h1>
@@ -379,10 +385,10 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                       <div className="flex items-center border border-gray-300 rounded-lg px-3 py-3 bg-white focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-emerald-500">
                         <Mail className="w-5 h-5 mr-3 text-gray-500" />
                         <input
-                          type="email"
-                      placeholder="Enter email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                          type="phone_number"
+                      placeholder="Enter phone_number"
+                      value={phone_number}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
                           className="w-full outline-none text-gray-700"
                           required
                           disabled={loading}
@@ -407,7 +413,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                     
                     <button
                       type="submit"
-                  disabled={loading || !email.trim() || !password.trim()}
+                  disabled={loading || !phone_number.trim() || !password.trim()}
                       className="w-full bg-emerald-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-emerald-700 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       {loading ? (

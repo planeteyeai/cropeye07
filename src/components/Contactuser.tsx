@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Phone, 
   Send, 
@@ -17,8 +17,8 @@ import {
   ChevronUp,
   Star
 } from 'lucide-react';
-import { getContactDetails } from '../api';
-import { getUserRole } from '../utils/auth';
+import { getContactDetails, sendMessage, getConversationWithUser, getConversations, getMessages } from '../api';
+import { getUserRole, getUserData } from '../utils/auth';
 
 
 
@@ -33,6 +33,37 @@ interface Contact {
   isOnline?: boolean;
   lastSeen?: string;
   avatar?: string;
+}
+
+interface Message {
+  id: number;
+  conversation: number;
+  sender: {
+    id: number;
+    username: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone_number: string;
+    role_name: string;
+  };
+  content: string;
+  read_at: string | null;
+  is_read: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Conversation {
+  id: number;
+  participant1: any;
+  participant2: any;
+  other_participant: any;
+  last_message: Message | null;
+  unread_count: number;
+  created_at: string;
+  updated_at: string;
+  last_message_at: string;
 }
 
 interface ContactuserProps {
@@ -77,12 +108,13 @@ const filterContactsByRole = (contacts: Contact[], currentUserRole: string): Con
       return ownerContacts;
       
     case 'farmer':
-      // Farmer can see: Field Officers, Managers
+      // Farmer can see: Field Officers, Managers, Owners
       const farmerContacts = contacts.filter(contact => {
         const role = contact.role?.toLowerCase() || '';
-        return role === 'fieldofficer' || role === 'field_officer' || role === 'manager';
+        return role === 'fieldofficer' || role === 'field_officer' || role === 'manager' || role === 'owner' || role === 'admin';
       });
       console.log('🌾 Farmer can see:', farmerContacts.length, 'contacts');
+      console.log('🔍 Farmer filtered contacts:', farmerContacts.map(c => ({ name: c.name, role: c.role })));
       return farmerContacts;
       
     default:
@@ -103,7 +135,7 @@ const getRoleBasedDescription = (currentUserRole: string): string => {
     case 'admin':
       return 'Connect with field officers, managers, and farmers in your organization';
     case 'farmer':
-      return 'Connect with field officers and managers for support';
+      return 'Connect with field officers, managers, and owners for support';
     default:
       return 'Connect with your team members and send messages';
   }
@@ -121,6 +153,41 @@ const Contactuser: React.FC<ContactuserProps> = () => {
   const [expandedRoles, setExpandedRoles] = useState<Set<string>>(new Set());
   const [messageSent, setMessageSent] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  
+  // Message view states
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [showMessageView, setShowMessageView] = useState(false);
+  const [replyMessage, setReplyMessage] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
+  
+  // Store messages locally by conversation ID (fallback when API fails)
+  const [localMessages, setLocalMessages] = useState<Record<number, Message[]>>({});
+  
+  // Ref for auto-scrolling to latest message
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Debug: Log messages state changes
+  useEffect(() => {
+    console.log('🔍 Messages state changed. Count:', messages.length);
+    console.log('🔍 Messages:', messages.map(m => ({ 
+      id: m.id, 
+      sender: m.sender?.first_name || m.sender?.username, 
+      content: m.content?.substring(0, 30),
+      created_at: m.created_at 
+    })));
+    
+    // Auto-scroll to bottom when messages change
+    if (messagesEndRef.current && messages.length > 0) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }
+  }, [messages]);
 
   // Fetch contacts from API
   useEffect(() => {
@@ -288,14 +355,314 @@ const Contactuser: React.FC<ContactuserProps> = () => {
     setFilteredContacts(filtered);
   }, [contacts, searchTerm, selectedRole]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Fetch conversations on component mount
+  useEffect(() => {
+    fetchConversations();
+  }, []);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    if (showMessageView && messages.length > 0) {
+      const messagesContainer = document.querySelector('.messages-container');
+      if (messagesContainer) {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      }
+    }
+  }, [messages, showMessageView]);
+
+  const fetchConversations = async () => {
+    try {
+      const response = await getConversations();
+      const conversationsData = response.data.results || response.data || [];
+      setConversations(Array.isArray(conversationsData) ? conversationsData : []);
+    } catch (error) {
+      console.error('Error fetching conversations:', error);
+    }
+  };
+
+  const fetchConversationMessages = async (userId: number, mergeWithExisting: boolean = true) => {
+    setLoadingMessages(true);
+    try {
+      const response = await getConversationWithUser(userId);
+      const conversation = response.data;
+      console.log('📨 Full conversation response:', conversation);
+      setSelectedConversation(conversation);
+      
+      let allMessages: Message[] = [];
+      
+      // PRIORITY 1: Use GET /conversations/{id}/messages/ to fetch ALL messages from backend
+      if (conversation.id) {
+        try {
+          console.log('📬 Fetching ALL messages from GET /conversations/' + conversation.id + '/messages/');
+          const messagesResponse = await getMessages(conversation.id);
+          console.log('📬 Messages API response:', messagesResponse.data);
+          
+          // Handle different response formats
+          if (messagesResponse.data) {
+            // Check if it's paginated (has results array)
+            if (Array.isArray(messagesResponse.data.results)) {
+              allMessages = messagesResponse.data.results;
+              console.log('✅ Found messages in results array:', allMessages.length);
+            } 
+            // Check if it's a direct array
+            else if (Array.isArray(messagesResponse.data)) {
+              allMessages = messagesResponse.data;
+              console.log('✅ Found messages as direct array:', allMessages.length);
+            }
+            // Check if messages are in a messages property
+            else if (Array.isArray(messagesResponse.data.messages)) {
+              allMessages = messagesResponse.data.messages;
+              console.log('✅ Found messages in messages property:', allMessages.length);
+            }
+          }
+          
+          // Log all message details for debugging
+          if (allMessages.length > 0) {
+            console.log('📋 All messages from backend:', allMessages.map(m => ({
+              id: m.id,
+              sender_id: m.sender?.id,
+              sender_name: m.sender?.first_name + ' ' + m.sender?.last_name,
+              recipient_id: m.recipient?.id || m.recipients?.[0]?.id,
+              content: m.content?.substring(0, 30),
+              created_at: m.created_at
+            })));
+          }
+        } catch (err: any) {
+          console.error('❌ Error fetching from GET /conversations/{id}/messages/:', err);
+          // If endpoint fails, continue with fallback methods
+          if (err.response?.status !== 500 && err.response?.status !== 404) {
+            console.warn('⚠️ Messages endpoint returned error:', err.response?.status, err.response?.data);
+          }
+        }
+      }
+      
+      // FALLBACK 1: If no messages from API, check conversation.messages
+      if (allMessages.length === 0 && conversation.messages && Array.isArray(conversation.messages)) {
+        allMessages = conversation.messages;
+        console.log('✅ Using messages from conversation.messages:', allMessages.length);
+      }
+      
+      // FALLBACK 2: Merge with local storage (but prioritize backend messages)
+      if (conversation.id && localMessages[conversation.id] && allMessages.length === 0) {
+        allMessages = [...localMessages[conversation.id]];
+        console.log('✅ Using locally stored messages (no backend messages):', allMessages.length);
+      } else if (conversation.id && localMessages[conversation.id] && allMessages.length > 0) {
+        // Merge: backend messages are source of truth, but add any local messages not in backend
+        const backendIds = new Set(allMessages.map((m: Message) => m.id));
+        const uniqueLocal = localMessages[conversation.id].filter((m: Message) => !backendIds.has(m.id));
+        if (uniqueLocal.length > 0) {
+          allMessages = [...allMessages, ...uniqueLocal];
+          console.log('✅ Merged local messages with backend. Backend:', allMessages.length - uniqueLocal.length, 'Local unique:', uniqueLocal.length);
+        }
+      }
+      
+      // FALLBACK 3: If we have last_message, include it if not already present
+      if (conversation.last_message) {
+        const lastMsgId = conversation.last_message.id;
+        if (!allMessages.some((m: Message) => m.id === lastMsgId)) {
+          allMessages.push(conversation.last_message);
+          console.log('✅ Added last_message to list');
+        }
+      }
+      
+      // Merge with existing messages in state (if merging is enabled)
+      if (mergeWithExisting && messages.length > 0) {
+        const newIds = new Set(allMessages.map((m: Message) => m.id));
+        const uniqueExisting = messages.filter((m: Message) => !newIds.has(m.id));
+        if (uniqueExisting.length > 0) {
+          allMessages = [...allMessages, ...uniqueExisting];
+          console.log('✅ Merged with existing state messages. Total:', allMessages.length);
+        }
+      }
+      
+      // Sort messages by created_at (oldest first) to show conversation history
+      allMessages.sort((a, b) => {
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
+        return dateA - dateB;
+      });
+      
+      // Remove duplicates based on message ID
+      const uniqueMessages = allMessages.filter((msg, index, self) => 
+        index === self.findIndex((m: Message) => m.id === msg.id)
+      );
+      
+      console.log('📋 Final messages array (sorted, unique):', uniqueMessages.length);
+      console.log('�� Message details:', uniqueMessages.map(m => ({ 
+        id: m.id, 
+        sender: m.sender?.first_name + ' ' + m.sender?.last_name,
+        recipient: m.recipient?.first_name || m.recipients?.[0]?.first_name,
+        content: m.content?.substring(0, 30),
+        created_at: m.created_at 
+      })));
+      
+      // Store in local storage for this conversation (as backup)
+      if (conversation.id) {
+        setLocalMessages(prev => ({
+          ...prev,
+          [conversation.id]: uniqueMessages
+        }));
+      }
+      
+      // Always update the messages state with all messages
+      console.log('🔄 Setting messages state with', uniqueMessages.length, 'messages');
+      setMessages(uniqueMessages);
+    } catch (error: any) {
+      console.error('❌ Error fetching conversation:', error);
+      // If conversation doesn't exist, check local storage
+      if (localMessages[userId]) {
+        console.log('✅ Using local messages for user:', userId);
+        const localMsgs = localMessages[userId];
+        // Merge with existing if needed
+        if (mergeWithExisting && messages.length > 0) {
+          const localIds = new Set(localMsgs.map((m: Message) => m.id));
+          const uniqueExisting = messages.filter((m: Message) => !localIds.has(m.id));
+          setMessages([...localMsgs, ...uniqueExisting].sort((a, b) => {
+            const dateA = new Date(a.created_at).getTime();
+            const dateB = new Date(b.created_at).getTime();
+            return dateA - dateB;
+          }));
+        } else {
+          setMessages(localMsgs);
+        }
+      } else if (!mergeWithExisting) {
+        setSelectedConversation(null);
+        setMessages([]);
+      }
+    } finally {
+      setLoadingMessages(false);
+    }
+  };
+
+  // Update handleOpenConversation to always fetch from backend first
+  const handleOpenConversation = async (contact: Contact) => {
+    setShowMessageView(true);
+    try {
+      const convResponse = await getConversationWithUser(contact.id);
+      const conversation = convResponse.data;
+      setSelectedConversation(conversation);
+      
+      // Always fetch from backend first using GET /conversations/{id}/messages/
+      // This ensures we get ALL stored messages from the backend
+      await fetchConversationMessages(contact.id, false); // Don't merge initially, use backend as source of truth
+      
+      // After fetching from backend, merge with local storage if needed
+      if (conversation.id && localMessages[conversation.id]) {
+        const localMsgs = localMessages[conversation.id];
+        setMessages(prev => {
+          const backendIds = new Set(prev.map((m: Message) => m.id));
+          const uniqueLocal = localMsgs.filter((m: Message) => !backendIds.has(m.id));
+          if (uniqueLocal.length > 0) {
+            const combined = [...prev, ...uniqueLocal];
+            combined.sort((a, b) => {
+              const dateA = new Date(a.created_at).getTime();
+              const dateB = new Date(b.created_at).getTime();
+              return dateA - dateB;
+            });
+            return combined;
+          }
+          return prev;
+        });
+      }
+    } catch (error) {
+      console.error('Error opening conversation:', error);
+      // If conversation doesn't exist, check if we have local messages by user ID
+      if (localMessages[contact.id]) {
+        console.log('📦 Loading local messages by user ID:', localMessages[contact.id].length);
+        setMessages(localMessages[contact.id]);
+      } else {
+        setMessages([]);
+      }
+    }
+  };
+
+  // Update handleSendReply to refresh from backend after sending
+  const handleSendReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedContacts.length > 0 && message) {
-      const contactNames = selectedContacts.map(c => c.name).join(', ');
-      console.log(`Message sent to ${contactNames}: ${message}`);
-      setMessage('');
-      setMessageSent(true);
-      setTimeout(() => setMessageSent(false), 3000);
+    if (!selectedConversation || !replyMessage.trim()) return;
+
+    setSendingReply(true);
+    setSendError(null);
+
+    try {
+      const otherParticipant = selectedConversation.other_participant;
+      if (!otherParticipant) return;
+
+      const response = await sendMessage({
+        recipient_id: [otherParticipant.id],
+        content: replyMessage.trim()
+      });
+
+      console.log('✅ Reply sent successfully:', response.data);
+      
+      setReplyMessage('');
+      
+      // IMPORTANT: Always refresh from backend after sending to get ALL messages
+      // This ensures both sender and receiver see the complete conversation
+      if (selectedConversation.id) {
+        try {
+          // Wait a moment for backend to process, then fetch ALL messages
+          setTimeout(async () => {
+            await fetchConversationMessages(otherParticipant.id, false); // Fetch fresh from backend
+          }, 1000);
+        } catch (refreshErr) {
+          console.warn('⚠️ Could not refresh messages from backend');
+        }
+      }
+      
+      // Refresh conversations
+      await fetchConversations();
+    } catch (error: any) {
+      console.error('❌ Error sending reply:', error);
+      setSendError(error.response?.data?.detail || error.message || 'Failed to send reply. Please try again.');
+    } finally {
+      setSendingReply(false);
+    }
+  };
+
+  // Update handleSubmit to refresh from backend after sending
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedContacts.length > 0 && message.trim()) {
+      setSendingMessage(true);
+      setSendError(null);
+      
+      try {
+        const recipientIds = selectedContacts.map(c => c.id);
+        const response = await sendMessage({
+          recipient_id: recipientIds,
+          content: message.trim()
+        });
+        
+        console.log('Message sent successfully:', response.data);
+        
+        setMessage('');
+        setMessageSent(true);
+        setTimeout(() => setMessageSent(false), 3000);
+        
+        // Refresh conversations
+        await fetchConversations();
+        
+        // If viewing a conversation, refresh ALL messages from backend
+        if (selectedConversation && showMessageView) {
+          const otherParticipant = selectedConversation.other_participant;
+          if (otherParticipant && recipientIds.includes(otherParticipant.id)) {
+            setTimeout(async () => {
+              try {
+                // Fetch ALL messages from backend to ensure complete history
+                await fetchConversationMessages(otherParticipant.id, false);
+              } catch (refreshErr) {
+                console.warn('⚠️ Could not refresh messages from backend');
+              }
+            }, 1000);
+          }
+        }
+      } catch (error: any) {
+        console.error('Error sending message:', error);
+        setSendError(error.response?.data?.detail || error.message || 'Failed to send message. Please try again.');
+      } finally {
+        setSendingMessage(false);
+      }
     }
   };
 
@@ -421,19 +788,29 @@ const Contactuser: React.FC<ContactuserProps> = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
-      <div className="max-w-7xl mx-auto p-6">
-        {/* Header Section */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                Team Contacts
-              </h1>
-              <p className="text-gray-600 mt-2">
-                {getRoleBasedDescription(getUserRole() || '')}
-              </p>
+    <div 
+      className="min-h-screen bg-cover bg-center bg-fixed"
+      style={{
+        backgroundImage: `url('/icons/sugarcane main slide.jpg')`
+      }}
+    >
+      <div className="min-h-screen bg-black bg-opacity-40">
+        <div className="max-w-7xl mx-auto px-4 py-12">
+          {/* Title Section */}
+          <div className="mb-8 text-center">
+            <div className="flex items-center justify-center space-x-4 mb-4">
+              <MessageCircle className="h-12 w-12 text-white" />
+              <h1 className="text-4xl font-bold text-white">Team Contacts</h1>
             </div>
+            <p className="text-white text-lg">
+              {getRoleBasedDescription(getUserRole() || '')}
+            </p>
+          </div>
+
+          {/* Content Card */}
+          <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 bg-opacity-95">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+              <div>
             
             {/* Stats */}
             {/* <div className="flex gap-4">
@@ -599,16 +976,29 @@ const Contactuser: React.FC<ContactuserProps> = () => {
                                   </div>
                                 </div>
 
-                                {/* Action Button */}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleContactSelection(contact);
-                                  }}
-                                  className="opacity-0 group-hover:opacity-100 p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded-lg transition-all duration-200"
-                                >
-                                  <MessageCircle size={18} />
-                                </button>
+                                {/* Action Buttons */}
+                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-200">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenConversation(contact);
+                                    }}
+                                    className="p-2 text-green-600 hover:text-green-800 hover:bg-green-100 rounded-lg transition-all duration-200"
+                                    title="View Messages"
+                                  >
+                                    <MessageCircle size={18} />
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleContactSelection(contact);
+                                    }}
+                                    className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded-lg transition-all duration-200"
+                                    title="Select for Message"
+                                  >
+                                    <Send size={18} />
+                                  </button>
+                                </div>
                               </div>
                   </div>
                 ))}
@@ -686,12 +1076,28 @@ const Contactuser: React.FC<ContactuserProps> = () => {
                     
             <button
               type="submit"
-                      disabled={!message.trim()}
+                      disabled={!message.trim() || sendingMessage}
                       className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 px-6 rounded-xl hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all duration-200 font-medium"
             >
-                      <Send size={18} />
-                      Send Message
+                      {sendingMessage ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Send size={18} />
+                          Send Message
+                        </>
+                      )}
             </button>
+            
+            {sendError && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 text-red-600" />
+                <span className="text-red-800 text-sm">{sendError}</span>
+              </div>
+            )}
           </form>
 
                   {/* Success Message */}
@@ -722,7 +1128,7 @@ const Contactuser: React.FC<ContactuserProps> = () => {
               <div className="h-64">
             <iframe
               className="w-full h-full"
-              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3748.8576457563217!2d73.73526997775477!3d20.014488481393084!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bddedfd4b5a7651%3A0xe41740d3c662d5f4!2sPlanetEye%20Infra%20AI!5e0!3m2!1sen!2sin!4v1743748499982!5m2!1sen!2sin"
+              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d4651.900710373046!2d73.73536247598082!3d20.014558521837216!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bdded0040680497%3A0x76c25323ee3fdc14!2sPlanetEye%20Farm%20AI%20ltd!5e1!3m2!1sen!2sin!4v1765186331122!5m2!1sen!2sin"
               allowFullScreen
               loading="lazy"
               style={{ border: 0 }}
@@ -733,8 +1139,155 @@ const Contactuser: React.FC<ContactuserProps> = () => {
           </div>
         </div>
       </div>
+
+      {/* Message View Modal/Card */}
+      {showMessageView && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => {
+                    setShowMessageView(false);
+                    setSelectedConversation(null);
+                    setMessages([]);
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X size={20} />
+                </button>
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-800">
+                    {selectedConversation?.other_participant 
+                      ? `${selectedConversation.other_participant.first_name} ${selectedConversation.other_participant.last_name}`
+                      : 'Messages'}
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    {selectedConversation?.other_participant?.role_display || ''}
+                  </p>
+                </div>
+              </div>
+              {selectedConversation && (
+                <button
+                  onClick={() => {
+                    const otherParticipant = selectedConversation.other_participant;
+                    if (otherParticipant) {
+                      fetchConversationMessages(otherParticipant.id);
+                    }
+                  }}
+                  disabled={loadingMessages}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                  title="Refresh Messages"
+                >
+                  <Loader2 className={`w-5 h-5 text-blue-600 ${loadingMessages ? 'animate-spin' : ''}`} />
+                </button>
+              )}
+            </div>
+
+            {/* Messages List */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50 messages-container">
+              {/* Debug: Show message count */}
+              {messages.length > 0 && (
+                <div className="text-xs text-gray-400 mb-2 text-center">
+                  Showing {messages.length} message{messages.length !== 1 ? 's' : ''}
+                </div>
+              )}
+              {loadingMessages ? (
+                <div className="flex items-center justify-center h-full">
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                </div>
+              ) : messages.length === 0 ? (
+                <div className="text-center py-12">
+                  <MessageCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">No messages yet. Start the conversation!</p>
+                </div>
+              ) : (
+                <>
+                  {messages.map((msg, index) => {
+                    const currentUser = getUserData();
+                    const isCurrentUser = currentUser && msg.sender && msg.sender.id === currentUser.id;
+                    
+                    return (
+                      <div
+                        key={msg.id || `msg-${index}-${msg.created_at}`}
+                        className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div
+                          className={`max-w-[70%] rounded-2xl p-4 ${
+                            isCurrentUser
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-white text-gray-800 border border-gray-200'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="font-semibold text-sm">
+                              {msg.sender?.first_name || ''} {msg.sender?.last_name || ''}
+                            </span>
+                            <span className={`text-xs ${isCurrentUser ? 'text-blue-100' : 'text-gray-500'}`}>
+                              {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                            </span>
+                          </div>
+                          <p className="text-sm whitespace-pre-wrap">{msg.content || ''}</p>
+                          {msg.is_read && isCurrentUser && (
+                            <div className="mt-2 text-xs text-blue-100 flex items-center gap-1">
+                              <CheckCircle size={12} />
+                              Read
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* Scroll anchor */}
+                  <div ref={messagesEndRef} />
+                </>
+              )}
+            </div>
+
+            {/* Reply Form */}
+            {selectedConversation && (
+              <div className="p-6 border-t border-gray-200 bg-white">
+                <form onSubmit={handleSendReply} className="flex gap-3">
+                  <textarea
+                    value={replyMessage}
+                    onChange={(e) => setReplyMessage(e.target.value)}
+                    placeholder="Type your reply..."
+                    className="flex-1 p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    rows={2}
+                    disabled={sendingReply}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!replyMessage.trim() || sendingReply}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+                  >
+                    {sendingReply ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <>
+                        <Send size={18} />
+                        Send
+                      </>
+                    )}
+                  </button>
+                </form>
+                {sendError && (
+                  <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-600" />
+                    <span className="text-red-800 text-sm">{sendError}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+        </div>
+      </div>
     </div>
   );
 };
 
 export default Contactuser;
+

@@ -1,3 +1,13 @@
+export interface Weed {
+  name: string;
+  months: string[];
+  when: string;
+  where: string;
+  why: string;
+  image: string;
+  chemical: string[];
+}
+
 export const weedsData: Weed[] = [
   {
     name: "Hariali (Cynodon dactylon)",

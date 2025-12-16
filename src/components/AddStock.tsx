@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Boxes } from 'lucide-react';
+import { addStock } from '../api';
 
 interface InventoryItem {
   id?: number;
@@ -36,26 +37,20 @@ export const AddStock: React.FC<AddStockProps> = ({ setStocks }) => {
     setSuccess('');
     setError('');
     try {
-      const response = await fetch('http://localhost:5000/stocklist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: Date.now(),
-          itemName: formData.itemName,
-          itemType: formData.itemType,
-          make: formData.Make,
-          yearOfMake: formData.yearMake,
-          estimateCost: formData.estimateCost,
-          status: formData.status,
-          remark: formData.remark
-        }),
-      });
+      // Prepare data for API (convert frontend field names to backend field names)
+      const apiData = {
+        item_name: formData.itemName,
+        item_type: formData.itemType,
+        make: formData.Make,
+        year_of_make: formData.yearMake,
+        estimate_cost: formData.estimateCost,
+        status: formData.status,
+        remark: formData.remark || ''
+      };
 
-      if (!response.ok) throw new Error('Failed to add stock');
-      await response.json();
-      // Fetch the latest stock data after adding
-      const updatedStocks = await fetch('http://localhost:5000/stocklist').then(res => res.json());
-      setStocks(updatedStocks);
+      console.log('📦 Adding stock with data:', apiData);
+      const response = await addStock(apiData);
+      console.log('✅ Stock added successfully:', response.data);
 
       // Reset form
       setFormData({
@@ -67,37 +62,67 @@ export const AddStock: React.FC<AddStockProps> = ({ setStocks }) => {
         status: 'Working',
         remark: ''
       });
-      setSuccess('Stock added successfully!');
-    } catch (error) {
-      setError('Error adding stock. Please try again.');
-      console.error('Error adding stock:', error);
+      
+      setSuccess('Stock added successfully! The stock list will be updated automatically.');
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setSuccess('');
+      }, 3000);
+    } catch (err: any) {
+      console.error('❌ Error adding stock:', err);
+      console.error('❌ Error response:', err?.response);
+      console.error('❌ Error data:', err?.response?.data);
+      console.error('❌ Error status:', err?.response?.status);
+      
+      let errorMessage = 'Error adding stock. Please try again.';
+      
+      if (err?.response?.status === 404) {
+        errorMessage = 'API endpoint not found (404). Please check the server configuration.';
+      } else if (err?.response?.status === 400) {
+        const errorData = err?.response?.data;
+        if (errorData) {
+          // Extract field-specific errors
+          const fieldErrors = Object.entries(errorData)
+            .filter(([key]) => key !== 'detail' && key !== 'message')
+            .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+            .join('; ');
+          
+          errorMessage = errorData.detail || errorData.message || fieldErrors || 'Invalid data format. Please check all fields.';
+        } else {
+          errorMessage = 'Invalid request format (400). Please check all required fields are filled.';
+        }
+      } else if (err?.response?.data) {
+        errorMessage = err.response.data.detail || err.response.data.message || err.message || errorMessage;
+      } else {
+        errorMessage = err?.message || errorMessage;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div
-        className="w-full h-48 bg-cover bg-center relative"
-        style={{
-          backgroundImage: 'url("https://images.unsplash.com/photo-1553413077-190dd305871c?ixlib=rb-1.2.1&auto=format&fit=crop&w=2000&q=80")'
-        }}
-      >
-        <div className="absolute inset-0 bg-black bg-opacity-50">
-          <div className="container mx-auto px-4 h-full flex items-center">
-            <div className="flex items-center text-white">
-              <Boxes className="w-8 h-8 mr-3" />
-              <h1 className="text-3xl font-bold">Add New Stock</h1>
+    <div 
+      className="min-h-screen bg-cover bg-center bg-fixed"
+      style={{
+        backgroundImage: `url('/icons/sugarcane main slide.jpg')`
+      }}
+    >
+      <div className="min-h-screen bg-black bg-opacity-40">
+        <div className="container mx-auto px-4 py-12">
+          {/* Title Section */}
+          <div className="mb-8 text-center">
+            <div className="flex items-center justify-center space-x-4">
+              <Boxes className="h-12 w-12 text-white" />
+              <h1 className="text-4xl font-bold text-white">Add New Stock</h1>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Form */}
-      <div className="container mx-auto px-4 py-8">
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-lg p-6 space-y-4 max-w-3xl mx-auto">
+          {/* Form Card */}
+          <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-lg p-6 space-y-4 max-w-3xl mx-auto bg-opacity-95">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
@@ -190,7 +215,8 @@ export const AddStock: React.FC<AddStockProps> = ({ setStocks }) => {
           </div>
           {success && <div className="text-green-600 mt-2">{success}</div>}
           {error && <div className="text-red-600 mt-2">{error}</div>}
-        </form>
+          </form>
+        </div>
       </div>
     </div>
   );

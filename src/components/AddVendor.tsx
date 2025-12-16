@@ -47,27 +47,70 @@ export const Addvendor: React.FC<AddVendorProps> = ({ users, setUsers }) => {
     }));
   };
 
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState('');
+  const [error, setError] = useState('');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+    setSuccess('');
+    setError('');
 
-    const payload = {
+    // Prepare payload - map frontend fields to API fields
+    // API expects: vendor_name, contact_person, email, phone, address, gstin_number, state, city (optional)
+    const payload: any = {
       vendor_name: formData.vendorName,
       email: formData.email,
-      mobile: formData.mobile,
-      gstin: formData.gstin,
-      state: formData.state,
-      city: formData.city,
+      phone: formData.mobile, // Map mobile to phone (API expects 'phone')
       address: formData.address,
+      // Always send these optional fields (even if empty) so backend can store them
+      gstin_number: formData.gstin ? formData.gstin.trim() : '',
+      state: formData.state ? formData.state.trim() : '',
+      city: formData.city ? formData.city.trim() : '',
+      // Default values for required fields that we don't have
+      contact_person: formData.vendorName, // Use vendor name as contact person if not provided
+      // rating is optional - don't send it since it's not collected in the form
     };
 
-    try {
-      const response = await addVendor(payload);
-      console.log('Vendor added:', response.data);
-      setUsers([...users, response.data]);
-    } catch (error) {
-      console.error('Error adding vendor:', error);
-    }
+    console.log('📦 Form data:', formData);
+    console.log('📦 GSTIN value from form:', formData.gstin);
+    console.log('📦 GSTIN trimmed value:', formData.gstin ? formData.gstin.trim() : '');
+    console.log('📦 GSTIN in payload (gstin_number):', payload.gstin_number);
+    console.log('📦 Full payload before sending:', JSON.stringify(payload, null, 2));
 
+    try {
+      console.log('📦 Adding vendor with data:', payload);
+      console.log('📦 Full payload:', JSON.stringify(payload, null, 2));
+      const response = await addVendor(payload);
+      console.log('✅ Vendor added successfully:', response.data);
+      console.log('✅ Response data keys:', response.data ? Object.keys(response.data) : 'no data');
+      console.log('✅ Response GSTIN field:', response.data?.gstin, '| gstin_number:', response.data?.gstin_number);
+      
+      // Transform API response to match User interface before updating local state
+      // Use form data as fallback in case API response doesn't include all fields immediately
+      if (response.data) {
+        const newVendor = {
+          id: response.data.id,
+          vendorName: response.data.vendor_name || response.data.vendorName || response.data.name || formData.vendorName || '',
+          vendor_name: response.data.vendor_name || response.data.vendorName || response.data.name || formData.vendorName || '',
+          email: response.data.email || formData.email || '',
+          mobile: response.data.mobile || response.data.phone_number || response.data.phone || formData.mobile || '',
+          phone_number: response.data.phone_number || response.data.phone || response.data.mobile || formData.mobile || '',
+          // Prioritize API response, but fallback to form data if API doesn't return it
+          gstin: response.data.gstin || response.data.gstin_number || (formData.gstin ? formData.gstin.trim() : '') || '',
+          state: response.data.state || (formData.state ? formData.state.trim() : '') || '',
+          city: response.data.city || (formData.city ? formData.city.trim() : '') || '',
+          address: response.data.address || formData.address || '',
+        };
+        console.log('✅ Transformed vendor for local state:', newVendor);
+        console.log('✅ GSTIN in newVendor:', newVendor.gstin);
+        setUsers([...users, newVendor]);
+      }
+
+      setSuccess('Vendor added successfully! The vendor list will be updated automatically.');
+      
+      // Reset form
     setFormData({
       vendorName: '',
       email: '',
@@ -77,37 +120,73 @@ export const Addvendor: React.FC<AddVendorProps> = ({ users, setUsers }) => {
       city: '',
       address: ''
     });
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setSuccess('');
+      }, 3000);
+    } catch (err: any) {
+      console.error('❌ Error adding vendor:', err);
+      console.error('❌ Error response:', err?.response);
+      console.error('❌ Error data:', err?.response?.data);
+      console.error('❌ Error status:', err?.response?.status);
+      
+      let errorMessage = 'Error adding vendor. Please try again.';
+      
+      if (err?.response?.status === 404) {
+        errorMessage = 'API endpoint not found (404). Please check the server configuration.';
+      } else if (err?.response?.status === 400) {
+        const errorData = err?.response?.data;
+        if (errorData) {
+          // Extract field-specific errors
+          const fieldErrors = Object.entries(errorData)
+            .filter(([key]) => key !== 'detail' && key !== 'message')
+            .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+            .join('; ');
+          
+          errorMessage = errorData.detail || errorData.message || fieldErrors || 'Invalid data format. Please check all fields.';
+        } else {
+          errorMessage = 'Invalid request format (400). Please check all required fields are filled.';
+        }
+      } else if (err?.response?.data) {
+        errorMessage = err.response.data.detail || err.response.data.message || err.message || errorMessage;
+      } else {
+        errorMessage = err?.message || errorMessage;
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header
-        className="bg-cover bg-center h-48"
-        style={{
-          backgroundImage:
-            'url("https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=1920&q=80")'
-        }}
-      >
-        <div className="w-full h-full bg-black bg-opacity-50">
-          <div className="max-w-7xl mx-auto px-4 py-4 flex items-center h-full">
-            <div className="flex items-center space-x-4">
+    <div 
+      className="min-h-screen bg-cover bg-center bg-fixed"
+      style={{
+        backgroundImage: `url('/icons/sugarcane main slide.jpg')`
+      }}
+    >
+      <div className="min-h-screen bg-black bg-opacity-40">
+        <div className="max-w-4xl mx-auto px-4 py-12">
+          {/* Title Section */}
+          <div className="mb-8 text-center">
+            <div className="flex items-center justify-center space-x-4">
               <Store className="h-12 w-12 text-white" />
               <h1 className="text-4xl font-bold text-white">VendorHub</h1>
             </div>
           </div>
-        </div>
-      </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-12">
-        <div className="bg-white rounded-xl shadow-lg p-8">
+          {/* Form Card */}
+          <div className="bg-white rounded-xl shadow-lg p-8 bg-opacity-95">
           <form onSubmit={handleSubmit} className="space-y-8">
             <div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
               {[
-                { label: 'Vendor Name', name: 'vendorName' },
-                { label: 'Email ID', name: 'email', type: 'email' },
-                { label: 'Mobile Number', name: 'mobile', type: 'tel', pattern: '[0-9]{10}' },
-                { label: 'GSTIN Number', name: 'gstin' }
-              ].map(({ label, name, type = 'text', pattern }) => (
+                { label: 'Vendor Name', name: 'vendorName', required: true },
+                { label: 'Email ID', name: 'email', type: 'email', required: true },
+                { label: 'Mobile Number', name: 'mobile', type: 'tel', pattern: '[0-9]{10}', required: true },
+                { label: 'GSTIN Number', name: 'gstin', required: false }
+              ].map(({ label, name, type = 'text', pattern, required = true }) => (
                 <div key={name}>
                   <label htmlFor={name} className="block text-base font-medium text-gray-700 mb-2">
                     {label}
@@ -116,7 +195,7 @@ export const Addvendor: React.FC<AddVendorProps> = ({ users, setUsers }) => {
                     type={type}
                     name={name}
                     id={name}
-                    required
+                    required={required}
                     pattern={pattern}
                     value={formData[name as keyof AddVendorForm]}
                     onChange={handleChange}
@@ -172,14 +251,28 @@ export const Addvendor: React.FC<AddVendorProps> = ({ users, setUsers }) => {
             <div className="flex justify-end">
               <button
                 type="submit"
-                className="px-6 py-3 text-base font-medium text-white bg-green-500 border border-transparent rounded-lg shadow-sm hover:bg-green-600"
+                disabled={loading}
+                className="px-6 py-3 text-base font-medium text-white bg-green-500 border border-transparent rounded-lg shadow-sm hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Add Vendor
+                {loading ? 'Adding...' : 'Add Vendor'}
               </button>
             </div>
+            
+            {success && (
+              <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-800">
+                {success}
+              </div>
+            )}
+            
+            {error && (
+              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
+                {error}
+              </div>
+            )}
           </form>
+          </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 };

@@ -4,7 +4,6 @@ import { LatLngTuple, LeafletMouseEvent } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./Map.css";
 import { useFarmerProfile } from "../hooks/useFarmerProfile";
-import { useAppContext } from "../context/AppContext";
 import { FaExpand } from 'react-icons/fa';
 import { ArrowLeft } from 'lucide-react';
 
@@ -217,7 +216,6 @@ const Map: React.FC<MapProps> = ({
   onPestDataChange,
 }) => {
   const { profile, loading: profileLoading } = useFarmerProfile();
-  const { selectedPlotName, setSelectedPlotName } = useAppContext();
   const mapWrapperRef = useRef<HTMLDivElement>(null);
 
   const [plotData, setPlotData] = useState<any>(null);
@@ -225,6 +223,7 @@ const Map: React.FC<MapProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mapCenter] = useState<LatLngTuple>([17.842832246588202, 74.91558702408217]);
+  const [selectedPlotName, setSelectedPlotName] = useState("");
   const [activeLayer, setActiveLayer] = useState<"Growth" | "Water Uptake" | "Soil Moisture" | "PEST">("Growth");
 
   // New state for different layer data
@@ -307,22 +306,24 @@ const Map: React.FC<MapProps> = ({
     return `${year}-${month}-${day}`;
   };
 
-  // Auto-select first plot from farmer profile if no plot is selected
+  // Auto-select first plot from farmer profile
   useEffect(() => {
+    // console.log('??? Map useEffect: profileLoading:', profileLoading, 'profile:', profile);
+    
     if (profileLoading || !profile) {
-      return;
-    }
-
-    // If there's already a selected plot (from localStorage or context), use it
-    if (selectedPlotName) {
+      // console.log('??? Waiting for profile to load...');
       return;
     }
 
     const plotNames = profile.plots?.map(plot => plot.fastapi_plot_id) || [];
     const defaultPlot = plotNames.length > 0 ? plotNames[0] : null;
     
+    // console.log('??? Available plots:', plotNames);
+    // console.log('??? Setting default plot:', defaultPlot);
+    
     if (defaultPlot) {
       setSelectedPlotName(defaultPlot);
+      localStorage.setItem('selectedPlot', defaultPlot);
       // Clear previous plot boundary when selecting a new plot
       setPlotBoundary(null);
       // Only fetch non-date-dependent layers here
@@ -331,7 +332,7 @@ const Map: React.FC<MapProps> = ({
       fetchPlotData(defaultPlot);
       fetchFieldAnalysis(defaultPlot);
     }
-  }, [profile, profileLoading, selectedPlotName, setSelectedPlotName]);
+  }, [profile, profileLoading]);
 
   // Removed fetchAllLayerData - date-dependent layers are now fetched by useEffect
 
@@ -398,7 +399,7 @@ const Map: React.FC<MapProps> = ({
     try {
       console.log("Fetching growth data for plot:", plotName, "end_date:", currentEndDate);
       const resp = await fetch(
-        `https://dev-plot.cropeye.ai//analyze_Growth?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`,
+        `https://dev-plot.cropeye.ai/analyze_Growth?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -427,7 +428,7 @@ const Map: React.FC<MapProps> = ({
     try {
       console.log("Fetching water uptake data for plot:", plotName, "end_date:", currentEndDate);
       const resp = await fetch(
-        `https://dev-plot.cropeye.ai//wateruptake_combined?plot_name=${plotName}&end_date=${currentEndDate}`,
+        `https://dev-plot.cropeye.ai/wateruptake?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -456,7 +457,7 @@ const Map: React.FC<MapProps> = ({
     try {
       console.log("Fetching soil moisture data for plot:", plotName, "end_date:", currentEndDate);
       const resp = await fetch(
-        `https://dev-plot.cropeye.ai//SoilMoisture?plot_name=${plotName}&end_date=${currentEndDate}`,
+        `https://dev-plot.cropeye.ai/SoilMoisture?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -486,7 +487,7 @@ const Map: React.FC<MapProps> = ({
     try {
       const currentDate = getCurrentDate();
       const resp = await fetch(
-        `https://dev-plot.cropeye.ai//analyze_Growth?plot_name=${plotName}&end_date=${currentDate}&days_back=7`,
+        `https://dev-plot.cropeye.ai/analyze_Growth?plot_name=${plotName}&end_date=${currentDate}&days_back=7`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -584,7 +585,7 @@ const Map: React.FC<MapProps> = ({
     try {
       console.log("Fetching pest detection for plot:", plotName, "end_date:", currentEndDate);
       const resp = await fetch(
-        `https://dev-plot.cropeye.ai//pest-detection?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`,
+        `https://dev-plot.cropeye.ai/pest-detection?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1203,10 +1204,11 @@ const Map: React.FC<MapProps> = ({
           <div className="plot-selector">
             <label>Select Plot:</label>
             <select
-              value={selectedPlotName || ""}
+              value={selectedPlotName}
               onChange={(e) => {
                 const newPlot = e.target.value;
                 setSelectedPlotName(newPlot);
+                localStorage.setItem('selectedPlot', newPlot);
                 // Clear previous plot boundary when selecting a new plot
                 setPlotBoundary(null);
                 // Only fetch non-date-dependent layers here
@@ -1276,7 +1278,7 @@ const Map: React.FC<MapProps> = ({
         </div>
       )}
 
-      <div className="map-container h-full" ref={mapWrapperRef}>
+      <div className="map-container" ref={mapWrapperRef}>
         {/* Back Button */}
         <button
           className="back-btn"
@@ -1364,11 +1366,10 @@ const Map: React.FC<MapProps> = ({
         <MapContainer
           center={mapCenter}
           zoom={18}
-          style={{ height: "100%", width: "100%", minWidth: "100%" }}
+          style={{ height: "90%", width: "100%" }}
           zoomControl={true}
           maxZoom={22}
           minZoom={10}
-          className="w-full h-full"
         >
           <TileLayer
             url="http://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
