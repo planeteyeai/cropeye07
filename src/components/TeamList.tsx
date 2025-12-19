@@ -98,7 +98,7 @@ const CATEGORY_INFO: Record<
   },
 };
 
-const REMOTE_API_BASE = 'http://192.168.41.86:8000/api';
+const REMOTE_API_BASE = 'http://192.168.41.93:8000/api';
 const LOCAL_API_BASE = 'http://localhost:8000';
 
 const ensureArray = (payload: any): any[] => {
