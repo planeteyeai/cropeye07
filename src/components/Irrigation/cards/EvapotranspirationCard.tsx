@@ -86,11 +86,13 @@ const EvapotranspirationCard: React.FC = () => {
       setError(null);
 
       // Use POST request with empty body as per API specification
-      const url = `https://dev-field.cropeye.ai
- /plots/${plotName}/compute-et/`;
+      const url = `https://dev-field.cropeye.ai/plots/${plotName}/compute-et/`;
       
       const response = await fetch(url, {
         method: "POST",
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "omit",
         headers: {
           "accept": "application/json",
         },
@@ -98,7 +100,7 @@ const EvapotranspirationCard: React.FC = () => {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
+        const errorText = await response.text().catch(() => 'Unable to read error response');
         throw new Error(`HTTP ${response.status} ${response.statusText} - ${errorText}`);
       }
 
@@ -130,7 +132,18 @@ const EvapotranspirationCard: React.FC = () => {
       });
 
     } catch (err: any) {
-      setError(`Failed to fetch ET data: ${err.message}`);
+      const errorMessage = err.message || 'Unknown error';
+      setError(`Failed to fetch ET data: ${errorMessage}`);
+      
+      // Log detailed error for debugging
+      console.error('ET API fetch error:', {
+        error: err,
+        message: err?.message,
+        name: err?.name,
+        url: `https://dev-field.cropeye.ai/plots/${plotName}/compute-et/`,
+        plotName: plotName
+      });
+      
       setAppState((prev: any) => ({
         ...prev,
         etValue: 0,
@@ -145,7 +158,6 @@ const EvapotranspirationCard: React.FC = () => {
     etValue > average
       ? { status: "Above average", className: "text-orange-500" }
       : { status: "Below average", className: "text-green-500" };
-
 
   const maxTrendValue =
     Array.isArray(trendData) && trendData.length > 0
