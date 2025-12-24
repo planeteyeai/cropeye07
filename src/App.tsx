@@ -150,6 +150,7 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
 
     switch (menu) {
       case "Farm Crop Status":
+      case "farm-crop-status":
         // Use ManagerFarmDash for manager/owner, FarmCropStatus for field officer
         if (userRole === "owner") {
           nextView = View.OwnerFarmDash;
@@ -220,10 +221,6 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
         break;
       case "MyList":
         nextView = View.MyList;
-        break;
-      case "Farm Crop Status":
-      case "farm-crop-status":
-        nextView = View.FarmCropStatus;
         break;
       case "Team List":
       case "Team Connect":
