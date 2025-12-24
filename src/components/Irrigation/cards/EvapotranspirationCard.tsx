@@ -85,119 +85,35 @@ const EvapotranspirationCard: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const currentDate = new Date().toISOString().split("T")[0];
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 7);
-      const startDateStr = startDate.toISOString().split("T")[0];
-
-      const requestBody = {
-        plot_name: plotName,
-        start_date: startDateStr,
-        end_date: currentDate,
-      };
-
-      const attempts: Array<{ url: string; init?: RequestInit; note: string }> = [
-        {
-          url: `https://dev-field.cropeye.ai/plots/${plotName}/compute-et/`,
-          init: {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(requestBody),
-          },
-          note: "7002 POST",
+      // Use POST request with empty body as per API specification
+      const url = `https://dev-field.cropeye.ai
+ /plots/${plotName}/compute-et/`;
+      
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "accept": "application/json",
         },
-        {
-          url: `https://dev-field.cropeye.ai/plots/${plotName}/compute-et/`,
-          init: {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(requestBody),
-          },
-          note: "8009 POST",
-        },
-        {
-          url: `https://dev-field.cropeye.ai/plots/${encodeURIComponent(
-            plotName
-          )}/compute-et/?start_date=${startDateStr}&end_date=${currentDate}`,
-          init: { method: "GET" },
-          note: "7002 GET",
-        },
-      ];
+        // Empty body as per curl command (-d '')
+      });
 
-      let data: any = null;
-      let lastError: any = null;
-
-      for (const attempt of attempts) {
-        try {
-          const resp = await fetch(attempt.url, attempt.init);
-
-          if (!resp.ok) {
-            const txt = await resp.text();
-            throw new Error(`HTTP ${resp.status} ${resp.statusText} - ${txt}`);
-          }
-
-          data = await resp.json();
-          lastError = null;
-          break;
-        } catch (e) {
-          lastError = e;
-        }
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status} ${response.statusText} - ${errorText}`);
       }
 
-      if (!data) {
-        throw lastError || new Error("All ET attempts failed");
-      }
+      const data: ETResponse = await response.json();
 
+      // Extract ET value from ET_mean_mm_per_day (primary field from API response)
+      const etValueExtracted = data.ET_mean_mm_per_day ?? 2.5;
 
-      // Extract ET value
-      let etValueExtracted = 0;
-      let etSource = "fallback (2.5)";
+      // Generate trend data based on ET_mean_mm_per_day (API doesn't provide hourly data)
+      const base = etValueExtracted;
+      const trendDataExtracted = Array.from({ length: 24 }, (_, i) => {
+        const fluctuation = (Math.sin(i / 3) + 1) * 0.1 * base;
+        return Math.round((base + fluctuation) * 10) / 10;
+      });
 
-      if (data.et_24hr !== undefined) {
-        etValueExtracted = data.et_24hr;
-        etSource = "data.et_24hr";
-      } else if (data.ET_mean_mm_per_day !== undefined) {
-        etValueExtracted = data.ET_mean_mm_per_day;
-        etSource = "data.ET_mean_mm_per_day";
-      } else if (data.et !== undefined) {
-        etValueExtracted = data.et;
-        etSource = "data.et";
-      } else if (typeof data === "number") {
-        etValueExtracted = data;
-        etSource = "direct number";
-      } else {
-        etValueExtracted = 2.5;
-      }
-
-
-      // Extract 24-hour trend data if available
-      let trendDataExtracted: number[] = [];
-
-      if (Array.isArray(data.et_24hr_array)) {
-        trendDataExtracted = data.et_24hr_array;
-      } else if (Array.isArray(data.trend)) {
-        trendDataExtracted = data.trend;
-      } else if (Array.isArray(data.hourly_et)) {
-        trendDataExtracted = data.hourly_et;
-      } else if (Array.isArray(data.et_hourly)) {
-        trendDataExtracted = data.et_hourly;
-      } else {
-        // Generate trend data if not available in response
-        const base = etValueExtracted;
-        trendDataExtracted = Array.from({ length: 24 }, (_, i) => {
-          const fluctuation = (Math.sin(i / 3) + 1) * 0.1 * base;
-          return Math.round((base + fluctuation) * 10) / 10;
-        });
-      }
-
-      // Ensure exactly 24 data points
-      if (trendDataExtracted.length !== 24) {
-        const base = etValueExtracted;
-        trendDataExtracted = Array.from({ length: 24 }, (_, i) => {
-          const fluctuation = (Math.sin(i / 3) + 1) * 0.1 * base;
-          return Math.round((base + fluctuation) * 10) / 10;
-        });
-      }
 
       // Update AppContext
       setAppState((prev: any) => ({
@@ -230,11 +146,6 @@ const EvapotranspirationCard: React.FC = () => {
       ? { status: "Above average", className: "text-orange-500" }
       : { status: "Below average", className: "text-green-500" };
 
-  const today = new Date().toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 
   const maxTrendValue =
     Array.isArray(trendData) && trendData.length > 0
@@ -297,7 +208,6 @@ const EvapotranspirationCard: React.FC = () => {
         </div>
 
         <div style={{ fontSize: "12px", color: "#999", marginTop: "8px" }}>
-          {/* Last updated: {today} */}
         </div>
       </div>
     </div>
