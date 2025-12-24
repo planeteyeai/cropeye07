@@ -48,13 +48,35 @@ const IrrigationSchedule: React.FC = () => {
     }
   };
 
+  /**
+   * Calculate Net ET (Evapotranspiration after accounting for rainfall)
+   * Formula: Net ET = ET - Rainfall
+   * @param et - Evapotranspiration in mm/day
+   * @param rainfall - Rainfall in mm/day
+   * @returns Net ET (cannot be negative)
+   */
   const calculateNetET = (et: number, rainfall: number) => {
     const net = Number(et) - Number(rainfall);
     return net > 0 ? net : 0;
   };
 
+  /**
+   * Calculate Water Required for Drip Irrigation (Liters per Acre)
+   * Formula: Water Required = Net ET × Kc × Efficiency × Area Conversion
+   * 
+   * Where:
+   * - Net ET: Evapotranspiration - Rainfall (mm/day)
+   * - Kc: Crop coefficient (varies by growth stage: 0.3 to 1.2)
+   * - 0.94: Irrigation efficiency factor (94% efficiency for drip)
+   * - 4046.86: Conversion factor (1 acre = 4046.86 m²)
+   * 
+   * @param netEt - Net Evapotranspiration in mm/day
+   * @param kcVal - Crop coefficient
+   * @returns Water required in Liters per Acre (rounded)
+   */
   const waterFromNetET = (netEt: number, kcVal: number) => {
     if (!Number.isFinite(netEt) || !Number.isFinite(kcVal) || netEt <= 0) return 0;
+    // Formula: Net ET × Kc × 0.94 (efficiency) × 4046.86 (m² per acre)
     const liters = netEt * kcVal * 0.94 * 4046.86;
     return Math.round(liters);
   };
@@ -132,7 +154,6 @@ const IrrigationSchedule: React.FC = () => {
 
     const plotId = selectedPlot.fastapi_plot_id || `${selectedPlot.gat_number}_${selectedPlot.plot_number}`;
     setPlotName(plotId);
-    console.log("IrrigationSchedule: Using plot", plotId);
 
     try {
       const coords = selectedPlot?.coordinates?.location?.coordinates;
@@ -438,8 +459,14 @@ const IrrigationSchedule: React.FC = () => {
         // console.log(`Day ${i} (${date.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}): ET = ${etForDay}, rainfall = ${rainfall}, range = ${getETRange(etForDay)}`);
       }
 
+      // Step 1: Calculate Net ET (ET - Rainfall)
       const netEt = calculateNetET(etForDay, rainfall);
+      
+      // Step 2: Calculate Water Required using formula: Net ET × Kc × 0.94 × 4046.86
+      // Result is in Liters per Acre
       const waterRequired = waterFromNetET(netEt, kc);
+      
+      // Step 3: Calculate irrigation time based on water required
       const time = calcIrrigationTime(waterRequired);
 
       scheduleData.push({

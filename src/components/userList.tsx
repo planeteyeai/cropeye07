@@ -507,14 +507,11 @@ export const UserList: React.FC<UserListProps> = ({ currentUserId, currentUserRo
       try {
         const response = await getUsers();
         usersData = response.data.results || response.data || [];
-        console.log('Users loaded from /users/:', usersData.length);
       } catch (err) {
-        console.warn('Failed to fetch from /users/, trying getContactDetails...');
         // Fallback to getContactDetails
         const response = await getContactDetails();
         const contactData = response.data.contacts;
         usersData = contactData.field_officers || contactData.owners || [];
-        console.log('Users loaded from contact-details:', usersData.length);
       }
 
       // Transform the data to match our interface
@@ -534,7 +531,6 @@ export const UserList: React.FC<UserListProps> = ({ currentUserId, currentUserRo
 
       setUsers(transformedUsers);
     } catch (error: any) {
-      console.error('Error fetching users:', error);
       setError(error.message || 'Failed to fetch users');
       setUsers([]);
     } finally {
@@ -623,7 +619,6 @@ export const UserList: React.FC<UserListProps> = ({ currentUserId, currentUserRo
       setEditId(null);
       setEditFormData({});
     } catch (err: any) {
-      console.error('Error updating user:', err);
       setEditError(err.response?.data?.detail || err.message || 'Failed to update user. Please try again.');
     } finally {
       setSavingEdit(false);

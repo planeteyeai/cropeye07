@@ -42,29 +42,20 @@ export const BookingList: React.FC<BookingListProps> = ({ bookings, setBookings 
     setLoading(true);
     setError(null);
     try {
-      console.log('📅 Fetching bookings from API...');
       const response = await getbookings();
       const data = response?.data;
-      console.log('📅 Bookings API response:', response);
-      console.log('📅 Bookings API data:', data);
 
       // Handle different response formats
       let bookingItems: any[] = [];
       if (Array.isArray(data)) {
         bookingItems = data;
-        console.log('✅ Found array format, bookings count:', bookingItems.length);
       } else if (Array.isArray(data?.results)) {
         bookingItems = data.results;
-        console.log('✅ Found results array, bookings count:', bookingItems.length);
       } else if (Array.isArray(data?.data)) {
         bookingItems = data.data;
-        console.log('✅ Found nested data array, bookings count:', bookingItems.length);
       } else if (data?.bookings && Array.isArray(data.bookings)) {
         bookingItems = data.bookings;
-        console.log('✅ Found bookings array, bookings count:', bookingItems.length);
       }
-
-      console.log('📅 Raw booking items:', bookingItems);
 
       // Transform API response to match Booking interface
       const transformedBookings: Booking[] = bookingItems.map((booking: any) => ({
@@ -79,12 +70,8 @@ export const BookingList: React.FC<BookingListProps> = ({ bookings, setBookings 
         end_date: booking.end_date || booking.endDate || '',
         status: booking.status || '',
       }));
-
-      console.log('✅ Transformed bookings count:', transformedBookings.length);
-      console.log('✅ Transformed bookings:', transformedBookings);
       setBookings(transformedBookings);
     } catch (err: any) {
-      console.error('❌ Failed to fetch bookings:', err);
       setError(err?.response?.data?.message || err?.message || 'Failed to fetch bookings');
     } finally {
       setLoading(false);
@@ -92,7 +79,6 @@ export const BookingList: React.FC<BookingListProps> = ({ bookings, setBookings 
   };
 
   const handleEdit = (id: number) => {
-    console.log('✏️ Edit clicked for booking ID:', id);
     const booking = bookings.find((b) => b.id === id);
     if (booking) {
       setEditingId(id);
@@ -108,7 +94,6 @@ export const BookingList: React.FC<BookingListProps> = ({ bookings, setBookings 
         endDate: booking.endDate || booking.end_date || '',
         end_date: booking.end_date || booking.endDate || '',
       });
-      console.log('✏️ Set editing booking:', booking);
     } else {
       setError(`Booking with ID ${id} not found`);
     }
@@ -123,8 +108,6 @@ export const BookingList: React.FC<BookingListProps> = ({ bookings, setBookings 
     setSaving(true);
     setError(null);
     try {
-      console.log('💾 Saving booking ID:', id);
-      console.log('💾 Edited booking data:', editedBooking);
 
       // Prepare data for API (convert frontend field names to backend field names)
       const apiData: any = {};
@@ -165,11 +148,8 @@ export const BookingList: React.FC<BookingListProps> = ({ bookings, setBookings 
         return;
       }
 
-      console.log('💾 API payload:', apiData);
-      console.log('💾 Sending PATCH request to:', `/bookings/${id}/`);
 
       const response = await patchBooking(id, apiData);
-      console.log('✅ Booking updated successfully:', response.data);
 
       // Refresh data from API to ensure consistency
       await fetchBookings();
@@ -179,9 +159,6 @@ export const BookingList: React.FC<BookingListProps> = ({ bookings, setBookings 
       setEditingId(null);
       setEditedBooking({});
     } catch (err: any) {
-      console.error('❌ Failed to update booking:', err);
-      console.error('❌ Error response:', err?.response);
-      console.error('❌ Error data:', err?.response?.data);
 
       // Extract detailed error message
       let errorMessage = 'Failed to update booking';
@@ -223,9 +200,7 @@ export const BookingList: React.FC<BookingListProps> = ({ bookings, setBookings 
     setDeleting(id);
     setError(null);
     try {
-      console.log('🗑️ Deleting booking ID:', id);
       await deleteBooking(id);
-      console.log('✅ Booking deleted successfully');
 
       // Refresh data from API to ensure consistency
       await fetchBookings();
@@ -233,7 +208,6 @@ export const BookingList: React.FC<BookingListProps> = ({ bookings, setBookings 
       // Update local state as fallback
       setBookings((bookings || []).filter((booking) => booking.id !== id));
     } catch (err: any) {
-      console.error('❌ Failed to delete booking:', err);
       setError(err?.response?.data?.message || err?.message || 'Failed to delete booking');
     } finally {
       setDeleting(null);

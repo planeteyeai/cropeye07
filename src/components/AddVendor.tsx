@@ -73,19 +73,8 @@ export const Addvendor: React.FC<AddVendorProps> = ({ users, setUsers }) => {
       // rating is optional - don't send it since it's not collected in the form
     };
 
-    console.log('📦 Form data:', formData);
-    console.log('📦 GSTIN value from form:', formData.gstin);
-    console.log('📦 GSTIN trimmed value:', formData.gstin ? formData.gstin.trim() : '');
-    console.log('📦 GSTIN in payload (gstin_number):', payload.gstin_number);
-    console.log('📦 Full payload before sending:', JSON.stringify(payload, null, 2));
-
     try {
-      console.log('📦 Adding vendor with data:', payload);
-      console.log('📦 Full payload:', JSON.stringify(payload, null, 2));
       const response = await addVendor(payload);
-      console.log('✅ Vendor added successfully:', response.data);
-      console.log('✅ Response data keys:', response.data ? Object.keys(response.data) : 'no data');
-      console.log('✅ Response GSTIN field:', response.data?.gstin, '| gstin_number:', response.data?.gstin_number);
       
       // Transform API response to match User interface before updating local state
       // Use form data as fallback in case API response doesn't include all fields immediately
@@ -103,8 +92,6 @@ export const Addvendor: React.FC<AddVendorProps> = ({ users, setUsers }) => {
           city: response.data.city || (formData.city ? formData.city.trim() : '') || '',
           address: response.data.address || formData.address || '',
         };
-        console.log('✅ Transformed vendor for local state:', newVendor);
-        console.log('✅ GSTIN in newVendor:', newVendor.gstin);
         setUsers([...users, newVendor]);
       }
 
@@ -126,10 +113,6 @@ export const Addvendor: React.FC<AddVendorProps> = ({ users, setUsers }) => {
         setSuccess('');
       }, 3000);
     } catch (err: any) {
-      console.error('❌ Error adding vendor:', err);
-      console.error('❌ Error response:', err?.response);
-      console.error('❌ Error data:', err?.response?.data);
-      console.error('❌ Error status:', err?.response?.status);
       
       let errorMessage = 'Error adding vendor. Please try again.';
       

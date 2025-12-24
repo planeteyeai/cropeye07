@@ -258,9 +258,6 @@ const SoilMoistureTrendCard: React.FC<SoilMoistureTrendCardProps> = ({
             <span className="text-blue-600">80-100%: High</span>
           </div>
         </div>
-        {selectedPlotName && (
-          <div className="plot-indicator-small hidden sm:block">Plot: {selectedPlotName}</div>
-        )}
         {currentDateMoisture !== null && (
           <div
             className="current-moisture-indicator text-xs sm:text-sm mt-0 hidden sm:block"

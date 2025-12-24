@@ -10,6 +10,9 @@ export interface WeatherData {
 
 export interface PestDetectionData {
   fungi_affected_pixel_percentage: number;
+  chewing_affected_pixel_percentage: number;
+  sucking_affected_pixel_percentage: number;
+  SoilBorn_affected_pixel_percentage: number;
 }
 
 export interface RiskAssessmentResult {
@@ -198,7 +201,10 @@ export async function fetchPestDetectionData(plotId?: string): Promise<PestDetec
     if (!token) {
       console.warn('No authentication token found for pest detection');
       return {
-        fungi_affected_pixel_percentage: 0
+        fungi_affected_pixel_percentage: 0,
+        chewing_affected_pixel_percentage: 0,
+        sucking_affected_pixel_percentage: 0,
+        SoilBorn_affected_pixel_percentage: 0,
       };
     }
 
@@ -208,7 +214,10 @@ export async function fetchPestDetectionData(plotId?: string): Promise<PestDetec
     if (!profileData.plots || profileData.plots.length === 0) {
       console.warn('No plots found in user profile for pest detection');
       return {
-        fungi_affected_pixel_percentage: 0
+        fungi_affected_pixel_percentage: 0,
+        chewing_affected_pixel_percentage: 0,
+        sucking_affected_pixel_percentage: 0,
+        SoilBorn_affected_pixel_percentage: 0,
       };
     }
 
@@ -229,49 +238,50 @@ export async function fetchPestDetectionData(plotId?: string): Promise<PestDetec
     const plotName = selectedPlot.plot_name || selectedPlot.fastapi_plot_id || `${selectedPlot.gat_number}_${selectedPlot.plot_number}`;
     const currentDate = new Date().toISOString().split('T')[0];
     
-    // Try POST with body first (as per Map.tsx implementation)
-    const postUrl = `https://dev-plot.cropeye.ai/pest-detection`;
-    const postResponse = await fetch(postUrl, {
+    // Use proxy in development to avoid CORS issues, direct URL in production
+    const baseUrl = import.meta.env.DEV 
+      ? '/api/dev-plot' 
+      : 'https://dev-plot.cropeye.ai';
+    const url = `${baseUrl}/pest-detection?plot_name=${plotName}&end_date=${currentDate}&days_back=7`;
+    
+    // Try fetch with explicit CORS mode and proper headers matching curl command
+    const postResponse = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        plot_name: plotName,
-        end_date: currentDate,
-        days_back: 7
-      }),
+      mode: "cors",
+      cache: "no-cache",
+      credentials: "omit",
+      headers: { 
+        "Accept": "application/json"
+      },
     });
     
     if (postResponse.ok) {
       const pestData = await postResponse.json();
+      const pixelSummary = pestData.pixel_summary || {};
       return {
-        fungi_affected_pixel_percentage: pestData.fungi_affected_pixel_percentage || 0
+        fungi_affected_pixel_percentage: pixelSummary.fungi_affected_pixel_percentage || 0,
+        chewing_affected_pixel_percentage: pixelSummary.chewing_affected_pixel_percentage || 0,
+        sucking_affected_pixel_percentage: pixelSummary.sucking_affected_pixel_percentage || 0,
+        SoilBorn_affected_pixel_percentage: pixelSummary.SoilBorn_affected_pixel_percentage || 0,
       };
     }
     
-    // Fallback: try with query params
-    const queryUrl = `https://dev-plot.cropeye.ai/pest-detection?plot_name=${encodeURIComponent(plotName)}&end_date=${currentDate}&days_back=7`;
-    const queryResponse = await fetch(queryUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-    });
-    
-    if (queryResponse.ok) {
-      const pestData = await queryResponse.json();
-      return {
-        fungi_affected_pixel_percentage: pestData.fungi_affected_pixel_percentage || 0
-      };
-    }
-    
-    // If both fail, return default
-    console.warn(`Pest detection API error: ${postResponse.status} / ${queryResponse.status}`);
+    // If request fails, return default
+    console.warn(`Pest detection API error: ${postResponse.status}`);
     return {
-      fungi_affected_pixel_percentage: 0
+      fungi_affected_pixel_percentage: 0,
+      chewing_affected_pixel_percentage: 0,
+      sucking_affected_pixel_percentage: 0,
+      SoilBorn_affected_pixel_percentage: 0,
     };
     
   } catch (error: any) {
     console.warn('Error fetching pest detection data:', error?.message || error);
     return {
-      fungi_affected_pixel_percentage: 0
+      fungi_affected_pixel_percentage: 0,
+      chewing_affected_pixel_percentage: 0,
+      sucking_affected_pixel_percentage: 0,
+      SoilBorn_affected_pixel_percentage: 0,
     };
   }
 }
@@ -347,9 +357,7 @@ export async function generateRiskAssessment(
     // Check for Red Rot based on fungi detection only
     try {
       const pestDetectionData = await fetchPestDetectionData();
-      console.log('Pest detection data:', pestDetectionData);
       if (pestDetectionData.fungi_affected_pixel_percentage > 0) {
-        console.log('Adding Red Rot to High risk');
         result.diseases.High.push('Red Rot');
       }
     } catch (error) {

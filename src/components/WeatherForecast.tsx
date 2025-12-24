@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   ComposedChart,
   Bar,
@@ -39,6 +39,7 @@ const WeatherForecast: React.FC<WeatherForecastProps> = ({
   const [loadingCoordinates, setLoadingCoordinates] = useState(true);
   const [hasFetchedWeather, setHasFetchedWeather] = useState(false);
   const [viewportWidth, setViewportWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1024);
+  const fetchingRef = useRef(false); // Prevent multiple simultaneous fetches
 
   useEffect(() => {
     const onResize = () => setViewportWidth(window.innerWidth);
@@ -56,15 +57,11 @@ const WeatherForecast: React.FC<WeatherForecastProps> = ({
     const fetchFarmerCoordinates = async () => {
       try {
         setLoadingCoordinates(true);
-        console.log("WeatherForecast: Fetching farmer profile for coordinates, selectedPlot:", selectedPlotName);
         
         const response = await getFarmerMyProfile();
         const profileData = response.data;
         
-        console.log("WeatherForecast: Farmer profile data:", profileData);
-        
         if (!profileData?.plots || profileData.plots.length === 0) {
-          console.log("WeatherForecast: No plots found in farmer profile");
           setFarmerCoordinates(null);
           setLoadingCoordinates(false);
           return;
@@ -89,12 +86,10 @@ const WeatherForecast: React.FC<WeatherForecastProps> = ({
             lat: selectedPlot.coordinates.location.latitude,
             lon: selectedPlot.coordinates.location.longitude
           };
-          console.log("WeatherForecast: Found coordinates for plot:", selectedPlot.fastapi_plot_id, coords);
           setFarmerCoordinates(coords);
           // Reset fetch flag when plot changes so weather data is refetched
           setHasFetchedWeather(false);
         } else {
-          console.log("WeatherForecast: No coordinates found in selected plot");
           setFarmerCoordinates(null);
         }
       } catch (error) {
@@ -109,29 +104,34 @@ const WeatherForecast: React.FC<WeatherForecastProps> = ({
     if (selectedPlotName || !farmerCoordinates) {
       fetchFarmerCoordinates();
     }
-  }, [selectedPlotName]); // Update when selectedPlotName changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPlotName]); // Update when selectedPlotName changes (farmerCoordinates intentionally excluded)
 
-  // Determine which coordinates to use
-  const lat = propLat || farmerCoordinates?.lat || 20.014040817830804;
-  const lon = propLon || farmerCoordinates?.lon || 73.66620106848734;
+  // Determine which coordinates to use - memoize to prevent unnecessary recalculations
+  const lat = useMemo(() => {
+    return propLat || farmerCoordinates?.lat || 20.014040817830804;
+  }, [propLat, farmerCoordinates?.lat]);
+  const lon = useMemo(() => {
+    return propLon || farmerCoordinates?.lon || 73.66620106848734;
+  }, [propLon, farmerCoordinates?.lon]);
 
   useEffect(() => {
     // Only fetch weather data when coordinates are available and not loading
     if (loadingCoordinates) {
-      console.log("WeatherForecast: Waiting for coordinates to load...");
       return;
     }
 
-    // Only fetch once
-    if (hasFetchedWeather) {
-      console.log("WeatherForecast: Weather data already fetched, skipping...");
+    // Only fetch once or if already fetching
+    if (hasFetchedWeather || fetchingRef.current) {
       return;
     }
 
     const cacheKey = `weatherChartData_${lat}_${lon}`; // Include coordinates in cache key
     
-    // Test parsing function
-    testParsing();
+    // Test parsing function - only log once on initial load
+    if (!hasFetchedWeather) {
+      testParsing();
+    }
     
     // Clear cache to force fresh data fetch
     localStorage.removeItem(cacheKey);
@@ -146,21 +146,12 @@ const WeatherForecast: React.FC<WeatherForecastProps> = ({
     //   return;
     // }
         
-        console.log(`WeatherForecast: Fetching weather for coordinates: lat=${lat}, lon=${lon}`);
-        console.log(`WeatherForecast: Using ${farmerCoordinates ? 'farmer' : 'default'} coordinates`);
-        
         // Mark as fetching to prevent multiple calls
+        fetchingRef.current = true;
         setHasFetchedWeather(true);
         
         fetchWeatherForecast(lat, lon)
       .then((data) => {
-        console.log("WeatherForecast: Received data:", data);
-        console.log("WeatherForecast: Raw API response structure:", {
-          isArray: Array.isArray(data),
-          hasData: !!data?.data,
-          dataKeys: data ? Object.keys(data) : [],
-          firstItem: Array.isArray(data) ? data[0] : data?.data?.[0]
-        });
         // Support both legacy array and new { source, data: [...] } shape
         const rawList = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
 
@@ -178,7 +169,6 @@ const WeatherForecast: React.FC<WeatherForecastProps> = ({
 
         // Generate next 7 days starting from tomorrow (exclude today)
         const days: any[] = [];
-        console.log("WeatherForecast: Generating next 7 days starting from tomorrow");
         
         // Create a map of API data by date for easy lookup
         const apiDataByDate = new Map<string, any>();
@@ -198,20 +188,6 @@ const WeatherForecast: React.FC<WeatherForecastProps> = ({
           // Get API data for this date, or use default values if not available
           const apiData = apiDataByDate.get(iso) || {};
           
-          console.log(`WeatherForecast: Processing day ${i} (${iso}):`, {
-            temperature_max: apiData.temperature_max,
-            humidity_max: apiData.humidity_max,
-            precipitation: apiData.precipitation,
-            wind_speed_max: apiData.wind_speed_max
-          });
-          
-          console.log(`WeatherForecast: Parsed values for day ${i}:`, {
-            temperature: parseNum(apiData.temperature_max),
-            humidity: parseNum(apiData.humidity_max),
-            rainfall: parseNum(apiData.precipitation),
-            wind: parseNum(apiData.wind_speed_max)
-          });
-          
           days.push({
             date: futureDate.toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
             temperature: parseNum(apiData.temperature_max),
@@ -222,26 +198,17 @@ const WeatherForecast: React.FC<WeatherForecastProps> = ({
           });
         }
 
-        console.log("WeatherForecast: Processed 7 days:", days);
-        console.log("WeatherForecast: First day data:", days[0]);
-        console.log("WeatherForecast: API raw data:", rawList);
-        if (days.length > 0) {
-          console.log("WeatherForecast: Parsed values for first day:", {
-            temperature: days[0].temperature,
-            humidity: days[0].humidity,
-            rainfall: days[0].rainfall,
-            wind: days[0].wind
-          });
-        }
         setAppState((prev: any) => ({
           ...prev,
           weatherChartData: days,
           weatherSelectedDay: days[0],
         }));
         setCached(cacheKey, days);
+        fetchingRef.current = false;
       })
         .catch((error) => {
           console.error("WeatherForecast: Fetch error:", error);
+          fetchingRef.current = false;
           // Fallback: generate next 7 days with zero values
           const days: any[] = [];
           const today = new Date();
@@ -270,9 +237,6 @@ const WeatherForecast: React.FC<WeatherForecastProps> = ({
   }, [loadingCoordinates, hasFetchedWeather, lat, lon]); // Depend on coordinates so it refetches when plot changes
 
   const currentWeather = selectedDay || chartData[0];
-  
-  // Debug: Log current weather data being displayed (can be removed in production)
-  // console.log("WeatherForecast: Current weather data being displayed:", currentWeather);
 
   // Show loading state while fetching coordinates
   if (loadingCoordinates) {

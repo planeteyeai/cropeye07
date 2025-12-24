@@ -15,9 +15,9 @@ export default defineConfig({
     // Terser options for better obfuscation - REMOVES ALL SOURCE REFERENCES
     terserOptions: {
       compress: {
-        drop_console: false,  // Keep console logs (set to true to remove all)
+        drop_console: true,   // Remove all console logs
         drop_debugger: true,  // Remove debugger statements
-        pure_funcs: ['console.debug'], // Remove specific console methods
+        pure_funcs: ['console.log', 'console.debug', 'console.info', 'console.warn'], // Remove specific console methods
         // Remove source file references
         module: true,
         passes: 3,            // Multiple passes for better minification
@@ -123,14 +123,36 @@ export default defineConfig({
   
   // Hide source file references in production
   define: {
-    __DEV__: false,
-    'process.env.NODE_ENV': '"production"',
+    // Only set in production build, not in dev mode (breaks React Fast Refresh)
+    ...(process.env.NODE_ENV === 'production' ? {
+      __DEV__: false,
+      'process.env.NODE_ENV': '"production"',
+    } : {}),
   },
   
   // Disable dev source maps completely
   server: {
     sourcemapIgnoreList: () => {
       return true; // Ignore all source maps in dev too
+    },
+    // Proxy API requests to avoid CORS issues in development
+    proxy: {
+      '/api/dev-plot': {
+        target: 'https://dev-plot.cropeye.ai',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/dev-plot/, ''),
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, res) => {
+            console.log('proxy error', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            console.log('Proxying request:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req, _res) => {
+            console.log('Proxy response:', proxyRes.statusCode, req.url);
+          });
+        },
+      },
     },
   },
 });

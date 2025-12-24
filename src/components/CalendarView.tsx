@@ -68,8 +68,6 @@ const CalendarView: React.FC = () => {
       try {
         setLoadingFieldOfficers(true);
         const response = await getContactDetails();
-        console.log('Field Officers API Response:', response);
-        
         let fieldOfficersData: FieldOfficer[] = [];
         
         if (response.data && response.data.contacts) {
@@ -86,9 +84,7 @@ const CalendarView: React.FC = () => {
         }
         
         setFieldOfficers(fieldOfficersData);
-        console.log('Field Officers loaded:', fieldOfficersData);
       } catch (error) {
-        console.error('Error fetching field officers:', error);
         // Fallback to sample data if API fails
         const sampleFieldOfficers: FieldOfficer[] = [
           {

@@ -22,7 +22,6 @@ export const DashboardNo: React.FC = () => {
         setLoading(true);
         setError(null);
         const response = await getTotalCounts();
-        console.log('📊 Dashboard counts response:', response.data);
         
         // Handle different response formats
         const data = response.data;
@@ -34,7 +33,6 @@ export const DashboardNo: React.FC = () => {
           bookings: data.bookings || 0,
         });
       } catch (err: any) {
-        console.error('❌ Error fetching dashboard counts:', err);
         setError('Failed to load dashboard data');
         // Set default values on error
         setStats({

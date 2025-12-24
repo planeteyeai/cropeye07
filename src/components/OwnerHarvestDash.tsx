@@ -510,7 +510,6 @@ const HarvestDashboard: React.FC = () => {
     async function fetchData() {
       setLoading(true);
       try {
-        console.log(`Fetching data from ${API_BASE_URL}`);
         const response = await api.get(API_BASE_URL);
         const apiData = response.data;
 
@@ -632,14 +631,11 @@ const HarvestDashboard: React.FC = () => {
             ...Array.from(plantationTypeSet).sort(),
           ]);
 
-          console.log(`Successfully processed ${allData.length} data points`);
           setRawData(allData);
         } else {
-          console.warn("Invalid data format:", response.data);
           setRawData([]);
         }
       } catch (err) {
-        console.error("API fetch error", err);
         setRawData([]);
       } finally {
         setLoading(false);

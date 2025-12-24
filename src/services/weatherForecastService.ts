@@ -18,10 +18,7 @@ export interface WeatherForecastDay {
 // Fetch 7-day weather forecast data for given coordinates
 export const fetchWeatherForecast = async (lat: number, lon: number): Promise<WeatherForecastData> => {
   try {
-    console.log('🌤️ Fetching weather forecast for coordinates:', { lat, lon });
-    
     const apiUrl = ` https://dev-weather.cropeye.ai/forecast?lat=${lat}&lon=${lon}`;
-    console.log('🌤️ Weather Forecast API URL:', apiUrl);
     
     const response = await fetch(apiUrl, {
       method: 'GET',
@@ -33,8 +30,6 @@ export const fetchWeatherForecast = async (lat: number, lon: number): Promise<We
       signal: AbortSignal.timeout(15000), // 15 second timeout
     });
 
-    console.log('🌤️ Weather Forecast API response status:', response.status);
-
     if (!response.ok) {
       const errorText = await response.text();
       console.error('🌤️ Weather Forecast API error response:', errorText);
@@ -42,7 +37,6 @@ export const fetchWeatherForecast = async (lat: number, lon: number): Promise<We
     }
 
     const forecastData: WeatherForecastData = await response.json();
-    console.log('🌤️ Weather forecast data received:', forecastData);
     
     return forecastData;
   } catch (error: any) {
@@ -157,16 +151,5 @@ export const getDayOfWeek = (dateString: string): string => {
 
 // Test function to verify parsing works correctly
 export const testParsing = () => {
-  const testData = {
-    temperature_max: "26.4 DegreeCel",
-    humidity_max: "99 %",
-    precipitation: "3.1 mm",
-    wind_speed_max: "9.8 km/h"
-  };
-  
-  console.log('🧪 Testing parsing functions:');
-  console.log('Temperature:', extractNumericValue(testData.temperature_max), 'Expected: 26.4');
-  console.log('Humidity:', extractNumericValue(testData.humidity_max), 'Expected: 99');
-  console.log('Precipitation:', extractNumericValue(testData.precipitation), 'Expected: 3.1');
-  console.log('Wind Speed:', extractNumericValue(testData.wind_speed_max), 'Expected: 9.8');
+  // Test function - logging removed
 };

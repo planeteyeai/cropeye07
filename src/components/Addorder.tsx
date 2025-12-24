@@ -71,9 +71,7 @@ export const Addorder: React.FC<AddOrderProps> = ({ items, setItems }) => {
         }));
         
         setVendors(transformedVendors);
-        console.log('✅ Loaded vendors:', transformedVendors);
       } catch (err: any) {
-        console.error('❌ Failed to fetch vendors:', err);
         setError('Failed to load vendors. Please refresh the page.');
       } finally {
         setLoadingVendors(false);
@@ -146,9 +144,7 @@ export const Addorder: React.FC<AddOrderProps> = ({ items, setItems }) => {
         }))
       };
 
-      console.log('📦 Adding order with data:', apiData);
       const response = await addOrder(apiData);
-      console.log('✅ Order added successfully:', response.data);
 
       setSuccess('Order(s) submitted successfully! The order list will be updated automatically.');
       
@@ -172,11 +168,6 @@ export const Addorder: React.FC<AddOrderProps> = ({ items, setItems }) => {
         setSuccess('');
       }, 3000);
     } catch (err: any) {
-      console.error('❌ Error posting order:', err);
-      console.error('❌ Error response:', err?.response);
-      console.error('❌ Error data:', err?.response?.data);
-      console.error('❌ Error status:', err?.response?.status);
-      console.error('❌ Request data that was sent:', apiData);
       
       let errorMessage = 'Failed to submit order. Please try again.';
       
