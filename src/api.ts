@@ -1160,6 +1160,8 @@ const convertToBulkFormat = (formData: any, plots: any[]) => {
         crop_type_name: plot.crop_Type || plot.crop_type_name || "Sugarcane",
         plantation_type:
           plot.plantation_Type || plot.plantation_type || "adsali",
+        plantation_date: plot.plantation_Date || "2024-01-15",
+        planting_method: plot.plantation_Method || "3_bud",
       },
       irrigation: {
         irrigation_type_name:
