@@ -39,38 +39,25 @@ export const StockList: React.FC<StockListProps> = ({ stocks, setStocks }) => {
     setLoading(true);
     setError(null);
     try {
-      console.log('📦 Fetching stock data from /stock/ endpoint...');
       let response;
       let data;
       
       response = await getstock();
-      console.log('📦 Stock API response:', response);
       data = response?.data;
-      console.log('📦 Stock API data:', data);
       
       // Handle different response formats
       let stockItems: any[] = [];
       if (Array.isArray(data)) {
         stockItems = data;
-        console.log('✅ Found array format, items count:', stockItems.length);
       } else if (Array.isArray(data?.results)) {
         stockItems = data.results;
-        console.log('✅ Found results array, items count:', stockItems.length);
       } else if (Array.isArray(data?.data)) {
         stockItems = data.data;
-        console.log('✅ Found nested data array, items count:', stockItems.length);
       } else if (data?.stock && Array.isArray(data.stock)) {
         stockItems = data.stock;
-        console.log('✅ Found stock array, items count:', stockItems.length);
       } else if (data?.stocks && Array.isArray(data.stocks)) {
         stockItems = data.stocks;
-        console.log('✅ Found stocks array, items count:', stockItems.length);
-      } else {
-        console.warn('⚠️ Unknown response format:', data);
-        console.warn('⚠️ Response keys:', data ? Object.keys(data) : 'no data');
       }
-      
-      console.log('📦 Raw stock items:', stockItems);
       
       // Transform API response to match Stock interface
       const transformedStocks: Stock[] = stockItems.map((stock: any) => {
@@ -84,12 +71,8 @@ export const StockList: React.FC<StockListProps> = ({ stocks, setStocks }) => {
           status: stock.status || '',
           remark: stock.remark || '',
         };
-        console.log('📦 Transformed stock item:', transformed);
         return transformed;
       });
-      
-      console.log('✅ Transformed stocks count:', transformedStocks.length);
-      console.log('✅ Transformed stocks:', transformedStocks);
       
       setStocks(transformedStocks);
     } catch (err: any) {

@@ -38,41 +38,23 @@ export const VendorList: React.FC<VendorListProps> = ({ users, setUsers }) => {
       setLoading(true);
       setError(null);
       try {
-        console.log('📦 Fetching vendors from API...');
         const response = await getVendors();
         const data = response?.data;
-        console.log('📦 Raw API response:', response);
-        console.log('📦 API data:', data);
         
         // Handle different response formats
         let vendors: any[] = [];
         if (Array.isArray(data)) {
           vendors = data;
-          console.log('✅ Found array format, vendors count:', vendors.length);
         } else if (Array.isArray(data?.results)) {
           vendors = data.results;
-          console.log('✅ Found results array, vendors count:', vendors.length);
         } else if (Array.isArray(data?.data)) {
           vendors = data.data;
-          console.log('✅ Found nested data array, vendors count:', vendors.length);
         } else if (data?.vendors && Array.isArray(data.vendors)) {
           vendors = data.vendors;
-          console.log('✅ Found vendors array, vendors count:', vendors.length);
-        }
-        
-        console.log('📦 Parsed vendors array:', vendors);
-        if (vendors.length > 0) {
-          console.log('📦 First vendor sample (raw):', vendors[0]);
-          console.log('📦 First vendor keys:', Object.keys(vendors[0]));
-          console.log('📦 First vendor GSTIN field:', vendors[0].gstin, '| gstin_number:', vendors[0].gstin_number);
         }
         
         // Transform API response to match User interface
         const transformedVendors: User[] = vendors.map((vendor: any, index: number) => {
-          console.log(`📦 Vendor ${index + 1} raw data:`, vendor);
-          console.log(`📦 Vendor ${index + 1} - gstin field:`, vendor.gstin, '| gstin_number:', vendor.gstin_number);
-          console.log(`📦 Vendor ${index + 1} - state field:`, vendor.state);
-          console.log(`📦 Vendor ${index + 1} - city field:`, vendor.city);
           
           const transformed = {
             id: vendor.id,
@@ -88,16 +70,11 @@ export const VendorList: React.FC<VendorListProps> = ({ users, setUsers }) => {
             address: vendor.address || '',
           };
           
-          console.log(`📦 Vendor ${index + 1} transformed:`, transformed);
-          console.log(`📦 Vendor ${index + 1} GSTIN value:`, transformed.gstin);
           return transformed;
         });
         
-        console.log('✅ Total vendors transformed:', transformedVendors.length);
-        console.log('✅ Transformed vendors:', transformedVendors);
         setUsers(transformedVendors);
       } catch (err: any) {
-        console.error('❌ Failed to fetch vendors:', err);
         setError(err?.response?.data?.message || err?.message || 'Failed to fetch vendors');
       } finally {
         setLoading(false);
@@ -140,10 +117,8 @@ export const VendorList: React.FC<VendorListProps> = ({ users, setUsers }) => {
         }
       });
       
-      console.log('📦 Updating vendor with data:', apiData);
 
       await patchVendor(id, apiData);
-      console.log('✅ Vendor updated successfully');
       
       // Update local state immediately (optimistic update)
       const updatedUsers = (users || []).map((user) => (user.id === id ? { ...user, ...editedUser } : user));
@@ -180,15 +155,12 @@ export const VendorList: React.FC<VendorListProps> = ({ users, setUsers }) => {
         }));
         
         setUsers(transformedVendors);
-        console.log('✅ Vendor list refreshed from API');
-      } catch (refreshErr) {
-        console.error('⚠️ Failed to refresh vendors (but update was successful):', refreshErr);
+        } catch (refreshErr) {
       }
       
       setEditingId(null);
       setEditedUser({});
     } catch (err: any) {
-      console.error('Failed to update vendor:', err);
       setError(err?.response?.data?.message || err?.message || 'Failed to update vendor');
     } finally {
       setSaving(false);
@@ -206,7 +178,6 @@ export const VendorList: React.FC<VendorListProps> = ({ users, setUsers }) => {
       await deleteVendor(id);
       setUsers((users || []).filter((user) => user.id !== id));
     } catch (err: any) {
-      console.error('Failed to delete vendor:', err);
       setError(err?.response?.data?.message || err?.message || 'Failed to delete vendor');
     } finally {
       setDeleting(null);

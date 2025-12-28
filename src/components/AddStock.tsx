@@ -48,9 +48,7 @@ export const AddStock: React.FC<AddStockProps> = ({ setStocks }) => {
         remark: formData.remark || ''
       };
 
-      console.log('📦 Adding stock with data:', apiData);
       const response = await addStock(apiData);
-      console.log('✅ Stock added successfully:', response.data);
 
       // Reset form
       setFormData({
@@ -70,10 +68,6 @@ export const AddStock: React.FC<AddStockProps> = ({ setStocks }) => {
         setSuccess('');
       }, 3000);
     } catch (err: any) {
-      console.error('❌ Error adding stock:', err);
-      console.error('❌ Error response:', err?.response);
-      console.error('❌ Error data:', err?.response?.data);
-      console.error('❌ Error status:', err?.response?.status);
       
       let errorMessage = 'Error adding stock. Please try again.';
       

@@ -44,9 +44,7 @@ const AddBooking: React.FC<AddBookingProps> = ({ bookings, setBookings }) => {
         status: formData.status,
       };
 
-      console.log('📅 Adding booking with data:', apiData);
       const response = await addBooking(apiData);
-      console.log('✅ Booking added successfully:', response.data);
 
       // Update local state with the new booking
       const newBooking = {
@@ -75,7 +73,6 @@ const AddBooking: React.FC<AddBookingProps> = ({ bookings, setBookings }) => {
       // Clear success message after 3 seconds
       setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
-      console.error('❌ Error adding booking:', err);
       const errorMessage = err?.response?.data?.message || 
                           err?.response?.data?.detail || 
                           err?.message || 

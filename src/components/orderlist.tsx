@@ -93,7 +93,6 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
         
         setItems(transformedOrders);
       } catch (err: any) {
-        console.error('Failed to fetch orders:', err);
         setError(err?.response?.data?.message || err?.message || 'Failed to fetch orders');
       } finally {
         setLoading(false);
@@ -158,8 +157,6 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
         }
       });
 
-      console.log('📦 Updating order with data:', apiData);
-      console.log('📦 Order ID:', editId);
       
       await patchOrder(editId, apiData);
       
@@ -210,7 +207,6 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
           
           setItems(transformedOrders);
         } catch (fetchErr) {
-          console.error('Failed to refresh orders:', fetchErr);
         }
       };
       
@@ -219,10 +215,6 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
       setEditId(null);
       setEditFormData({});
     } catch (err: any) {
-      console.error('❌ Failed to update order:', err);
-      console.error('❌ Error response:', err?.response);
-      console.error('❌ Error data:', err?.response?.data);
-      console.error('❌ Error status:', err?.response?.status);
       
       let errorMessage = 'Failed to update order. Please try again.';
       
@@ -262,7 +254,6 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
       await deleteOrder(id);
       setItems(items.filter((item) => item.id !== id));
     } catch (err: any) {
-      console.error('Failed to delete order:', err);
       setError(err?.response?.data?.message || err?.message || 'Failed to delete order');
     } finally {
       setDeleting(null);

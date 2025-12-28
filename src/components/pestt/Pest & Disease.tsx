@@ -14,12 +14,16 @@ import {
   WeatherData,
   PestDetectionData 
 } from './meter/riskAssessmentService';
+import { useAppContext } from '../../context/AppContext';
+import { useFarmerProfile } from '../../hooks/useFarmerProfile';
 import {
   getCurrentMonthLower,
   categorizeWeedsBySeason,
 } from './meter/weedRiskUtils';
 
 export const PestDisease: React.FC = () => {
+  const { selectedPlotName, setSelectedPlotName } = useAppContext();
+  const { profile, loading: profileLoading } = useFarmerProfile();
   const [riskAssessment, setRiskAssessment] = useState<RiskAssessmentResult | null>(null);
   const [pestDetectionData, setPestDetectionData] = useState<PestDetectionData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -31,7 +35,7 @@ export const PestDisease: React.FC = () => {
 
   useEffect(() => {
     loadRiskAssessment();
-  }, []);
+  }, [selectedPlotName]);
 
   const loadRiskAssessment = async () => {
     try {
@@ -40,11 +44,15 @@ export const PestDisease: React.FC = () => {
       // Fetch plantation date, weather data, and pest detection data
       const plantationDate = await fetchPlantationDate();
       const weatherData = await fetchCurrentWeather();
-      const pestData = await fetchPestDetectionData();
+      const pestData = await fetchPestDetectionData(selectedPlotName || undefined);
       
       // Generate risk assessment
       const assessment = await generateRiskAssessment(plantationDate, weatherData);
-      setRiskAssessment(assessment);
+      
+      // Modify assessment based on API percentages
+      const modifiedAssessment = modifyAssessmentWithAPIData(assessment, pestData);
+      
+      setRiskAssessment(modifiedAssessment);
       setPestDetectionData(pestData);
       
     } catch (error) {
@@ -52,6 +60,60 @@ export const PestDisease: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Modify risk assessment to include pests/diseases based on API percentages
+  const modifyAssessmentWithAPIData = (assessment: RiskAssessmentResult, pestData: PestDetectionData): RiskAssessmentResult => {
+    const modified = { ...assessment };
+    
+    // Add pests to High Risk based on API percentages
+    if (pestData.chewing_affected_pixel_percentage > 0) {
+      const chewingPests = ['Early shoot borer', 'Internode borer', 'Top shoot borer'];
+      chewingPests.forEach(pestName => {
+        if (!modified.pests.High.includes(pestName)) {
+          modified.pests.High.push(pestName);
+          // Remove from other categories if present
+          modified.pests.Moderate = modified.pests.Moderate.filter(p => p !== pestName);
+          modified.pests.Low = modified.pests.Low.filter(p => p !== pestName);
+        }
+      });
+    }
+    
+    if (pestData.sucking_affected_pixel_percentage > 0) {
+      const suckingPests = ['Sugarcane woolly aphids', 'Mealy bug', 'Whitefly', 'Sugarcane scale insect', 'Sugarcane pyrilla'];
+      suckingPests.forEach(pestName => {
+        if (!modified.pests.High.includes(pestName)) {
+          modified.pests.High.push(pestName);
+          modified.pests.Moderate = modified.pests.Moderate.filter(p => p !== pestName);
+          modified.pests.Low = modified.pests.Low.filter(p => p !== pestName);
+        }
+      });
+    }
+    
+    if (pestData.SoilBorn_affected_pixel_percentage > 0) {
+      const soilBornePests = ['White grub', 'Termites'];
+      soilBornePests.forEach(pestName => {
+        if (!modified.pests.High.includes(pestName)) {
+          modified.pests.High.push(pestName);
+          modified.pests.Moderate = modified.pests.Moderate.filter(p => p !== pestName);
+          modified.pests.Low = modified.pests.Low.filter(p => p !== pestName);
+        }
+      });
+    }
+    
+    // Add diseases to High Risk based on Fungi percentage
+    if (pestData.fungi_affected_pixel_percentage > 0) {
+      const fungalDiseases = ['Red Rot', 'Rust'];
+      fungalDiseases.forEach(diseaseName => {
+        if (!modified.diseases.High.includes(diseaseName)) {
+          modified.diseases.High.push(diseaseName);
+          modified.diseases.Moderate = modified.diseases.Moderate.filter(d => d !== diseaseName);
+          modified.diseases.Low = modified.diseases.Low.filter(d => d !== diseaseName);
+        }
+      });
+    }
+    
+    return modified;
   };
 
   const getRiskCounts = () => {
@@ -75,32 +137,38 @@ export const PestDisease: React.FC = () => {
   const getDiseaseRiskTags = () => {
     if (!riskAssessment) return { high: [], moderate: [], low: [] };
     
+    // Fungal diseases that should show fungi percentage
+    const fungalDiseaseNames = ['Red Rot', 'Rust', 'Smut', 'Wilt', 'Downy Mildew'];
+    
     const diseasesByRisk = { 
       high: riskAssessment.diseases.High.map(name => {
         const disease = diseasesData.find(d => d.name === name);
+        const isFungal = fungalDiseaseNames.includes(name);
         return {
           name: disease?.name || name,
           image: disease?.image || '/Image/wilt.png',
           months: disease?.months || [],
-          fungiPercentage: name === 'Red Rot' && pestDetectionData ? pestDetectionData.fungi_affected_pixel_percentage : undefined
+          fungiPercentage: isFungal && pestDetectionData ? pestDetectionData.fungi_affected_pixel_percentage : undefined
         };
       }), 
       moderate: riskAssessment.diseases.Moderate.map(name => {
         const disease = diseasesData.find(d => d.name === name);
+        const isFungal = fungalDiseaseNames.includes(name);
         return {
           name: disease?.name || name,
           image: disease?.image || '/Image/wilt.png',
           months: disease?.months || [],
-          fungiPercentage: name === 'Red Rot' && pestDetectionData ? pestDetectionData.fungi_affected_pixel_percentage : undefined
+          fungiPercentage: isFungal && pestDetectionData ? pestDetectionData.fungi_affected_pixel_percentage : undefined
         };
       }), 
       low: riskAssessment.diseases.Low.map(name => {
         const disease = diseasesData.find(d => d.name === name);
+        const isFungal = fungalDiseaseNames.includes(name);
         return {
           name: disease?.name || name,
           image: disease?.image || '/Image/wilt.png',
           months: disease?.months || [],
-          fungiPercentage: name === 'Red Rot' && pestDetectionData ? pestDetectionData.fungi_affected_pixel_percentage : undefined
+          fungiPercentage: isFungal && pestDetectionData ? pestDetectionData.fungi_affected_pixel_percentage : undefined
         };
       }) 
     };
@@ -171,6 +239,52 @@ export const PestDisease: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-3 sm:p-4 md:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
+        {/* Plot Selector - Top Left */}
+        {profile && !profileLoading && (
+          <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+            <div className="flex items-center gap-4 flex-wrap">
+              <label className="font-semibold text-gray-700">Select Plot:</label>
+              <select
+                value={selectedPlotName || ""}
+                onChange={(e) => {
+                  setSelectedPlotName(e.target.value);
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {profile.plots?.map(plot => {
+                  let displayName = '';
+                  
+                  if (plot.gat_number && plot.plot_number && 
+                      plot.gat_number.trim() !== "" && plot.plot_number.trim() !== "" &&
+                      !plot.gat_number.startsWith('GAT_') && !plot.plot_number.startsWith('PLOT_')) {
+                    displayName = `${plot.gat_number}_${plot.plot_number}`;
+                  } else if (plot.gat_number && plot.gat_number.trim() !== "" && !plot.gat_number.startsWith('GAT_')) {
+                    displayName = plot.gat_number;
+                  } else if (plot.plot_number && plot.plot_number.trim() !== "" && !plot.plot_number.startsWith('PLOT_')) {
+                    displayName = plot.plot_number;
+                  } else {
+                    const village = plot.address?.village;
+                    const taluka = plot.address?.taluka;
+                    
+                    if (village) {
+                      displayName = `Plot in ${village}`;
+                      if (taluka) displayName += `, ${taluka}`;
+                    } else {
+                      displayName = 'Plot (No GAT/Plot Number)';
+                    }
+                  }
+                  
+                  return (
+                    <option key={plot.fastapi_plot_id} value={plot.fastapi_plot_id}>
+                      {displayName}
+                    </option>
+                  );
+                }) || []}
+              </select>
+            </div>
+          </div>
+        )}
+        
         <div className="mb-6 sm:mb-8">
           <h2 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-800 text-center mb-4 sm:mb-6 px-2">
             Risk Assessment

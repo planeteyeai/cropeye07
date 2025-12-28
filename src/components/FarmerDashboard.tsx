@@ -32,6 +32,7 @@ import {
 import axios from "axios";
 import { getCache, setCache } from "../utils/cache";
 import { useFarmerProfile } from "../hooks/useFarmerProfile";
+import { useAppContext } from "../context/AppContext";
 import CommonSpinner from "./CommanSpinner";
 
 // Type definitions
@@ -196,6 +197,7 @@ const FarmerDashboard: React.FC = () => {
     loading: profileLoading,
     getFarmerFullName,
   } = useFarmerProfile();
+  const { selectedPlotName, setSelectedPlotName } = useAppContext();
 
   const [currentPlotId, setCurrentPlotId] = useState<string | null>(null);
   const [showDebugInfo, setShowDebugInfo] = useState(false);
@@ -854,6 +856,52 @@ const FarmerDashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-3">
       <div className="max-w-7xl mx-auto space-y-4">
+        {/* Plot Selector - Top Left */}
+        {profile && !profileLoading && (
+          <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+            <div className="flex items-center gap-4 flex-wrap">
+              <label className="font-semibold text-gray-700">Select Plot:</label>
+              <select
+                value={selectedPlotName || ""}
+                onChange={(e) => {
+                  setSelectedPlotName(e.target.value);
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {profile.plots?.map(plot => {
+                  let displayName = '';
+                  
+                  if (plot.gat_number && plot.plot_number && 
+                      plot.gat_number.trim() !== "" && plot.plot_number.trim() !== "" &&
+                      !plot.gat_number.startsWith('GAT_') && !plot.plot_number.startsWith('PLOT_')) {
+                    displayName = `${plot.gat_number}_${plot.plot_number}`;
+                  } else if (plot.gat_number && plot.gat_number.trim() !== "" && !plot.gat_number.startsWith('GAT_')) {
+                    displayName = plot.gat_number;
+                  } else if (plot.plot_number && plot.plot_number.trim() !== "" && !plot.plot_number.startsWith('PLOT_')) {
+                    displayName = plot.plot_number;
+                  } else {
+                    const village = plot.address?.village;
+                    const taluka = plot.address?.taluka;
+                    
+                    if (village) {
+                      displayName = `Plot in ${village}`;
+                      if (taluka) displayName += `, ${taluka}`;
+                    } else {
+                      displayName = 'Plot (No GAT/Plot Number)';
+                    }
+                  }
+                  
+                  return (
+                    <option key={plot.fastapi_plot_id} value={plot.fastapi_plot_id}>
+                      {displayName}
+                    </option>
+                  );
+                }) || []}
+              </select>
+            </div>
+          </div>
+        )}
+        
         {/* Debug Info Panel */}
         {showDebugInfo && (
           <div className="bg-gray-900 rounded-xl shadow-lg p-4 border border-gray-700">

@@ -91,7 +91,6 @@ export const Header: React.FC<HeaderProps> = ({
       setUserLocation(location);
       setLocationPermission("granted");
       setShowLocationPrompt(false);
-      console.log("📍 User location obtained:", location);
     } catch (error) {
       console.error("📍 Location access denied or failed:", error);
       setLocationPermission("denied");
@@ -105,16 +104,8 @@ export const Header: React.FC<HeaderProps> = ({
     longitude: number;
     source: string;
   }> => {
-    console.log("🌤️ ===== LOCATION DEBUG START =====");
-    console.log("🌤️ User role:", userRole);
-    console.log("🌤️ Farmer profile data exists:", !!farmerProfileData);
-    console.log("🌤️ Farmer profile loading:", farmerProfileLoading);
-    console.log("🌤️ User location exists:", !!userLocation);
-    console.log("🌤️ Location permission:", locationPermission);
-
     // For farmers, prioritize farm location over current location
     if (userRole === "farmer") {
-      console.log("🌤️ Processing FARMER location logic...");
 
       // First try farm location
       if (
@@ -122,72 +113,42 @@ export const Header: React.FC<HeaderProps> = ({
         farmerProfileData.plots &&
         farmerProfileData.plots.length > 0
       ) {
-        console.log("🌤️ Farmer has plots:", farmerProfileData.plots.length);
         const firstPlot = farmerProfileData.plots[0];
-        console.log("🌤️ First plot data:", firstPlot);
         const coordinates = firstPlot.coordinates?.location?.coordinates;
-        console.log("🌤️ Plot coordinates:", coordinates);
 
         if (coordinates && coordinates.length === 2) {
           const [longitude, latitude] = coordinates;
-          console.log("🌤️ ✅ USING FARMER FARM LOCATION:", {
-            latitude,
-            longitude,
-          });
-          console.log("🌤️ ===== LOCATION DEBUG END =====");
           return { latitude, longitude, source: "farm" };
-        } else {
-          console.log("🌤️ ❌ Invalid farm coordinates:", coordinates);
         }
-      } else {
-        console.log("🌤️ ❌ No farmer profile data or plots available");
-        console.log("🌤️ Farmer profile data:", farmerProfileData);
       }
 
       // If no farm location, try current location
       if (userLocation) {
-        console.log(
-          "🌤️ ⚠️ USING FARMER CURRENT LOCATION (no farm location available):",
-          userLocation
-        );
-        console.log("🌤️ ===== LOCATION DEBUG END =====");
         return { ...userLocation, source: "current" };
       }
 
       // If no location available, show prompt
       if (locationPermission === "prompt") {
-        console.log("🌤️ ⚠️ No location available, showing prompt");
         setShowLocationPrompt(true);
         throw new Error("Location permission required");
       }
 
       // Fallback to default location
-      console.log("🌤️ ⚠️ USING DEFAULT LOCATION FOR FARMER (Pune, India)");
-      console.log("🌤️ ===== LOCATION DEBUG END =====");
       return { latitude: 18.5204, longitude: 73.8567, source: "default" };
     }
 
     // For non-farmers (manager, field officer, owner), use current location
-    console.log("🌤️ Processing NON-FARMER location logic...");
-    console.log("🌤️ User role for non-farmer:", userRole);
-
     if (userLocation) {
-      console.log("🌤️ ✅ USING USER CURRENT LOCATION:", userLocation);
-      console.log("🌤️ ===== LOCATION DEBUG END =====");
       return { ...userLocation, source: "current" };
     }
 
     // If no location available, show prompt
     if (locationPermission === "prompt") {
-      console.log("🌤️ ⚠️ No location available, showing prompt");
       setShowLocationPrompt(true);
       throw new Error("Location permission required");
     }
 
     // Fallback to default location (Pune, India)
-    console.log("🌤️ ⚠️ USING DEFAULT LOCATION (Pune, India)");
-    console.log("🌤️ Default coordinates: 18.5204, 73.8567");
-    console.log("🌤️ ===== LOCATION DEBUG END =====");
     return { latitude: 18.5204, longitude: 73.8567, source: "default" };
   };
 
@@ -196,28 +157,11 @@ export const Header: React.FC<HeaderProps> = ({
     const loadUserData = () => {
       const currentUserData = getUserData();
       setUserData(currentUserData);
-      console.log("🌤️ User data loaded:", currentUserData);
     };
 
     loadUserData();
   }, []);
 
-  // Debug farmer profile data
-  useEffect(() => {
-    if (userRole === "farmer") {
-      console.log("🌤️ Farmer profile data:", farmerProfileData);
-      console.log("🌤️ Farmer profile loading:", farmerProfileLoading);
-      if (farmerProfileData && farmerProfileData.plots) {
-        console.log("🌤️ Farmer plots:", farmerProfileData.plots);
-        if (farmerProfileData.plots.length > 0) {
-          console.log(
-            "🌤️ First plot coordinates:",
-            farmerProfileData.plots[0].coordinates
-          );
-        }
-      }
-    }
-  }, [farmerProfileData, farmerProfileLoading, userRole]);
 
   useEffect(() => {
     const fetchWeather = async () => {
@@ -227,7 +171,6 @@ export const Header: React.FC<HeaderProps> = ({
 
         // For farmers, wait for profile to load
         if (userRole === "farmer" && farmerProfileLoading) {
-          console.log("🌤️ Waiting for farmer profile to load...");
           return;
         }
 
@@ -235,43 +178,10 @@ export const Header: React.FC<HeaderProps> = ({
         const locationData = await getLocationForUser();
         const { latitude, longitude, source } = locationData;
 
-        console.log("🌤️ ===== WEATHER FETCH DEBUG =====");
-        console.log("🌤️ Location source:", source);
-        console.log("🌤️ Coordinates being used:", { latitude, longitude });
-        console.log("🌤️ Fetching weather for location:", {
-          latitude,
-          longitude,
-          source,
-        });
-
         // Check cache first
         const cacheKey = `weather_${latitude}_${longitude}`;
         const cached = getCached(cacheKey);
-        console.log("🌤️ Cache key:", cacheKey);
-        console.log("🌤️ Cached data exists:", !!cached);
         if (cached) {
-          console.log("🌤️ ===== USING CACHED WEATHER DATA =====");
-          console.log("🌤️ Cached weather data:", cached.data);
-          console.log("🌤️ Cache timestamp:", new Date(cached.timestamp));
-          console.log(
-            "🌤️ Expected for field officer: lat=19.95, lon=73.833, temp=26.7°C, humidity=75%, wind=12.2km/h, precip=1.91mm"
-          );
-          console.log(
-            "🌤️ Cached actual: lat=" +
-              cached.data.latitude +
-              ", lon=" +
-              cached.data.longitude +
-              ", temp=" +
-              cached.data.temperature_c +
-              "°C, humidity=" +
-              cached.data.humidity +
-              "%, wind=" +
-              cached.data.wind_kph +
-              "km/h, precip=" +
-              cached.data.precip_mm +
-              "mm"
-          );
-          console.log("🌤️ ===== CACHED DATA END =====");
           setWeather(cached.data);
           setError(null);
           setLoading(false);
@@ -280,27 +190,6 @@ export const Header: React.FC<HeaderProps> = ({
 
         // Fetch weather data using the new service
         const weatherData = await fetchCurrentWeather(latitude, longitude);
-        console.log("🌤️ ===== WEATHER DATA RECEIVED =====");
-        console.log("🌤️ Weather data received:", weatherData);
-        console.log(
-          "🌤️ Expected for field officer: lat=19.95, lon=73.833, temp=26.7°C, humidity=75%, wind=12.2km/h, precip=1.91mm"
-        );
-        console.log(
-          "🌤️ Actual received: lat=" +
-            weatherData.latitude +
-            ", lon=" +
-            weatherData.longitude +
-            ", temp=" +
-            weatherData.temperature_c +
-            "°C, humidity=" +
-            weatherData.humidity +
-            "%, wind=" +
-            weatherData.wind_kph +
-            "km/h, precip=" +
-            weatherData.precip_mm +
-            "mm"
-        );
-        console.log("🌤️ ===== WEATHER DATA END =====");
 
         setWeather(weatherData);
         setError(null);

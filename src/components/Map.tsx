@@ -202,7 +202,6 @@ const CustomTileLayer: React.FC<{
       tileSize={256}
       eventHandlers={{
         tileerror: (e: any) => console.error('Tile loading error:', e),
-        tileload: (e: any) => console.log('Tile loaded successfully'),
       }}
     />
   );
@@ -284,7 +283,6 @@ const Map: React.FC<MapProps> = ({
   // Fetch data when currentEndDate changes for Growth, Water Uptake, Soil Moisture, and PEST layers
   useEffect(() => {
     if (selectedPlotName && (activeLayer === "Growth" || activeLayer === "Water Uptake" || activeLayer === "Soil Moisture" || activeLayer === "PEST")) {
-      console.log("Fetching data for layer:", activeLayer, "plot:", selectedPlotName, "end_date:", currentEndDate);
       if (activeLayer === "Growth") {
         fetchGrowthData(selectedPlotName);
       } else if (activeLayer === "Water Uptake") {
@@ -396,28 +394,50 @@ const Map: React.FC<MapProps> = ({
   const fetchGrowthData = async (plotName: string) => {
     if (!plotName) return;
 
+    // Use proxy in development to avoid CORS issues, direct URL in production
+    const baseUrl = import.meta.env.DEV 
+      ? '/api/dev-plot' 
+      : 'https://dev-plot.cropeye.ai';
+    const url = `${baseUrl}/analyze_Growth?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`;
+    
     try {
-      console.log("Fetching growth data for plot:", plotName, "end_date:", currentEndDate);
-      const resp = await fetch(
-        `https://dev-plot.cropeye.ai/analyze_Growth?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`,
-        {
+      
+      // Try fetch with explicit CORS mode and proper headers matching curl command
+      const resp = await fetch(url, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "omit",
+        headers: { 
+          "Accept": "application/json"
+        },
+        // Note: Not setting body at all, let browser handle empty POST body
+      });
 
-      if (!resp.ok) throw new Error(`Growth API failed: ${resp.status}`);
+
+      if (!resp.ok) {
+        const errorText = await resp.text().catch(() => 'Unable to read error response');
+        console.error("Growth API error response:", errorText);
+        throw new Error(`Growth API failed: ${resp.status} ${resp.statusText} - ${errorText}`);
+      }
 
       const data = await resp.json();
-      console.log("Growth API response:", data);
       setGrowthData(data);
       
       // Preserve plot boundary from growth data if not already set
       if (!plotBoundary && data?.features?.[0]?.geometry) {
         setPlotBoundary(data.features[0]);
       }
-    } catch (err) {
-      console.error("Error fetching growth data:", err);
+    } catch (err: any) {
+      console.error("Error fetching growth data:", {
+        error: err,
+        message: err?.message,
+        name: err?.name,
+        stack: err?.stack,
+        url: url,
+        plotName: plotName,
+        endDate: currentEndDate
+      });
       setGrowthData(null);
     }
   };
@@ -425,28 +445,50 @@ const Map: React.FC<MapProps> = ({
   const fetchWaterUptakeData = async (plotName: string) => {
     if (!plotName) return;
 
-    try {
-      console.log("Fetching water uptake data for plot:", plotName, "end_date:", currentEndDate);
-      const resp = await fetch(
-        `https://dev-plot.cropeye.ai/wateruptake?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+    // Use proxy in development to avoid CORS issues, direct URL in production
+    const baseUrl = import.meta.env.DEV 
+      ? '/api/dev-plot' 
+      : 'https://dev-plot.cropeye.ai';
+    const url = `${baseUrl}/wateruptake?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`;
 
-      if (!resp.ok) throw new Error(`Water Uptake API failed: ${resp.status}`);
+    try {
+      
+      // Try fetch with explicit CORS mode and proper headers matching curl command
+      const resp = await fetch(url, {
+          method: "POST",
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "omit",
+        headers: { 
+          "Accept": "application/json"
+        },
+        // Note: Not setting body at all, let browser handle empty POST body
+      });
+
+
+      if (!resp.ok) {
+        const errorText = await resp.text().catch(() => 'Unable to read error response');
+        console.error("Water Uptake API error response:", errorText);
+        throw new Error(`Water Uptake API failed: ${resp.status} ${resp.statusText} - ${errorText}`);
+      }
 
       const data = await resp.json();
-      console.log("Water Uptake API response:", data);
       setWaterUptakeData(data);
       
       // Preserve plot boundary from water uptake data if not already set
       if (!plotBoundary && data?.features?.[0]?.geometry) {
         setPlotBoundary(data.features[0]);
       }
-    } catch (err) {
-      console.error("Error fetching water uptake data:", err);
+    } catch (err: any) {
+      console.error("Error fetching water uptake data:", {
+        error: err,
+        message: err?.message,
+        name: err?.name,
+        stack: err?.stack,
+        url: url,
+        plotName: plotName,
+        endDate: currentEndDate
+      });
       setWaterUptakeData(null);
     }
   };
@@ -454,28 +496,50 @@ const Map: React.FC<MapProps> = ({
   const fetchSoilMoistureData = async (plotName: string) => {
     if (!plotName) return;
 
-    try {
-      console.log("Fetching soil moisture data for plot:", plotName, "end_date:", currentEndDate);
-      const resp = await fetch(
-        `https://dev-plot.cropeye.ai/SoilMoisture?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+    // Use proxy in development to avoid CORS issues, direct URL in production
+    const baseUrl = import.meta.env.DEV 
+      ? '/api/dev-plot' 
+      : 'https://dev-plot.cropeye.ai';
+    const url = `${baseUrl}/SoilMoisture?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`;
 
-      if (!resp.ok) throw new Error(`Soil Moisture API failed: ${resp.status}`);
+    try {
+      
+      // Try fetch with explicit CORS mode and proper headers matching curl command
+      const resp = await fetch(url, {
+          method: "POST",
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "omit",
+        headers: { 
+          "Accept": "application/json"
+        },
+        // Note: Not setting body at all, let browser handle empty POST body
+      });
+
+
+      if (!resp.ok) {
+        const errorText = await resp.text().catch(() => 'Unable to read error response');
+        console.error("Soil Moisture API error response:", errorText);
+        throw new Error(`Soil Moisture API failed: ${resp.status} ${resp.statusText} - ${errorText}`);
+      }
 
       const data = await resp.json();
-      console.log("Soil Moisture API response:", data);
       setSoilMoistureData(data);
       
       // Preserve plot boundary from soil moisture data if not already set
       if (!plotBoundary && data?.features?.[0]?.geometry) {
         setPlotBoundary(data.features[0]);
       }
-    } catch (err) {
-      console.error("Error fetching soil moisture data:", err);
+    } catch (err: any) {
+      console.error("Error fetching soil moisture data:", {
+        error: err,
+        message: err?.message,
+        name: err?.name,
+        stack: err?.stack,
+        url: url,
+        plotName: plotName,
+        endDate: currentEndDate
+      });
       setSoilMoistureData(null);
     }
   };
@@ -484,17 +548,33 @@ const Map: React.FC<MapProps> = ({
     setLoading(true);
     setError(null);
 
-    try {
       const currentDate = getCurrentDate();
-      const resp = await fetch(
-        `https://dev-plot.cropeye.ai/analyze_Growth?plot_name=${plotName}&end_date=${currentDate}&days_back=7`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+    // Use proxy in development to avoid CORS issues, direct URL in production
+    const baseUrl = import.meta.env.DEV 
+      ? '/api/dev-plot' 
+      : 'https://dev-plot.cropeye.ai';
+    const url = `${baseUrl}/analyze_Growth?plot_name=${plotName}&end_date=${currentDate}&days_back=7`;
 
-      if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
+    try {
+      
+      // Try fetch with explicit CORS mode and proper headers matching curl command
+      const resp = await fetch(url, {
+          method: "POST",
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "omit",
+        headers: { 
+          "Accept": "application/json"
+        },
+        // Note: Not setting body at all, let browser handle empty POST body
+      });
+
+
+      if (!resp.ok) {
+        const errorText = await resp.text().catch(() => 'Unable to read error response');
+        console.error("Plot API error response:", errorText);
+        throw new Error(`${resp.status} ${resp.statusText} - ${errorText}`);
+      }
 
       const data = await resp.json();
       setPlotData(data);
@@ -504,8 +584,16 @@ const Map: React.FC<MapProps> = ({
         setPlotBoundary(data.features[0]);
       }
     } catch (err: any) {
-      // console.error(err);
-      setError(err.message);
+      console.error("Error fetching plot data:", {
+        error: err,
+        message: err?.message,
+        name: err?.name,
+        stack: err?.stack,
+        url: url,
+        plotName: plotName,
+        endDate: currentDate
+      });
+      setError(err?.message || "Failed to fetch plot data");
       // Don't clear plotData or plotBoundary on error - keep existing plot visible
       // Only clear if this is a new plot selection
       if (!plotBoundary || plotBoundary.properties?.plot_name !== plotName) {
@@ -582,20 +670,34 @@ const Map: React.FC<MapProps> = ({
       return;
     }
 
-    try {
-      console.log("Fetching pest detection for plot:", plotName, "end_date:", currentEndDate);
-      const resp = await fetch(
-        `https://dev-plot.cropeye.ai/pest-detection?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+    // Use proxy in development to avoid CORS issues, direct URL in production
+    const baseUrl = import.meta.env.DEV 
+      ? '/api/dev-plot' 
+      : 'https://dev-plot.cropeye.ai';
+    const url = `${baseUrl}/pest-detection?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`;
 
-      if (!resp.ok) throw new Error(`Pest detection API failed: ${resp.status}`);
+    try {
+      
+      // Try fetch with explicit CORS mode and proper headers matching curl command
+      const resp = await fetch(url, {
+          method: "POST",
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "omit",
+        headers: { 
+          "Accept": "application/json"
+        },
+        // Note: Not setting body at all, let browser handle empty POST body
+      });
+
+
+      if (!resp.ok) {
+        const errorText = await resp.text().catch(() => 'Unable to read error response');
+        console.error("Pest detection API error response:", errorText);
+        throw new Error(`Pest detection API failed: ${resp.status} ${resp.statusText} - ${errorText}`);
+      }
 
       const data = await resp.json();
-      console.log("Pest detection API response:", data);
       setPestData(data);
       
       // Preserve plot boundary from pest data if not already set
@@ -626,8 +728,16 @@ const Map: React.FC<MapProps> = ({
           suckingPixels: data.pixel_summary.sucking_affected_pixel_count || 0,
         });
       }
-    } catch (err) {
-      // console.error("Error in fetchPestData:", err);
+    } catch (err: any) {
+      console.error("Error in fetchPestData:", {
+        error: err,
+        message: err?.message,
+        name: err?.name,
+        stack: err?.stack,
+        url: url,
+        plotName: plotName,
+        endDate: currentEndDate
+      });
       setPestData(null);
     }
   };
@@ -681,6 +791,9 @@ const Map: React.FC<MapProps> = ({
 
     return rawUrl;
   };
+
+  // Memoize active URL to track changes
+  const activeUrl = useMemo(() => getActiveLayerUrl(), [activeLayer, pestData, growthData, waterUptakeData, soilMoistureData]);
 
   // Use plotBoundary if available (persists across layer changes), otherwise fall back to plotData
   const currentPlotFeature = plotBoundary || plotData?.features?.[0];
@@ -1382,21 +1495,13 @@ const Map: React.FC<MapProps> = ({
             <SetFixedZoom coordinates={(plotBoundary || currentPlotFeature).geometry.coordinates[0]} />
           )}
 
-          {(() => {
-            const activeUrl = getActiveLayerUrl();
-            console.log('Rendering active layer with URL:', activeUrl);
-            if (!activeUrl) {
-              console.warn(`[Map] Skipping TileLayer render for ${activeLayer} due to missing/invalid tile_url`);
-              return null;
-            }
-            return (
-              <CustomTileLayer
-                url={activeUrl}
-                opacity={0.7}
-                key={`${activeLayer}-layer-${layerChangeKey}`}
-              />
-            );
-          })()}
+          {activeUrl && (
+            <CustomTileLayer
+              url={activeUrl}
+              opacity={0.7}
+              key={`${activeLayer}-layer-${layerChangeKey}`}
+            />
+          )}
 
           {selectedLegendClass && renderFilteredPixels()}
           {renderPlotBorder()}

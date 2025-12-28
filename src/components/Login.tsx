@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Satellite, Leaf, Mail, Lock } from 'lucide-react';
+import { Satellite, Leaf, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { setAuthData, setRefreshToken } from '../utils/auth';
 import { login } from '../api';
 
@@ -14,6 +14,7 @@ interface LoginProps {
 const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [phone_number, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -209,13 +210,10 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     setError('');
 
     try {
-      console.log('🔐 Attempting login with phone_number:', phone_number.trim());
-      
       // Using the API function to login with email as username
       const response = await login(phone_number.trim(), password.trim());
       const result = response.data;
       
-      console.log('✅ Login response received:', result);
       const token = result.access || result.token;
       const refreshToken = result.refresh; // Get refresh token from response
       
@@ -225,7 +223,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
       // User data is already included in the login response
       const userData = result.user;
-      console.log('User data received:', userData);
       
       // Handle role determination from the response format
       let userRole: UserRole;
@@ -258,12 +255,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         username: userData.username ||phone_number,
         id: userData.id || ''
       };
-      
-      console.log('🔐 Storing authentication data:', {
-        token: token ? `${token.substring(0, 20)}...` : 'null',
-        role: userRole,
-        userData: userDataToStore
-      });
       
       // Store refresh token if available
       if (refreshToken) {
@@ -394,20 +385,32 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                           disabled={loading}
                         />
                       </div>
-                    </div>
-                    
+                    </div>                   
                     <div className="relative">
                       <div className="flex items-center border border-gray-300 rounded-lg px-3 py-3 bg-white focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-emerald-500">
                     <Lock className="w-5 h-5 mr-3 text-gray-500" />
                         <input
-                      type="password"
-                      placeholder="Enter password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full outline-none text-gray-700"
+                      className="w-full outline-none text-gray-700 pr-10"
                           required
                           disabled={loading}
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="ml-2 p-1 text-gray-500 hover:text-gray-700 focus:outline-none transition-colors"
+                          disabled={loading}
+                          aria-label={showPassword ? "Hide password" : "Show password"}
+                        >
+                          {showPassword ? (
+                            <EyeOff className="w-5 h-5" />
+                          ) : (
+                            <Eye className="w-5 h-5" />
+                          )}
+                        </button>
                       </div>
                     </div>
                     

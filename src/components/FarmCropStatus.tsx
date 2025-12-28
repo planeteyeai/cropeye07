@@ -232,8 +232,6 @@ const OfficerDashboard: React.FC = () => {
 
   // NEW: Function to set plot coordinates from existing state
   const setPlotCoordinatesFromState = (plotId: string): void => {
-    console.log("Fetching coordinates for plot:", plotId);
-
     // Find the selected farmer and their plot
     const farmer = farmers.find((f) => String(f.id) === selectedFarmerId);
     const plot = farmer?.plots?.find((p: any) => p.fastapi_plot_id === plotId);
@@ -243,20 +241,16 @@ const OfficerDashboard: React.FC = () => {
       if (geom) {
         // The API gives [lng, lat], Leaflet needs [lat, lng]
         const coords = geom.map(([lng, lat]: [number, number]) => [lat, lng]);
-        console.log("Received coordinates from state:", coords);
         setPlotCoordinates(coords);
 
         // Calculate and set map center
         const center = calculateCenter(coords);
-        console.log("Calculated map center:", center);
         setMapCenter(center);
         setMapKey((prev) => prev + 1); // Force map re-render
       } else {
-        console.log("No geometry found in plot boundary");
         setPlotCoordinates([]);
       }
     } else {
-      console.error("Could not find plot or boundary for plotId:", plotId);
       setPlotCoordinates([]);
     }
   };
@@ -264,44 +258,30 @@ const OfficerDashboard: React.FC = () => {
   // Fetch plots when farmer is selected
   useEffect(() => {
     if (selectedFarmerId) {
-      console.log("🔍 Finding farmer with ID:", selectedFarmerId);
-
       const selectedFarmer = farmers.find(
         (f) =>
           String(f.id || f.farmer_id || f.farmerId) === String(selectedFarmerId)
       );
 
       if (selectedFarmer) {
-        console.log("✅ Found selected farmer:", selectedFarmer);
-
         // Extract fastapi_plot_id from plots array
         const farmerPlots = selectedFarmer.plots || [];
         const plotIds = farmerPlots.map((plot: any) => plot.fastapi_plot_id);
-
-        console.log("📍 Farmer plots data:", {
-          plotsArray: farmerPlots,
-          extractedPlotIds: plotIds,
-          plotsCount: plotIds.length,
-        });
 
         setPlots(plotIds);
 
         // Auto-select first plot if available
         if (plotIds.length > 0) {
           const firstPlotId = plotIds[0];
-          console.log("✅ Auto-selecting first plot:", firstPlotId);
           setSelectedPlotId(firstPlotId);
         } else {
-          console.warn("⚠️ No plots found for this farmer");
           setSelectedPlotId("");
         }
       } else {
-        console.warn("⚠️ Farmer not found with ID:", selectedFarmerId);
         setPlots([]);
         setSelectedPlotId("");
       }
     } else {
-      console.log("ℹ️ No farmer selected");
       setPlots([]);
       setSelectedPlotId("");
     }
@@ -377,9 +357,6 @@ const OfficerDashboard: React.FC = () => {
         error.message?.includes("CORS") ||
         error.message?.includes("Access-Control-Allow-Origin")
       ) {
-        console.warn(
-          `CORS error for ${url}. This is a server-side configuration issue.`
-        );
         throw new Error(
           `CORS error: The server at ${
             new URL(url).origin
@@ -394,9 +371,7 @@ const OfficerDashboard: React.FC = () => {
         error.message?.includes("timeout") ||
         error.message?.includes("canceled")
       ) {
-        console.warn(`Request timeout for ${url}`);
         if (retries > 0) {
-          console.log(`Retrying request (${retries} retries left)...`);
           await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait 1 second before retry
           return makeRequestWithRetry(url, retries - 1, timeout);
         }
@@ -410,9 +385,7 @@ const OfficerDashboard: React.FC = () => {
         error.code === "ERR_NETWORK" ||
         error.message?.includes("ERR_FAILED")
       ) {
-        console.warn(`Network error for ${url}:`, error.message);
         if (retries > 0) {
-          console.log(`Retrying request (${retries} retries left)...`);
           await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
           return makeRequestWithRetry(url, retries - 1, timeout);
         }
@@ -423,9 +396,7 @@ const OfficerDashboard: React.FC = () => {
 
       // Handle 504 Gateway Timeout
       if (error.response?.status === 504) {
-        console.warn(`Gateway timeout for ${url}`);
         if (retries > 0) {
-          console.log(`Retrying request (${retries} retries left)...`);
           await new Promise((resolve) => setTimeout(resolve, 2000));
           return makeRequestWithRetry(url, retries - 1, timeout);
         }
@@ -474,10 +445,6 @@ const OfficerDashboard: React.FC = () => {
             setCache(plotSpecificCacheKey, currentPlotData);
           }
         } catch (error: any) {
-          console.warn(
-            "Failed to fetch agroStats, continuing with other data:",
-            error.message
-          );
           if (!allPlotsData) allPlotsData = null;
           if (!currentPlotData) {
             const quotedPlotId = `"${selectedPlotId.replace("_", '"_"')}"`;
@@ -522,7 +489,6 @@ const OfficerDashboard: React.FC = () => {
           harvestData = harvestRes.data;
           setCache(harvestCacheKey, harvestData);
         } catch (harvestErr) {
-          console.error("Error fetching harvest status:", harvestErr);
         }
       }
 
@@ -671,7 +637,6 @@ const OfficerDashboard: React.FC = () => {
         cnRatio: null,
       }));
     } catch (err: any) {
-      console.error("Error fetching data:", err);
       // You could add a toast notification here to inform the user
       // For now, we'll just log the error and continue with partial data
     } finally {
@@ -683,23 +648,6 @@ const OfficerDashboard: React.FC = () => {
   const fetchFarmers = async (): Promise<void> => {
     setLoadingFarmers(true);
     try {
-      console.log("=".repeat(60));
-      console.log(
-        "🔄 FarmCropStatus: Fetching farmers under logged-in field officer..."
-      );
-      console.log(
-        "📍 Endpoint: https://cropeye-server-1.onrender.com/api/farms/recent-farmers/"
-      );
-
-      const token = localStorage.getItem("token");
-      console.log(
-        "🔑 Bearer Token Status:",
-        token ? "✅ Token found in localStorage" : "❌ No token found"
-      );
-      if (token) {
-        console.log("🔑 Token preview:", `${token.substring(0, 30)}...`);
-      }
-
       // Use authenticated API call from api.ts (automatically includes Bearer token)
       const response = await getRecentFarmers();
 
@@ -707,68 +655,18 @@ const OfficerDashboard: React.FC = () => {
       const apiResponse = response.data;
       const farmersData = apiResponse.farmers || apiResponse || [];
 
-      console.log("=".repeat(60));
-      console.log("✅ FarmCropStatus: Raw API response:", apiResponse);
-      console.log("✅ FarmCropStatus: Extracted farmers array:", farmersData);
-      console.log(
-        "📊 FarmCropStatus: Total farmers found:",
-        farmersData.length
-      );
-
-      // Log each farmer with their plots
-      farmersData.forEach((farmer: any, index: number) => {
-        const farmerPlots = farmer.plots || [];
-        const plotIds = farmerPlots.map((plot: any) => plot.fastapi_plot_id);
-
-        console.log(`👨‍🌾 Farmer ${index + 1}:`, {
-          id: farmer.id,
-          name: `${farmer.first_name} ${farmer.last_name}`,
-          email: farmer.email,
-          plotsCount: farmerPlots.length,
-          plotIds: plotIds,
-          firstPlot: farmerPlots[0]?.fastapi_plot_id || null,
-        });
-      });
-
-      console.log(
-        "⚡ Setting farmers state with",
-        farmersData.length,
-        "farmers"
-      );
       setFarmers(farmersData);
-      console.log("✅ Farmers state updated successfully");
 
       // Auto-select first farmer if available
       if (farmersData.length > 0) {
         const firstFarmer = farmersData[0];
         const farmerId = String(firstFarmer.id);
-        const farmerPlots = firstFarmer.plots || [];
-        const plotIds = farmerPlots.map((plot: any) => plot.fastapi_plot_id);
-
-        console.log("✅ FarmCropStatus: Auto-selecting first farmer:", {
-          id: farmerId,
-          name: `${firstFarmer.first_name} ${firstFarmer.last_name}`,
-          email: firstFarmer.email,
-          plotsCount: farmerPlots.length,
-          plotIds: plotIds,
-          firstPlotId: plotIds[0] || null,
-        });
-
         setSelectedFarmerId(farmerId);
-      } else {
-        console.warn(
-          "⚠️ FarmCropStatus: No farmers found under this field officer"
-        );
       }
     } catch (error: any) {
-      console.error("❌ FarmCropStatus: Error fetching farmers:", error);
-      console.error("Error details:", error.response?.data);
-
       // Show user-friendly error message
       if (error.response?.status === 401) {
-        console.error("Authentication error - please login again");
       } else if (error.response?.status === 403) {
-        console.error("Access denied - insufficient permissions");
       }
     } finally {
       setLoadingFarmers(false);
@@ -790,13 +688,10 @@ const OfficerDashboard: React.FC = () => {
 
   // Fetch plot coordinates immediately when plot is selected
   const fetchPlotCoordinates = async (plotId: string): Promise<void> => {
-    console.log("Fetching coordinates for plot:", plotId);
-
     // Check cache first
     if (plotCoordinatesCache.has(plotId)) {
       const cachedCoords = plotCoordinatesCache.get(plotId);
       if (cachedCoords && cachedCoords.length > 0) {
-        console.log("Using cached coordinates for plot:", plotId);
         setPlotCoordinates(cachedCoords);
         // Calculate center from coordinates
         const center = calculateCenter(cachedCoords);
@@ -808,7 +703,6 @@ const OfficerDashboard: React.FC = () => {
 
     try {
       const today = new Date().toISOString().slice(0, 10);
-      console.log("Fetching coordinates from API for plot:", plotId);
       const response = await axios.post(
         `${BASE_URL}/analyze?plot_name=${plotId}&date=${today}`
       );
@@ -816,7 +710,6 @@ const OfficerDashboard: React.FC = () => {
       const geom = response.data?.features?.[0]?.geometry?.coordinates?.[0];
       if (geom) {
         const coords = geom.map(([lng, lat]: [number, number]) => [lat, lng]);
-        console.log("Received coordinates:", coords);
         setPlotCoordinates(coords);
 
         // Cache the coordinates
@@ -824,14 +717,10 @@ const OfficerDashboard: React.FC = () => {
 
         // Calculate and set map center
         const center = calculateCenter(coords);
-        console.log("Calculated map center:", center);
         setMapCenter(center);
         setMapKey((prev) => prev + 1);
-      } else {
-        console.log("No geometry found in response");
       }
     } catch (error) {
-      console.error("Error fetching plot coordinates:", error);
     }
   };
 
@@ -1242,15 +1131,6 @@ const OfficerDashboard: React.FC = () => {
     );
   }
 
-  // Log farmers state before rendering
-  console.log("🎨 FarmCropStatus Render - Current State:", {
-    farmersCount: farmers.length,
-    farmersArray: farmers,
-    selectedFarmerId,
-    selectedPlotId,
-    loadingFarmers,
-    loadingData,
-  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
@@ -1315,10 +1195,6 @@ const OfficerDashboard: React.FC = () => {
                     className="px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white shadow-sm w-full sm:w-64"
                     value={selectedFarmerId}
                     onChange={(e) => {
-                      console.log(
-                        "🔄 Farmer selection changed to:",
-                        e.target.value
-                      );
                       setSelectedFarmerId(e.target.value);
                     }}
                     disabled={loadingFarmers}
@@ -1335,16 +1211,6 @@ const OfficerDashboard: React.FC = () => {
                           const farmerName =
                             `${farmer.first_name} ${farmer.last_name}`.trim();
                           const plotsCount = farmer.plots?.length || 0;
-
-                          console.log(
-                            `🔍 Rendering farmer ${index + 1} in dropdown:`,
-                            {
-                              id: farmerId,
-                              name: farmerName,
-                              email: farmer.email,
-                              plots: plotsCount,
-                            }
-                          );
 
                           return (
                             <option key={`farmer-${farmerId}`} value={farmerId}>
@@ -1368,13 +1234,8 @@ const OfficerDashboard: React.FC = () => {
                     value={selectedPlotId}
                     onChange={(e) => {
                       const newPlotId = e.target.value;
-                      console.log("🔄 Plot selection changed to:", newPlotId);
                       setSelectedPlotId(newPlotId);
                       if (newPlotId) {
-                        console.log(
-                          "📍 Fetching coordinates for plot:",
-                          newPlotId
-                        );
                         // Immediately fetch coordinates and update map
                         fetchPlotCoordinates(newPlotId);
                       }
@@ -1389,10 +1250,6 @@ const OfficerDashboard: React.FC = () => {
                       <>
                         <option value="">Select a plot</option>
                         {plots.map((plotId, index) => {
-                          console.log(
-                            `🔍 Rendering plot ${index + 1}:`,
-                            plotId
-                          );
                           return (
                             <option
                               key={`plot-${plotId}-${index}`}

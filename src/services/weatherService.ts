@@ -22,10 +22,7 @@ export interface WeatherError {
 // Fetch current weather data for given coordinates
 export const fetchCurrentWeather = async (lat: number, lon: number): Promise<WeatherData> => {
   try {
-    console.log('🌤️ Fetching weather data for coordinates:', { lat, lon });
-    
     const apiUrl = ` https://dev-weather.cropeye.ai/current-weather?lat=${lat}&lon=${lon}`;
-    console.log('🌤️ Weather API URL:', apiUrl);
     
     const response = await fetch(apiUrl, {
       method: 'GET',
@@ -37,20 +34,15 @@ export const fetchCurrentWeather = async (lat: number, lon: number): Promise<Wea
       signal: AbortSignal.timeout(10000), // 10 second timeout
     });
 
-    console.log('🌤️ Weather API response status:', response.status);
-
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('🌤️ Weather API error response:', errorText);
       throw new Error(`Weather API error: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
     const weatherData: WeatherData = await response.json();
-    console.log('🌤️ Weather data received:', weatherData);
     
     return weatherData;
   } catch (error: any) {
-    console.error('🌤️ Failed to fetch weather data:', error);
     
     if (error.name === 'AbortError') {
       throw new Error('Weather request timed out. Please try again.');

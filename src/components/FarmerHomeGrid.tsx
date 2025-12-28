@@ -73,7 +73,6 @@ function FarmerHomeGrid() {
   }) => {
     setSoilData(data);
     setSelectedPlotName(data.plotName || null);
-    console.log('Soil data updated:', data);
   };
 
   // New handler for field analysis data
@@ -86,7 +85,6 @@ function FarmerHomeGrid() {
     };
   }) => {
     setFieldAnalysisData(data);
-    console.log('Field analysis data updated:', data);
   };
 
   return (

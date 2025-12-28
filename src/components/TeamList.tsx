@@ -98,7 +98,7 @@ const CATEGORY_INFO: Record<
   },
 };
 
-const REMOTE_API_BASE = 'http://192.168.41.86:8000/api';
+const REMOTE_API_BASE = 'http://192.168.41.93:8000/api';
 const LOCAL_API_BASE = 'http://localhost:8000';
 
 const ensureArray = (payload: any): any[] => {
@@ -194,7 +194,6 @@ const fetchFromEndpointList = async (
       return await tryFetch(path);
     } catch (error: any) {
       lastError = error;
-      console.warn(`Failed remote fetch from ${path}:`, error?.message || error);
     }
   }
 
@@ -203,7 +202,6 @@ const fetchFromEndpointList = async (
       return await tryFetch(path);
     } catch (error: any) {
       lastError = error;
-      console.warn(`Failed local fetch from ${path}:`, error?.message || error);
     }
   }
 
@@ -381,22 +379,8 @@ const fetchTeamConnectData = async (industryId?: number | string): Promise<{
       throw new Error('industry_id is required for team-connect API');
     }
     
-    console.log('📡 Fetching team connect data from API with industry_id:', industryId);
     const response = await getTeamConnect(industryId);
     const data = response?.data;
-    
-    console.log('📡 Team connect API response:', data);
-    console.log('📡 Team connect API response structure:', {
-      hasUsersByRole: !!data?.users_by_role,
-      hasOwners: !!data?.owners || !!data?.users_by_role?.owners,
-      hasFieldOfficers: !!data?.field_officers || !!data?.fieldOfficers || !!data?.users_by_role?.field_officers,
-      hasFarmers: !!data?.farmers || !!data?.users_by_role?.farmers,
-      hasManagers: !!data?.managers || !!data?.users_by_role?.managers,
-      hasResults: !!data?.results,
-      isArray: Array.isArray(data),
-      keys: data ? Object.keys(data) : [],
-      usersByRoleKeys: data?.users_by_role ? Object.keys(data.users_by_role) : [],
-    });
     
     // Handle different response formats
     let ownersRaw: any[] = [];
@@ -410,58 +394,40 @@ const fetchTeamConnectData = async (industryId?: number | string): Promise<{
       if (data.users_by_role) {
         if (Array.isArray(data.users_by_role.owners)) {
           ownersRaw = data.users_by_role.owners;
-          console.log('✅ Found users_by_role.owners array:', ownersRaw.length);
         }
         if (Array.isArray(data.users_by_role.field_officers)) {
           fieldOfficersRaw = data.users_by_role.field_officers;
-          console.log('✅ Found users_by_role.field_officers array:', fieldOfficersRaw.length);
         }
         if (Array.isArray(data.users_by_role.farmers)) {
           farmersRaw = data.users_by_role.farmers;
-          console.log('✅ Found users_by_role.farmers array:', farmersRaw.length);
         }
         if (Array.isArray(data.users_by_role.managers)) {
           managersRaw = data.users_by_role.managers;
-          console.log('✅ Found users_by_role.managers array:', managersRaw.length);
         }
       }
       
       // Format 2: { owners: [], field_officers: [], farmers: [] } (direct format)
       if (Array.isArray(data.owners)) {
         ownersRaw = data.owners;
-        console.log('✅ Found owners array:', ownersRaw.length);
       }
       if (Array.isArray(data.field_officers)) {
         fieldOfficersRaw = data.field_officers;
-        console.log('✅ Found field_officers array:', fieldOfficersRaw.length);
       }
       if (Array.isArray(data.fieldOfficers)) {
         fieldOfficersRaw = data.fieldOfficers;
-        console.log('✅ Found fieldOfficers array:', fieldOfficersRaw.length);
       }
       if (Array.isArray(data.farmers)) {
         farmersRaw = data.farmers;
-        console.log('✅ Found farmers array:', farmersRaw.length);
       }
       if (Array.isArray(data.managers)) {
         managersRaw = data.managers;
-        console.log('✅ Found managers array:', managersRaw.length);
       }
       
       // Format 2: { results: [] } with role field in each item
       if (Array.isArray(data.results)) {
-        console.log('📋 Processing results array:', data.results.length);
         data.results.forEach((user: any) => {
           const roleName = extractRoleName(user).toLowerCase();
           const roleId = user?.role_id ?? user?.role?.id;
-          
-          console.log('👤 User:', {
-            id: user?.id,
-            username: user?.username,
-            roleName,
-            roleId,
-            role: user?.role,
-          });
           
           // Check by role_id first (1=farmer, 2=fieldofficer, 3=manager, 4=owner)
           if (roleId === 4 || roleName.includes('owner') || roleName === 'admin' || roleName === 'administrator') {
@@ -478,7 +444,6 @@ const fetchTeamConnectData = async (industryId?: number | string): Promise<{
       
       // Format 3: Direct array with role field
       if (Array.isArray(data)) {
-        console.log('📋 Processing direct array:', data.length);
         data.forEach((user: any) => {
           const roleName = extractRoleName(user).toLowerCase();
           const roleId = user?.role_id ?? user?.role?.id;
@@ -498,7 +463,6 @@ const fetchTeamConnectData = async (industryId?: number | string): Promise<{
       
       // Format 4: Check for nested data structures (data.data)
       if (data.data && Array.isArray(data.data)) {
-        console.log('📋 Processing nested data.data array:', data.data.length);
         data.data.forEach((user: any) => {
           const roleName = extractRoleName(user).toLowerCase();
           const roleId = user?.role_id ?? user?.role?.id;
@@ -517,12 +481,6 @@ const fetchTeamConnectData = async (industryId?: number | string): Promise<{
       }
     }
     
-    console.log('📊 Raw data counts before mapping:', {
-      owners: ownersRaw.length,
-      fieldOfficers: fieldOfficersRaw.length,
-      farmers: farmersRaw.length,
-      managers: managersRaw.length,
-    });
     
     // Map to TeamMember format
     const owners = ownersRaw.map((user, index) =>
@@ -582,30 +540,9 @@ const fetchTeamConnectData = async (industryId?: number | string): Promise<{
       })
     );
     
-    console.log('✅ Team connect data processed:', {
-      owners: owners.length,
-      fieldOfficers: fieldOfficers.length,
-      farmers: farmers.length,
-      managers: managers.length,
-    });
-    
-    // Log sample data to verify structure
-    if (owners.length > 0) {
-      console.log('👤 Sample owner:', owners[0]);
-    }
-    if (fieldOfficers.length > 0) {
-      console.log('👤 Sample field officer:', fieldOfficers[0]);
-    }
-    if (farmers.length > 0) {
-      console.log('👤 Sample farmer:', farmers[0]);
-    }
-    if (managers.length > 0) {
-      console.log('👤 Sample manager:', managers[0]);
-    }
     
     return { owners, fieldOfficers, farmers, managers };
   } catch (error: any) {
-    console.error('❌ Error fetching team connect data:', error);
     throw error;  
   }
 };
@@ -716,7 +653,6 @@ const fetchCurrentUserOwner = async (): Promise<TeamMember | null> => {
     }
     return null;
   } catch (error) {
-    console.error('Failed to load current user:', error);
     return null;
   }
 };
@@ -872,7 +808,6 @@ const TeamList: React.FC = () => {
     try {
       const currentUserResponse = await getCurrentUser();
       const currentUser = currentUserResponse?.data;
-      console.log('👤 Current user data:', currentUser);
       
       if (currentUser) {
         // Try different possible field names for industry_id
@@ -881,17 +816,8 @@ const TeamList: React.FC = () => {
           currentUser?.industry?.id ?? 
           currentUser?.industryId ?? 
           currentUser?.industry?.industry_id;
-        
-        console.log('🏭 Current user industry_id:', industryId);
-        
-        // If still no industry_id, log all user fields for debugging
-        if (!industryId) {
-          console.warn('⚠️ No industry_id found in user data. Available fields:', Object.keys(currentUser));
-          console.warn('⚠️ Full user object:', JSON.stringify(currentUser, null, 2));
-        }
       }
     } catch (err) {
-      console.warn('⚠️ Could not fetch current user for industry_id:', err);
     }
 
     // PRIORITY: Try to fetch from team-connect API first with industry_id
@@ -900,7 +826,6 @@ const TeamList: React.FC = () => {
         throw new Error('industry_id is required but not found in current user data');
       }
       
-      console.log('🔄 Fetching from team-connect API with industry_id:', industryId);
       const teamConnectData = await fetchTeamConnectData(industryId);
       nextData.owners = teamConnectData.owners;
       nextData.fieldOfficers = teamConnectData.fieldOfficers;
@@ -909,32 +834,21 @@ const TeamList: React.FC = () => {
       // If team-connect API returns farmers, use them; otherwise fallback to getRecentFarmers
       if (teamConnectData.farmers.length > 0) {
         nextData.farmers = teamConnectData.farmers;
-        console.log('✅ Using farmers from team-connect API:', teamConnectData.farmers.length);
       } else {
         // Fallback to getRecentFarmers if team-connect doesn't return farmers
-        console.log('⚠️ No farmers from team-connect API, trying fallback...');
         try {
           nextData.farmers = await fetchFarmersData();
         } catch (err) {
-          console.error('Failed to load farmers:', err);
           errors.push('farmers');
         }
       }
     } catch (teamConnectErr: any) {
-      console.warn('⚠️ Team-connect API failed, using fallback methods:', teamConnectErr);
-      console.warn('⚠️ Error details:', {
-        message: teamConnectErr?.message,
-        response: teamConnectErr?.response?.data,
-        status: teamConnectErr?.response?.status,
-        url: teamConnectErr?.config?.url,
-      });
       errors.push('team-connect');
       
       // Fallback 1: Try getRecentFarmers for farmers
       try {
         nextData.farmers = await fetchFarmersData();
       } catch (err) {
-        console.error('Failed to load farmers:', err);
         errors.push('farmers');
       }
 
@@ -946,7 +860,6 @@ const TeamList: React.FC = () => {
         nextData.fieldOfficers = fieldOfficers;
         nextData.managers = managers;
       } catch (err) {
-        console.error('Failed to load users via /users/ endpoint:', err);
         errors.push('user directory');
         // Fallback 3: Try getContactDetails
         try {
@@ -954,7 +867,6 @@ const TeamList: React.FC = () => {
           nextData.owners = owners;
           nextData.fieldOfficers = fieldOfficers;
         } catch (fallbackError) {
-          console.error('Failed to load contact users:', fallbackError);
           errors.push('contact users');
         }
       }
@@ -971,28 +883,24 @@ const TeamList: React.FC = () => {
     try {
       nextData.vendors = await fetchVendorsData();
     } catch (err) {
-      console.error('Failed to load vendors:', err);
       errors.push('vendors');
     }
 
     try {
       nextData.stock = await fetchStockData();
     } catch (err) {
-      console.error('Failed to load stock:', err);
       errors.push('stock');
     }
 
     try {
       nextData.bookings = await fetchBookingsData();
     } catch (err) {
-      console.error('Failed to load bookings:', err);
       errors.push('bookings');
     }
 
     try {
       nextData.orders = await fetchOrdersData();
     } catch (err) {
-      console.error('Failed to load orders:', err);
       errors.push('orders');
     }
 

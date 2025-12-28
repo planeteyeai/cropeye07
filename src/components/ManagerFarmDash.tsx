@@ -226,8 +226,6 @@ const ManagerFarmDash: React.FC = () => {
 
   // NEW: Function to set plot coordinates from existing state
   const setPlotCoordinatesFromState = (plotId: string): void => {
-    console.log("Fetching coordinates for plot:", plotId);
-
     // Find the selected farmer and their plot
     const farmer = farmersForSelectedOfficer.find(
       (f) => String(f.id) === selectedFarmerId
@@ -239,20 +237,16 @@ const ManagerFarmDash: React.FC = () => {
       if (geom) {
         // The API gives [lng, lat], Leaflet needs [lat, lng]
         const coords = geom.map(([lng, lat]: [number, number]) => [lat, lng]);
-        console.log("Received coordinates from state:", coords);
         setPlotCoordinates(coords);
 
         // Calculate and set map center
         const center = calculateCenter(coords);
-        console.log("Calculated map center:", center);
         setMapCenter(center);
         setMapKey((prev) => prev + 1); // Force map re-render
       } else {
-        console.log("No geometry found in plot boundary");
         setPlotCoordinates([]);
       }
     } else {
-      console.error("Could not find plot or boundary for plotId:", plotId);
       setPlotCoordinates([]);
     }
   };
@@ -276,44 +270,30 @@ const ManagerFarmDash: React.FC = () => {
   // Fetch plots when farmer is selected
   useEffect(() => {
     if (selectedFarmerId) {
-      console.log("🔍 Finding farmer with ID:", selectedFarmerId);
-
       const selectedFarmer = farmersForSelectedOfficer.find(
         (f) =>
           String(f.id || f.farmer_id || f.farmerId) === String(selectedFarmerId)
       );
 
       if (selectedFarmer) {
-        console.log("✅ Found selected farmer:", selectedFarmer);
-
         // Extract fastapi_plot_id from plots array
         const farmerPlots = selectedFarmer.plots || [];
         const plotIds = farmerPlots.map((plot: any) => plot.fastapi_plot_id);
-
-        console.log("📍 Farmer plots data:", {
-          plotsArray: farmerPlots,
-          extractedPlotIds: plotIds,
-          plotsCount: plotIds.length,
-        });
 
         setPlots(plotIds);
 
         // Auto-select first plot if available
         if (plotIds.length > 0) {
           const firstPlotId = plotIds[0];
-          console.log("✅ Auto-selecting first plot:", firstPlotId);
           setSelectedPlotId(firstPlotId);
         } else {
-          console.warn("⚠️ No plots found for this farmer");
           setSelectedPlotId("");
         }
       } else {
-        console.warn("⚠️ Farmer not found with ID:", selectedFarmerId);
         setPlots([]);
         setSelectedPlotId("");
       }
     } else {
-      console.log("ℹ️ No farmer selected");
       setPlots([]);
       setSelectedPlotId("");
     }
@@ -389,9 +369,6 @@ const ManagerFarmDash: React.FC = () => {
         error.message?.includes("CORS") ||
         error.message?.includes("Access-Control-Allow-Origin")
       ) {
-        console.warn(
-          `CORS error for ${url}. This is a server-side configuration issue.`
-        );
         throw new Error(
           `CORS error: The server at ${
             new URL(url).origin
@@ -406,9 +383,7 @@ const ManagerFarmDash: React.FC = () => {
         error.message?.includes("timeout") ||
         error.message?.includes("canceled")
       ) {
-        console.warn(`Request timeout for ${url}`);
         if (retries > 0) {
-          console.log(`Retrying request (${retries} retries left)...`);
           await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait 1 second before retry
           return makeRequestWithRetry(url, retries - 1, timeout);
         }
@@ -422,9 +397,7 @@ const ManagerFarmDash: React.FC = () => {
         error.code === "ERR_NETWORK" ||
         error.message?.includes("ERR_FAILED")
       ) {
-        console.warn(`Network error for ${url}:`, error.message);
         if (retries > 0) {
-          console.log(`Retrying request (${retries} retries left)...`);
           await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
           return makeRequestWithRetry(url, retries - 1, timeout);
         }
@@ -435,9 +408,7 @@ const ManagerFarmDash: React.FC = () => {
 
       // Handle 504 Gateway Timeout
       if (error.response?.status === 504) {
-        console.warn(`Gateway timeout for ${url}`);
         if (retries > 0) {
-          console.log(`Retrying request (${retries} retries left)...`);
           await new Promise((resolve) => setTimeout(resolve, 2000));
           return makeRequestWithRetry(url, retries - 1, timeout);
         }
@@ -486,10 +457,6 @@ const ManagerFarmDash: React.FC = () => {
             setCache(plotSpecificCacheKey, currentPlotData);
           }
         } catch (error: any) {
-          console.warn(
-            "Failed to fetch agroStats, continuing with other data:",
-            error.message
-          );
           if (!allPlotsData) allPlotsData = null;
           if (!currentPlotData) {
             const quotedPlotId = `"${selectedPlotId.replace("_", '"_"')}"`;
@@ -534,7 +501,6 @@ const ManagerFarmDash: React.FC = () => {
           harvestData = harvestRes.data;
           setCache(harvestCacheKey, harvestData);
         } catch (harvestErr) {
-          console.error("Error fetching harvest status:", harvestErr);
         }
       }
 
@@ -682,7 +648,6 @@ const ManagerFarmDash: React.FC = () => {
         cnRatio: null,
       }));
     } catch (err: any) {
-      console.error("Error fetching data:", err);
       // You could add a toast notification here to inform the user
       // For now, we'll just log the error and continue with partial data
     } finally {
@@ -694,14 +659,6 @@ const ManagerFarmDash: React.FC = () => {
   const fetchManagerData = async (): Promise<void> => {
     setLoadingFarmers(true);
     try {
-      console.log("=".repeat(60));
-      console.log(
-        "🔄 ManagerFarmDash: Fetching field officers and their farmers..."
-      );
-      console.log(
-        "📍 Endpoint: https://cropeye-server-1.onrender.com/api/users/my-field-officers/"
-      );
-
       // Use authenticated API call from api.ts
       const response = await api.get(
         "https://cropeye-server-1.onrender.com/api/users/my-field-officers/"
@@ -710,31 +667,16 @@ const ManagerFarmDash: React.FC = () => {
       // Extract the array of field officers from the response object
       const officersData = responseData.field_officers || [];
 
-      console.log("=".repeat(60));
-      console.log("✅ ManagerFarmDash: Raw API response:", responseData);
-      console.log(
-        "✅ ManagerFarmDash: Extracted field officers array:",
-        officersData
-      );
       setFieldOfficers(officersData);
 
       // Auto-select first field officer if available
       if (officersData.length > 0) {
         setSelectedFieldOfficerId(String(officersData[0].id));
-      } else {
-        console.warn(
-          "⚠️ ManagerFarmDash: No field officers found for this manager"
-        );
       }
     } catch (error: any) {
-      console.error("❌ ManagerFarmDash: Error fetching manager data:", error);
-      console.error("Error details:", error.response?.data);
-
       // Show user-friendly error message
       if (error.response?.status === 401) {
-        console.error("Authentication error - please login again");
       } else if (error.response?.status === 403) {
-        console.error("Access denied - insufficient permissions");
       }
     } finally {
       setLoadingFarmers(false);
@@ -756,13 +698,10 @@ const ManagerFarmDash: React.FC = () => {
 
   // Fetch plot coordinates immediately when plot is selected
   const fetchPlotCoordinates = async (plotId: string): Promise<void> => {
-    console.log("Fetching coordinates for plot:", plotId);
-
     // Check cache first
     if (plotCoordinatesCache.has(plotId)) {
       const cachedCoords = plotCoordinatesCache.get(plotId);
       if (cachedCoords && cachedCoords.length > 0) {
-        console.log("Using cached coordinates for plot:", plotId);
         setPlotCoordinates(cachedCoords);
         // Calculate center from coordinates
         const center = calculateCenter(cachedCoords);
@@ -774,7 +713,6 @@ const ManagerFarmDash: React.FC = () => {
 
     try {
       const today = new Date().toISOString().slice(0, 10);
-      console.log("Fetching coordinates from API for plot:", plotId);
       const response = await axios.post(
         `${BASE_URL}/analyze?plot_name=${plotId}&date=${today}`
       );
@@ -782,7 +720,6 @@ const ManagerFarmDash: React.FC = () => {
       const geom = response.data?.features?.[0]?.geometry?.coordinates?.[0];
       if (geom) {
         const coords = geom.map(([lng, lat]: [number, number]) => [lat, lng]);
-        console.log("Received coordinates:", coords);
         setPlotCoordinates(coords);
 
         // Cache the coordinates
@@ -790,14 +727,10 @@ const ManagerFarmDash: React.FC = () => {
 
         // Calculate and set map center
         const center = calculateCenter(coords);
-        console.log("Calculated map center:", center);
         setMapCenter(center);
         setMapKey((prev) => prev + 1);
-      } else {
-        console.log("No geometry found in response");
       }
     } catch (error) {
-      console.error("Error fetching plot coordinates:", error);
     }
   };
 
@@ -1154,15 +1087,6 @@ const ManagerFarmDash: React.FC = () => {
     0
   );
 
-  // Log farmers state before rendering
-  console.log("🎨 FarmCropStatus Render - Current State:", {
-    officerCount: fieldOfficers.length,
-    totalFarmers: totalFarmers,
-    selectedFarmerId,
-    selectedPlotId,
-    loadingFarmers,
-    loadingData,
-  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
@@ -1259,10 +1183,6 @@ const ManagerFarmDash: React.FC = () => {
                     className="px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white shadow-sm w-full sm:w-64"
                     value={selectedFarmerId}
                     onChange={(e) => {
-                      console.log(
-                        "🔄 Farmer selection changed to:",
-                        e.target.value
-                      );
                       setSelectedFarmerId(e.target.value);
                     }}
                     disabled={
@@ -1282,16 +1202,6 @@ const ManagerFarmDash: React.FC = () => {
                           const farmerName =
                             `${farmer.first_name} ${farmer.last_name}`.trim();
                           const plotsCount = farmer.plots?.length || 0;
-
-                          console.log(
-                            `🔍 Rendering farmer ${index + 1} in dropdown:`,
-                            {
-                              id: farmerId,
-                              name: farmerName,
-                              email: farmer.email,
-                              plots: plotsCount,
-                            }
-                          );
 
                           return (
                             <option key={`farmer-${farmerId}`} value={farmerId}>
@@ -1315,13 +1225,8 @@ const ManagerFarmDash: React.FC = () => {
                     value={selectedPlotId}
                     onChange={(e) => {
                       const newPlotId = e.target.value;
-                      console.log("🔄 Plot selection changed to:", newPlotId);
                       setSelectedPlotId(newPlotId);
                       if (newPlotId) {
-                        console.log(
-                          "📍 Fetching coordinates for plot:",
-                          newPlotId
-                        );
                         // Immediately fetch coordinates and update map
                         fetchPlotCoordinates(newPlotId);
                       }
@@ -1336,10 +1241,6 @@ const ManagerFarmDash: React.FC = () => {
                       <>
                         <option value="">Select a plot</option>
                         {plots.map((plotId, index) => {
-                          console.log(
-                            `🔍 Rendering plot ${index + 1}:`,
-                            plotId
-                          );
                           return (
                             <option
                               key={`plot-${plotId}-${index}`}

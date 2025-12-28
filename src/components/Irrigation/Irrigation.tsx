@@ -183,9 +183,6 @@ const Irrigation: React.FC<IrrigationProps> = ({
       <div className="irrigation-header">
         <h1>Irrigation Status</h1>
         <span className="date">{formattedDate}</span>
-        {activePlotName && (
-          <span className="plot-indicator">Plot: {activePlotName}</span>
-        )}
       </div>
 
       <div className="card-row">

@@ -48,25 +48,19 @@ const AppRoutesContent: React.FC = () => {
     try {
       // Check if token exists and is valid format
       if (!token || token.trim() === "") {
-        console.warn("⚠️ No token found, redirecting to login");
         handleLogout();
         return;
       }
 
       // Validate token format before making API call
       if (!isValidToken(token)) {
-        console.warn("⚠️ Invalid token format, redirecting to login");
         handleLogout();
         return;
       }
 
-      console.log("🔐 Validating token on app reload...");
-
       // Use the API function to get current user (automatically uses stored token)
       const response = await getCurrentUser();
       const userData = response.data;
-
-      console.log("✅ User data received in AppRoutes:", userData);
 
       // Handle both string roles and numeric role_id
       let normalizedRole: UserRole;
@@ -106,7 +100,6 @@ const AppRoutesContent: React.FC = () => {
           normalizedRole = roleMap[roleId] || "farmer";
         } else {
           // Invalid role, logout
-          console.error("❌ Invalid role format:", userData);
           handleLogout();
           return;
         }
@@ -118,7 +111,6 @@ const AppRoutesContent: React.FC = () => {
           normalizedRole
         )
       ) {
-        console.log("✅ Token valid, user role:", normalizedRole);
         setUserRole(normalizedRole);
         setIsAuthenticated(true);
 
@@ -132,7 +124,6 @@ const AppRoutesContent: React.FC = () => {
         });
       } else {
         // Invalid role, logout
-        console.error("❌ Invalid role:", normalizedRole);
         handleLogout();
       }
     } catch (error: any) {
@@ -141,17 +132,12 @@ const AppRoutesContent: React.FC = () => {
       
       // Handle 401/403 - Token expired or invalid
       if (status === 401 || status === 403) {
-        console.warn("⚠️ Token expired or invalid (401/403). Redirecting to login...");
-        console.log("Token validation failed - this is normal if the session expired");
         handleLogout();
         return;
       }
       
       // Handle network errors - keep user logged in with cached credentials
       if (!error.response || error.code === 'ECONNABORTED' || error.message?.includes('Network Error')) {
-        console.warn(
-          "⚠️ Network error during token validation. Using cached credentials."
-        );
         setUserRole(role);
         setIsAuthenticated(true);
         setLoading(false);
@@ -159,14 +145,7 @@ const AppRoutesContent: React.FC = () => {
       }
       
       // Handle other errors
-      console.error("❌ Token validation error:", {
-        status,
-        message: errorMessage,
-        error: error.response?.data
-      });
-      
       // For unknown errors, logout for security
-      console.warn("⚠️ Unknown error during token validation. Redirecting to login for security.");
       handleLogout();
     } finally {
       setLoading(false);
@@ -184,8 +163,6 @@ const AppRoutesContent: React.FC = () => {
     setIsAuthenticated(true);
 
     // Auto-redirect to dashboard
-    console.log("Login successful for role:", normalizedRole);
-    console.log("Redirecting to dashboard...");
     navigate("/dashboard");
   };
 

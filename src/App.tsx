@@ -118,7 +118,6 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
     if (token) {
       try {
         const decoded: any = jwtDecode(token);
-        console.log("Decoded token:", decoded);
 
         setCurrentUser({
           id: decoded.user_id || decoded.id,
@@ -136,7 +135,6 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
       }
     } else {
       // No token - set default for testing
-      console.warn("No token found, using default user");
       setCurrentUser({
         id: 3,
         role: userRole,
@@ -152,6 +150,7 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
 
     switch (menu) {
       case "Farm Crop Status":
+      case "farm-crop-status":
         // Use ManagerFarmDash for manager/owner, FarmCropStatus for field officer
         if (userRole === "owner") {
           nextView = View.OwnerFarmDash;
@@ -223,10 +222,6 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
       case "MyList":
         nextView = View.MyList;
         break;
-      case "Farm Crop Status":
-      case "farm-crop-status":
-        nextView = View.FarmCropStatus;
-        break;
       case "Team List":
       case "Team Connect":
       case "TeamConnect":
@@ -288,12 +283,10 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
   };
 
   const openSidebarWithMenu = (menuTitle: string) => {
-    console.log("🔧 openSidebarWithMenu called with:", menuTitle);
     setIsSidebarOpen(true);
     setExpandedSidebarMenu(menuTitle);
     // Clear the expanded menu after a longer delay to allow the sidebar to open and expand
     setTimeout(() => {
-      console.log("🔧 Clearing expanded menu after timeout");
       setExpandedSidebarMenu(null);
     }, 1000);
   };
@@ -304,7 +297,6 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
     nitrogenValue?: number | null;
     phStatistics?: { phh2o_0_5cm_mean_mean: number };
   }) => {
-    console.log("App.tsx: handleSoilDataChange called with:", data);
     setSoilData((prev) => ({
       ...prev,
       phValue: data.phValue,
@@ -315,10 +307,8 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
   };
 
   const renderHomeGrid = () => {
-    console.log("Rendering home grid for role:", userRole);
     switch (userRole) {
       case "manager":
-        console.log("Rendering ManagerHomeGrid");
         return (
           <ManagerHomeGrid
             onMenuClick={handleMenuSelect}
@@ -326,10 +316,8 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
           />
         );
       case "owner":
-        console.log("Rendering OwnerHomeGrid");
         return <OwnerHomeGrid onMenuClick={handleMenuSelect} />;
       case "fieldofficer":
-        console.log("Rendering FieldOfficerHomeGrid");
         return (
           <FieldOfficerHomeGrid
             onMenuClick={handleMenuSelect}
@@ -337,10 +325,8 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
           />
         );
       case "farmer":
-        console.log("Rendering FarmerHomeGrid");
         return <FarmerHomeGrid onMenuClick={handleMenuSelect} />;
       default:
-        console.log("Invalid user role:", userRole);
         return <div>Invalid user role: {userRole}</div>;
     }
   };
@@ -371,7 +357,6 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
           } overflow-auto`}
         >
           <div className="w-full h-full">
-            {/* {console.log("Current view:", currentView, "View.Home:", View.Home)} */}
             {currentView === View.Home && renderHomeGrid()}
 
             {currentView === View.Dashboard && activeSubmenu && (

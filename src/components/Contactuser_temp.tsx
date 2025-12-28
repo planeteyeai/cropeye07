@@ -73,6 +73,9 @@ interface ContactuserProps {
 
 // Role-based filtering function
 const filterContactsByRole = (contacts: Contact[], currentUserRole: string): Contact[] => {
+
+
+  
   switch (currentUserRole.toLowerCase()) {
     case 'fieldofficer':
       // Field Officer can see: Farmers, Managers, Owners, Field Officers
@@ -80,6 +83,8 @@ const filterContactsByRole = (contacts: Contact[], currentUserRole: string): Con
         const role = contact.role?.toLowerCase() || '';
         return role === 'farmer' || role === 'manager' || role === 'owner' || role === 'admin' || role === 'fieldofficer' || role === 'field_officer';
       });
+
+      console.log('🔍 Field Officer filtered contacts:', fieldOfficerContacts.map(c => ({ name: c.name, role: c.role })));
       return fieldOfficerContacts;
       
     case 'manager':
@@ -88,6 +93,7 @@ const filterContactsByRole = (contacts: Contact[], currentUserRole: string): Con
         const role = contact.role?.toLowerCase() || '';
         return role === 'owner' || role === 'admin' || role === 'fieldofficer' || role === 'field_officer';
       });
+
       return managerContacts;
       
     case 'owner':
@@ -97,6 +103,8 @@ const filterContactsByRole = (contacts: Contact[], currentUserRole: string): Con
         const role = contact.role?.toLowerCase() || '';
         return role === 'fieldofficer' || role === 'field_officer' || role === 'manager' || role === 'farmer';
       });
+
+      console.log('🔍 Owner/Admin filtered contacts:', ownerContacts.map(c => ({ name: c.name, role: c.role })));
       return ownerContacts;
       
     case 'farmer':
@@ -105,10 +113,13 @@ const filterContactsByRole = (contacts: Contact[], currentUserRole: string): Con
         const role = contact.role?.toLowerCase() || '';
         return role === 'fieldofficer' || role === 'field_officer' || role === 'manager' || role === 'owner' || role === 'admin';
       });
+
+      console.log('🔍 Farmer filtered contacts:', farmerContacts.map(c => ({ name: c.name, role: c.role })));
       return farmerContacts;
       
     default:
       // Default: show all contacts
+
       return contacts;
   }
 };
@@ -160,8 +171,17 @@ const Contactuser: React.FC<ContactuserProps> = () => {
   // Ref for auto-scrolling to latest message
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  // Auto-scroll to bottom when messages change
+  // Debug: Log messages state changes
   useEffect(() => {
+
+    console.log('🔍 Messages:', messages.map(m => ({ 
+      id: m.id, 
+      sender: m.sender?.first_name || m.sender?.username, 
+      content: m.content?.substring(0, 30),
+      created_at: m.created_at 
+    })));
+    
+    // Auto-scroll to bottom when messages change
     if (messagesEndRef.current && messages.length > 0) {
       setTimeout(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -176,31 +196,48 @@ const Contactuser: React.FC<ContactuserProps> = () => {
         setLoading(true);
         setError(null);
         const response = await getContactDetails();
+
+
+
+
+
+
+        console.log('Is Array:', Array.isArray(response.data));
+        console.log('Response Data Keys:', response.data ? Object.keys(response.data) : 'No keys');
         
         let usersData = response.data;
         
         // Handle different API response formats
         if (usersData && typeof usersData === 'object') {
+
+          
           // If response has a 'results' property (common in paginated APIs)
           if (Array.isArray(usersData.results)) {
+
             usersData = usersData.results;
           }
           // If response has a 'data' property
           else if (Array.isArray(usersData.data)) {
+
             usersData = usersData.data;
           }
           // If response has a 'users' property
           else if (Array.isArray(usersData.users)) {
+
             usersData = usersData.users;
           }
           // If response has a 'contacts' property with role-based structure
           else if (usersData.contacts && typeof usersData.contacts === 'object') {
+
+            console.log('Contacts object keys:', Object.keys(usersData.contacts));
+            
             // Handle role-based contacts structure: {owner: {...}, field_officers: [...], farmers: [...]}
             const allContacts: any[] = [];
             
             // Process each role category
             Object.keys(usersData.contacts).forEach(roleKey => {
               const roleData = usersData.contacts[roleKey];
+
               
               if (Array.isArray(roleData)) {
                 // If it's an array (like field_officers: [], farmers: [])
@@ -213,35 +250,55 @@ const Contactuser: React.FC<ContactuserProps> = () => {
                           roleKey.replace('_', '') // Convert 'field_officers' to 'fieldofficer', 'farmers' to 'farmer', 'managers' to 'manager'
                   });
                 });
+
               } else if (roleData && typeof roleData === 'object' && roleData.id) {
                 // If it's a single object (like owner: {...})
                 allContacts.push({
                   ...roleData,
                   role: roleKey
                 });
+
               }
             });
             
             usersData = allContacts;
+
+            console.log('📋 All extracted contacts with roles:', allContacts.map(c => ({ name: c.name, role: c.role })));
           }
           // If response has a 'contact_details' property
           else if (Array.isArray(usersData.contact_details)) {
+
             usersData = usersData.contact_details;
           }
           // If it's an object with user properties, try to extract users
           else if (usersData.user_list && Array.isArray(usersData.user_list)) {
+
             usersData = usersData.user_list;
+          }
+          else {
+            console.log('No recognized array property found. Available properties:', Object.keys(usersData));
+
           }
         }
         
         // Check if usersData is an array
         if (!Array.isArray(usersData)) {
+
+
+
           setError(`Invalid data format received from server. Expected an array of users, but got: ${typeof usersData}. Please check the API response format.`);
           return;
         }
         
+
+        
         // Transform API data to Contact format
         const contactsData: Contact[] = usersData.map((user: any) => {
+          // Debug log for role object
+          if (typeof user.role === 'object') {
+
+          }
+          
           return {
             id: user.id,
             name: user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username || 'Unknown',
@@ -255,13 +312,19 @@ const Contactuser: React.FC<ContactuserProps> = () => {
           };
         });
         
+
+        
         // Apply role-based filtering
         const currentUserRole = getUserRole();
         const filteredContacts = filterContactsByRole(contactsData, currentUserRole || '');
+
+
         
         setContacts(filteredContacts);
         setFilteredContacts(filteredContacts);
       } catch (err: any) {
+
+
         setError(`Failed to load contacts: ${err.message || 'Please try again.'}`);
       } finally {
         setLoading(false);
@@ -313,6 +376,7 @@ const Contactuser: React.FC<ContactuserProps> = () => {
       const conversationsData = response.data.results || response.data || [];
       setConversations(Array.isArray(conversationsData) ? conversationsData : []);
     } catch (error) {
+
     }
   };
 
@@ -321,6 +385,7 @@ const Contactuser: React.FC<ContactuserProps> = () => {
     try {
       const response = await getConversationWithUser(userId);
       const conversation = response.data;
+
       setSelectedConversation(conversation);
       
       let allMessages: Message[] = [];
@@ -328,30 +393,45 @@ const Contactuser: React.FC<ContactuserProps> = () => {
       // PRIORITY 1: Use GET /conversations/{id}/messages/ to fetch ALL messages from backend
       if (conversation.id) {
         try {
+
           const messagesResponse = await getMessages(conversation.id);
+
           
           // Handle different response formats
           if (messagesResponse.data) {
             // Check if it's paginated (has results array)
             if (Array.isArray(messagesResponse.data.results)) {
               allMessages = messagesResponse.data.results;
+
             } 
             // Check if it's a direct array
             else if (Array.isArray(messagesResponse.data)) {
               allMessages = messagesResponse.data;
+
             }
             // Check if messages are in a messages property
             else if (Array.isArray(messagesResponse.data.messages)) {
               allMessages = messagesResponse.data.messages;
+
             }
           }
           
           // Log all message details for debugging
           if (allMessages.length > 0) {
+            console.log('📋 All messages from backend:', allMessages.map(m => ({
+              id: m.id,
+              sender_id: m.sender?.id,
+              sender_name: m.sender?.first_name + ' ' + m.sender?.last_name,
+              recipient_id: m.recipient?.id || m.recipients?.[0]?.id,
+              content: m.content?.substring(0, 30),
+              created_at: m.created_at
+            })));
           }
         } catch (err: any) {
+
           // If endpoint fails, continue with fallback methods
           if (err.response?.status !== 500 && err.response?.status !== 404) {
+
           }
         }
       }
@@ -359,17 +439,20 @@ const Contactuser: React.FC<ContactuserProps> = () => {
       // FALLBACK 1: If no messages from API, check conversation.messages
       if (allMessages.length === 0 && conversation.messages && Array.isArray(conversation.messages)) {
         allMessages = conversation.messages;
+
       }
       
       // FALLBACK 2: Merge with local storage (but prioritize backend messages)
       if (conversation.id && localMessages[conversation.id] && allMessages.length === 0) {
         allMessages = [...localMessages[conversation.id]];
+        console.log('✅ Using locally stored messages (no backend messages):', allMessages.length);
       } else if (conversation.id && localMessages[conversation.id] && allMessages.length > 0) {
         // Merge: backend messages are source of truth, but add any local messages not in backend
         const backendIds = new Set(allMessages.map((m: Message) => m.id));
         const uniqueLocal = localMessages[conversation.id].filter((m: Message) => !backendIds.has(m.id));
         if (uniqueLocal.length > 0) {
           allMessages = [...allMessages, ...uniqueLocal];
+
         }
       }
       
@@ -378,6 +461,7 @@ const Contactuser: React.FC<ContactuserProps> = () => {
         const lastMsgId = conversation.last_message.id;
         if (!allMessages.some((m: Message) => m.id === lastMsgId)) {
           allMessages.push(conversation.last_message);
+
         }
       }
       
@@ -387,6 +471,7 @@ const Contactuser: React.FC<ContactuserProps> = () => {
         const uniqueExisting = messages.filter((m: Message) => !newIds.has(m.id));
         if (uniqueExisting.length > 0) {
           allMessages = [...allMessages, ...uniqueExisting];
+
         }
       }
       
@@ -402,6 +487,7 @@ const Contactuser: React.FC<ContactuserProps> = () => {
         index === self.findIndex((m: Message) => m.id === msg.id)
       );
       
+      console.log('📋 Final messages array (sorted, unique):', uniqueMessages.length);
       console.log('�� Message details:', uniqueMessages.map(m => ({ 
         id: m.id, 
         sender: m.sender?.first_name + ' ' + m.sender?.last_name,
@@ -419,10 +505,13 @@ const Contactuser: React.FC<ContactuserProps> = () => {
       }
       
       // Always update the messages state with all messages
+
       setMessages(uniqueMessages);
     } catch (error: any) {
+
       // If conversation doesn't exist, check local storage
       if (localMessages[userId]) {
+
         const localMsgs = localMessages[userId];
         // Merge with existing if needed
         if (mergeWithExisting && messages.length > 0) {
@@ -476,8 +565,10 @@ const Contactuser: React.FC<ContactuserProps> = () => {
         });
       }
     } catch (error) {
+
       // If conversation doesn't exist, check if we have local messages by user ID
       if (localMessages[contact.id]) {
+
         setMessages(localMessages[contact.id]);
       } else {
         setMessages([]);
@@ -502,6 +593,7 @@ const Contactuser: React.FC<ContactuserProps> = () => {
         content: replyMessage.trim()
       });
 
+
       
       setReplyMessage('');
       
@@ -514,12 +606,14 @@ const Contactuser: React.FC<ContactuserProps> = () => {
             await fetchConversationMessages(otherParticipant.id, false); // Fetch fresh from backend
           }, 1000);
         } catch (refreshErr) {
+
         }
       }
       
       // Refresh conversations
       await fetchConversations();
     } catch (error: any) {
+
       setSendError(error.response?.data?.detail || error.message || 'Failed to send reply. Please try again.');
     } finally {
       setSendingReply(false);
@@ -540,6 +634,7 @@ const Contactuser: React.FC<ContactuserProps> = () => {
           content: message.trim()
         });
         
+
         
         setMessage('');
         setMessageSent(true);
@@ -557,11 +652,13 @@ const Contactuser: React.FC<ContactuserProps> = () => {
                 // Fetch ALL messages from backend to ensure complete history
                 await fetchConversationMessages(otherParticipant.id, false);
               } catch (refreshErr) {
+
               }
             }, 1000);
           }
         }
       } catch (error: any) {
+
         setSendError(error.response?.data?.detail || error.message || 'Failed to send message. Please try again.');
       } finally {
         setSendingMessage(false);

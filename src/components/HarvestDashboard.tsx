@@ -2,6 +2,7 @@ import api from "../api";
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import CommonSpinner from "./CommanSpinner";
 import axios from "axios";
+import { getCache, setCache } from "../utils/cache";
 import {
   MapPin,
   ChevronDown,
@@ -41,6 +42,7 @@ import { useMap } from "react-leaflet";
 
 const API_BASE_URL =
   "https://cropeye-server-1.onrender.com/api/users/my-field-officers/";
+const BASE_URL = "https://dev-events.cropeye.ai";
 
 // Chart Types
 const CHART_TYPES = {
@@ -73,7 +75,7 @@ interface HarvestData {
   "Sugarcane Status": string;
   "Area (Hect)": number;
   Days: number;
-  "Prediction Yield (T/Ha)": number;
+  "Prediction Yield (T/acre)": number;
   "Brix (Degree)": number;
   "Recovery (Degree)": number;
   "Distance (km)": number;
@@ -264,7 +266,7 @@ const CombinedChart: React.FC<CombinedChartProps> = ({
             <strong>Days:</strong> {entry.day}
           </div>
           <div className="text-sm">
-            <strong>Avg Yield (T/Ha):</strong> {entry.area?.toFixed(2)}
+            <strong>Avg Yield (T/acre):</strong> {entry.area?.toFixed(2)}
           </div>
           <div className="text-sm">
             <strong>Plot Count:</strong> {entry.count}
@@ -338,7 +340,7 @@ const CombinedChart: React.FC<CombinedChartProps> = ({
                 tick={{ fontSize: 12 }}
                 axisLine={{ stroke: "#e5e7eb" }}
                 label={{
-                  value: "Yield (T/Ha)",
+                  value: "Yield (T/acre)",
                   angle: -90,
                   position: "insideLeft",
                   offset: 10,
@@ -453,7 +455,7 @@ const CombinedChart: React.FC<CombinedChartProps> = ({
             <input
               type="range"
               min="-50"
-              max="200"
+              max="500"
               value={harvestRange[1]}
               onChange={(e) =>
                 setHarvestRange([harvestRange[0], parseInt(e.target.value)])
@@ -482,7 +484,7 @@ const HarvestDashboard: React.FC = () => {
     end: "2024-12-14",
   });
   const [harvestRange, setHarvestRange] = useState<[number, number]>([
-    -50, 100,
+    -50, 500,
   ]);
   const [loading, setLoading] = useState<boolean>(true);
   const [rawData, setRawData] = useState<HarvestData[]>([]);
@@ -506,7 +508,6 @@ const HarvestDashboard: React.FC = () => {
     async function fetchData() {
       setLoading(true);
       try {
-        console.log(`Fetching data from ${API_BASE_URL}`);
         const response = await api.get(API_BASE_URL);
 
         if (response.data && response.data.field_officers) {
@@ -516,6 +517,10 @@ const HarvestDashboard: React.FC = () => {
           const talukaSet = new Set<string>();
           const representativeSet = new Set<string>();
           const plantationTypeSet = new Set<string>();
+
+          // Collect all plot IDs for harvest status API calls
+          // Map: dataPointId -> plotId (fastapi_plot_id)
+          const dataPointToPlotIdMap = new Map<string, string>();
 
           apiData.field_officers.forEach((officer: any) => {
             const representativeName = `${officer.first_name} ${officer.last_name}`;
@@ -545,18 +550,25 @@ const HarvestDashboard: React.FC = () => {
                     centerLng /= coordinates.length;
                   }
 
-                  const plantationDate = new Date(farm.plantation_date);
-                  const today = new Date();
-                  const days = Math.floor(
-                    (today.getTime() - plantationDate.getTime()) /
-                      (1000 * 60 * 60 * 24)
-                  );
+                  // Calculate days since plantation
+                  let days = 0;
+                  if (farm.plantation_date) {
+                    const plantationDate = new Date(farm.plantation_date);
+                    const today = new Date();
+                    if (!isNaN(plantationDate.getTime())) {
+                      days = Math.floor(
+                        (today.getTime() - plantationDate.getTime()) /
+                          (1000 * 60 * 60 * 24)
+                      );
+                    }
+                  }
 
                   let stage = "Germination Stage";
                   if (days > 150) stage = "Maturity Stage";
                   else if (days > 90) stage = "Grand Growth Stage";
                   else if (days > 30) stage = "Tillering Stage";
 
+                  // Default status (will be updated from API)
                   let status = "Growing";
                   if (days > 300) status = "Ready to Harvest";
                   else if (days > 270) status = "Partially Harvested";
@@ -565,7 +577,8 @@ const HarvestDashboard: React.FC = () => {
                   const recovery = Math.min(8 + days / 30, 12);
 
                   const area = parseFloat(farm.area_size || "0");
-                  const yieldPerHa = Math.min(60 + days / 3, 100);
+                  // Yield will be fetched from API later
+                  const yieldPerAcre = 0;
 
                   // Only add data point if we have valid coordinates
                   if (
@@ -583,15 +596,23 @@ const HarvestDashboard: React.FC = () => {
                           )
                         : undefined;
 
+                    // Use fastapi_plot_id if available, otherwise use plot.id
+                    const plotId =
+                      plot.fastapi_plot_id || plot.id || String(plot.id);
+                    const dataPointId = `${plot.id}-${farm.id}`;
+
+                    // Store mapping for harvest status API call
+                    dataPointToPlotIdMap.set(dataPointId, plotId);
+
                     const dataPoint: HarvestData = {
-                      id: `${plot.id}-${farm.id}`,
+                      id: dataPointId,
                       "Plot No": plot.plot_number || "",
                       Latitude: centerLat,
                       Longitude: centerLng,
                       "Sugarcane Status": status,
                       "Area (Hect)": area,
                       Days: days,
-                      "Prediction Yield (T/Ha)": yieldPerHa,
+                      "Prediction Yield (T/acre)": yieldPerAcre,
                       "Brix (Degree)": brix,
                       "Recovery (Degree)": recovery,
                       "Distance (km)": Math.random() * 10 + 1,
@@ -611,6 +632,168 @@ const HarvestDashboard: React.FC = () => {
             });
           });
 
+          // Get unique plot IDs
+          const uniquePlotIds = Array.from(
+            new Set(dataPointToPlotIdMap.values())
+          );
+
+          // Fetch yield data and harvest status for all plots from API
+          const today = new Date().toISOString().slice(0, 10);
+          const harvestStatusMap = new Map<string, string>();
+          const yieldDataMap = new Map<string, number>();
+
+          // Fetch yield data from agroStats API
+          const agroStatsCacheKey = `agroStats_${today}`;
+          let allPlotsYieldData = getCache(agroStatsCacheKey);
+
+          if (!allPlotsYieldData) {
+            try {
+              const agroStatsRes = await axios.get(
+                `https://dev-events.cropeye.ai/plots/agroStats?end_date=${today}`
+              );
+              allPlotsYieldData = agroStatsRes.data;
+              setCache(agroStatsCacheKey, allPlotsYieldData);
+            } catch (err) {
+              allPlotsYieldData = null;
+            }
+          }
+
+          // Extract yield data for each plot
+          if (allPlotsYieldData && uniquePlotIds.length > 0) {
+            uniquePlotIds.forEach((plotId) => {
+              const plotData =
+                allPlotsYieldData[plotId] || allPlotsYieldData[`"${plotId}"`];
+              if (plotData?.brix_sugar?.sugar_yield) {
+                // Use mean if available, otherwise use min
+                const yieldValue =
+                  plotData.brix_sugar.sugar_yield.mean ??
+                  plotData.brix_sugar.sugar_yield.min ??
+                  null;
+                if (yieldValue !== null) {
+                  yieldDataMap.set(plotId, yieldValue);
+                }
+              }
+            });
+          }
+
+          if (uniquePlotIds.length > 0) {
+
+            // Fetch harvest status for all plots in parallel with caching
+            const harvestPromises = uniquePlotIds.map(async (plotId) => {
+              // Check cache first
+              const cacheKey = `harvest_status_${plotId}_${today}`;
+              const cachedStatus = getCache(cacheKey);
+
+              if (cachedStatus) {
+                harvestStatusMap.set(plotId, cachedStatus);
+                return;
+              }
+
+              try {
+                const harvestRes = await axios.post(
+                  `${BASE_URL}/sugarcane-harvest?plot_name=${plotId}&end_date=${today}`,
+                  {},
+                  {
+                    timeout: 30000, // 30 seconds timeout
+                  }
+                );
+                const harvestData = harvestRes.data;
+
+                // Extract harvest_status from response - check multiple possible locations
+                const harvestStatus =
+                  harvestData?.harvest_status || // Direct access (primary)
+                  harvestData?.harvest_summary?.harvest_status || // Nested in harvest_summary
+                  harvestData?.features?.[0]?.properties?.harvest_status || // Nested in features
+                  null;
+
+                if (harvestStatus) {
+                  harvestStatusMap.set(plotId, harvestStatus);
+                  // Cache the result
+                  setCache(cacheKey, harvestStatus);
+                }
+              } catch (err: any) {
+                // Keep default status if API call fails
+              }
+            });
+
+            await Promise.allSettled(harvestPromises);
+          }
+
+          // Update status and yield in allData with API response
+          const statusMappingCounts: { [key: string]: number } = {
+            Harvested: 0,
+            "Partially Harvested": 0,
+            "Ready to Harvest": 0,
+            Growing: 0,
+            Unknown: 0,
+          };
+
+          allData.forEach((dataPoint) => {
+            const plotId = dataPointToPlotIdMap.get(dataPoint.id || "");
+
+            // Update yield from API
+            if (plotId && yieldDataMap.has(plotId)) {
+              const apiYield = yieldDataMap.get(plotId);
+              if (apiYield !== undefined && apiYield !== null) {
+                dataPoint["Prediction Yield (T/acre)"] = apiYield;
+              }
+            }
+
+            // Update status from API
+            if (plotId && harvestStatusMap.has(plotId)) {
+              const apiStatus = harvestStatusMap.get(plotId);
+              // Normalize status values to match expected labels
+              if (apiStatus) {
+                // Convert to lowercase for case-insensitive matching
+                const statusLower = (apiStatus || "").toLowerCase().trim();
+
+                // Replace underscores and normalize spacing
+                const normalizedStatus = statusLower
+                  .replace(/_/g, " ")
+                  .replace(/\s+/g, " ")
+                  .trim();
+
+                // Map API status to expected status labels (case-insensitive)
+                // Check in order: partially harvested, harvested, ready, growing
+                if (
+                  normalizedStatus.includes("partially") &&
+                  normalizedStatus.includes("harvested")
+                ) {
+                  dataPoint["Sugarcane Status"] = "Partially Harvested";
+                  statusMappingCounts["Partially Harvested"]++;
+                } else if (
+                  normalizedStatus.includes("harvested") &&
+                  !normalizedStatus.includes("partially")
+                ) {
+                  dataPoint["Sugarcane Status"] = "Harvested";
+                  statusMappingCounts["Harvested"]++;
+                } else if (normalizedStatus.includes("ready")) {
+                  dataPoint["Sugarcane Status"] = "Ready to Harvest";
+                  statusMappingCounts["Ready to Harvest"]++;
+                } else if (normalizedStatus.includes("growing")) {
+                  dataPoint["Sugarcane Status"] = "Growing";
+                  statusMappingCounts["Growing"]++;
+                } else {
+                  // Fallback: capitalize first letter of each word
+                  const fallbackStatus = normalizedStatus
+                    .split(" ")
+                    .map(
+                      (word: string) =>
+                        word.charAt(0).toUpperCase() + word.slice(1)
+                    )
+                    .join(" ");
+                  dataPoint["Sugarcane Status"] = fallbackStatus;
+                  statusMappingCounts["Unknown"]++;
+                }
+              }
+            } else {
+              // Plot doesn't have API status, keep default or count as unknown
+              if (!plotId) {
+              } else if (!harvestStatusMap.has(plotId)) {
+              }
+            }
+          });
+
           setRegionOptions(["All", ...Array.from(talukaSet).sort()]);
           setRepresentativeOptions([
             "All",
@@ -621,14 +804,11 @@ const HarvestDashboard: React.FC = () => {
             ...Array.from(plantationTypeSet).sort(),
           ]);
 
-          console.log(`Successfully processed ${allData.length} data points`);
           setRawData(allData);
         } else {
-          console.warn("Invalid data format:", response.data);
           setRawData([]);
         }
       } catch (err) {
-        console.error("API fetch error", err);
         setRawData([]);
       } finally {
         setLoading(false);
@@ -701,7 +881,7 @@ const HarvestDashboard: React.FC = () => {
     let dataToUse = filteredData;
     if (activeChart === CHART_TYPES.HARVEST) {
       dataToUse = filteredData.filter((item) => {
-        if (typeof item.Days === "number") {
+        if (typeof item.Days === "number" && !isNaN(item.Days)) {
           return item.Days >= harvestRange[0] && item.Days <= harvestRange[1];
         }
         return false;
@@ -736,29 +916,32 @@ const HarvestDashboard: React.FC = () => {
 
   const harvestData = useMemo(() => {
     const rangeFilteredData = filteredData.filter((item) => {
-      if (typeof item.Days === "number") {
+      if (typeof item.Days === "number" && !isNaN(item.Days)) {
         return item.Days >= harvestRange[0] && item.Days <= harvestRange[1];
       }
       return false;
     });
 
+
     const dayGroups = rangeFilteredData.reduce(
       (acc: { [key: number]: number[] }, item) => {
         if (
           typeof item.Days === "number" &&
-          typeof item["Prediction Yield (T/Ha)"] === "number"
+          !isNaN(item.Days) &&
+          typeof item["Prediction Yield (T/acre)"] === "number" &&
+          !isNaN(item["Prediction Yield (T/acre)"])
         ) {
           if (!acc[item.Days]) {
             acc[item.Days] = [];
           }
-          acc[item.Days].push(item["Prediction Yield (T/Ha)"]);
+          acc[item.Days].push(item["Prediction Yield (T/acre)"]);
         }
         return acc;
       },
       {}
     );
 
-    return Object.entries(dayGroups)
+    const result = Object.entries(dayGroups)
       .map(([day, yieldValues]) => ({
         day: Number(day),
         area:
@@ -767,6 +950,8 @@ const HarvestDashboard: React.FC = () => {
         totalYield: yieldValues.reduce((sum, val) => sum + val, 0),
       }))
       .sort((a, b) => a.day - b.day);
+
+    return result;
   }, [filteredData, harvestRange]);
 
   const stageDistribution = useMemo(() => {
@@ -811,7 +996,7 @@ const HarvestDashboard: React.FC = () => {
     const avgYield = filteredData.length
       ? (
           filteredData.reduce(
-            (sum, item) => sum + (item["Prediction Yield (T/Ha)"] || 0),
+            (sum, item) => sum + (item["Prediction Yield (T/acre)"] || 0),
             0
           ) / filteredData.length
         ).toFixed(2)
@@ -844,7 +1029,7 @@ const HarvestDashboard: React.FC = () => {
         icon: MapPin,
       },
       {
-        label: "Expected Yield (T/Ha)",
+        label: "Expected Yield (T/acre)",
         value: avgYield,
         icon: TrendingUp,
       },
