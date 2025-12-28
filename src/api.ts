@@ -1,8 +1,15 @@
 import axios from "axios";
-import { getAuthToken, setAuthToken as setAuthTokenUtil, isValidToken, getRefreshToken, setRefreshToken, clearAuthData } from "./utils/auth";
+import {
+  getAuthToken,
+  setAuthToken as setAuthTokenUtil,
+  isValidToken,
+  getRefreshToken,
+  setRefreshToken,
+  clearAuthData,
+} from "./utils/auth";
 
 // Set base URL for backend
-const API_BASE_URL = "http://192.168.41.86:8000/api"; // changed to root API URL
+const API_BASE_URL = "http://192.168.1.8:8000/api"; // changed to root API URL
 
 // KML/GeoJSON API URL
 const KML_API_URL = "http://192.168.41.51";
@@ -34,17 +41,20 @@ api.interceptors.request.use((config) => {
 
 // Token refresh flag to prevent infinite loops
 let isRefreshing = false;
-let failedQueue: Array<{ resolve: (value?: any) => void; reject: (reason?: any) => void }> = [];
+let failedQueue: Array<{
+  resolve: (value?: any) => void;
+  reject: (reason?: any) => void;
+}> = [];
 
 const processQueue = (error: any, token: string | null = null) => {
-  failedQueue.forEach(prom => {
+  failedQueue.forEach((prom) => {
     if (error) {
       prom.reject(error);
     } else {
       prom.resolve(token);
     }
   });
-  
+
   failedQueue = [];
 };
 
@@ -65,9 +75,10 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       // Check if it's a token validation error
       const errorData = error.response?.data;
-      const isTokenError = errorData?.code === 'token_not_valid' || 
-                          errorData?.detail?.includes('token') ||
-                          errorData?.messages;
+      const isTokenError =
+        errorData?.code === "token_not_valid" ||
+        errorData?.detail?.includes("token") ||
+        errorData?.messages;
 
       if (isTokenError) {
         if (isRefreshing) {
@@ -75,11 +86,11 @@ api.interceptors.response.use(
           return new Promise((resolve, reject) => {
             failedQueue.push({ resolve, reject });
           })
-            .then(token => {
+            .then((token) => {
               originalRequest.headers.Authorization = `Bearer ${token}`;
               return api(originalRequest);
             })
-            .catch(err => {
+            .catch((err) => {
               return Promise.reject(err);
             });
         }
@@ -88,24 +99,27 @@ api.interceptors.response.use(
         isRefreshing = true;
 
         const refreshToken = getRefreshToken();
-        
+
         if (refreshToken) {
           try {
             // Try to refresh the token
-            const response = await axios.post(`${API_BASE_URL}/token/refresh/`, {
-              refresh: refreshToken
-            });
+            const response = await axios.post(
+              `${API_BASE_URL}/token/refresh/`,
+              {
+                refresh: refreshToken,
+              }
+            );
 
             const { access } = response.data;
-            
+
             if (access) {
               setAuthTokenUtil(access);
               originalRequest.headers.Authorization = `Bearer ${access}`;
-              
+
               // Process queued requests
               processQueue(null, access);
               isRefreshing = false;
-              
+
               return api(originalRequest);
             }
           } catch (refreshError) {
@@ -113,12 +127,12 @@ api.interceptors.response.use(
             processQueue(refreshError, null);
             isRefreshing = false;
             clearAuthData();
-            
+
             // Redirect to login page
-            if (window.location.pathname !== '/login') {
-              window.location.href = '/login';
+            if (window.location.pathname !== "/login") {
+              window.location.href = "/login";
             }
-            
+
             return Promise.reject(refreshError);
           }
         } else {
@@ -126,21 +140,21 @@ api.interceptors.response.use(
           processQueue(error, null);
           isRefreshing = false;
           clearAuthData();
-          
-          if (window.location.pathname !== '/login') {
-            window.location.href = '/login';
+
+          if (window.location.pathname !== "/login") {
+            window.location.href = "/login";
           }
         }
       }
     }
-    
+
     // Only log non-silent errors
     if (error.response?.status === 401 || error.response?.status === 403) {
       // Authentication errors are expected in some cases, don't log them as errors
       // They're handled by the calling code
       return Promise.reject(error);
     }
-    
+
     return Promise.reject(error);
   }
 );
@@ -259,9 +273,9 @@ export const addOrder = (data: {
   return api.post("/orders/", data);
 };
 
-export const getorders=()=>{
+export const getorders = () => {
   return api.get("/orders/");
-}
+};
 
 // Update order using PATCH method (partial update)
 export const patchOrder = (id: string | number, data: any) => {
@@ -283,9 +297,9 @@ export const addStock = (data: {
 }) => {
   return api.post("/stock/", data);
 };
-export const getstock=()=>{
+export const getstock = () => {
   return api.get("/stock/");
-}
+};
 
 // Update stock using PATCH method (partial update)
 export const patchStock = (id: string | number, data: any) => {
@@ -305,9 +319,9 @@ export const addBooking = (data: {
 }) => {
   return api.post("/addbooking", data);
 };
-export const getbookings=()=>{
+export const getbookings = () => {
   return api.get("/bookings/");
-}
+};
 export const patchBooking = (id: string | number, data: any) => {
   return api.patch(`/bookings/${id}/`, data);
 };
@@ -419,7 +433,7 @@ export const patchIrrigation = (id: string, data: any) => {
   return api.patch(`/irrigations/${id}/`, data);
 };
 
-// Update farm registration 
+// Update farm registration
 export const updateFarmRegistration = (
   id: string,
   data: {
@@ -528,7 +542,7 @@ export const getTotalCounts = () => {
 
 // Get team connect data (owners, field officers, farmers)
 export const getTeamConnect = (industryId?: number | string) => {
-  const url = industryId 
+  const url = industryId
     ? `/users/team-connect/?industry_id=${industryId}`
     : `/users/team-connect/`;
   return api.get(url);
@@ -797,10 +811,10 @@ export const getFarmerMyProfile = () => {
   const token = getAuthToken();
   if (!token || !isValidToken(token)) {
     // Create a silent error that won't be logged to console
-    const error = new Error('No valid authentication token found');
-    (error as any).response = { 
-      status: 403, 
-      data: { detail: 'Authentication credentials were not provided.' } 
+    const error = new Error("No valid authentication token found");
+    (error as any).response = {
+      status: 403,
+      data: { detail: "Authentication credentials were not provided." },
     };
     (error as any).isSilent = true; // Mark as silent to prevent console logging
     return Promise.reject(error);
@@ -972,7 +986,6 @@ export const getFarmerProfile = async () => {
 
     return transformedData;
   } catch (error: any) {
-
     if (error.response?.status === 401) {
       throw new Error("Authentication failed. Please login again.");
     } else if (error.response?.status === 403) {
@@ -1052,30 +1065,39 @@ export const registerFarmerAllInOne = async (data: {
   try {
     // Check if user is authenticated - registration endpoint REQUIRES authentication
     const token = getAuthToken();
-    
+
     // Registration endpoint requires authentication (Field Officers/Admins register farmers)
     if (!token || !isValidToken(token)) {
-      const errorMsg = "Authentication required. Please login as a Field Officer or Admin to register farmers.";
+      const errorMsg =
+        "Authentication required. Please login as a Field Officer or Admin to register farmers.";
       const error = new Error(errorMsg);
-      (error as any).response = { 
-        status: 401, 
-        data: { detail: errorMsg } 
+      (error as any).response = {
+        status: 401,
+        data: { detail: errorMsg },
       };
       (error as any).requiresAuth = true;
       throw error;
     }
-    
+
     // Use authenticated API for registration
     const response = await api.post("/farms/register-farmer/", data);
     return response;
   } catch (error: any) {
     // Provide better error messages
-    if (error.response?.status === 401 || error.response?.status === 403 || error.requiresAuth) {
-      const errorMsg = error.response?.data?.detail || error.response?.data?.message || error.message || "Authentication credentials were not provided. Please login as a Field Officer or Admin to register farmers.";
+    if (
+      error.response?.status === 401 ||
+      error.response?.status === 403 ||
+      error.requiresAuth
+    ) {
+      const errorMsg =
+        error.response?.data?.detail ||
+        error.response?.data?.message ||
+        error.message ||
+        "Authentication credentials were not provided. Please login as a Field Officer or Admin to register farmers.";
       const authError = new Error(errorMsg);
-      (authError as any).response = error.response || { 
-        status: 401, 
-        data: { detail: errorMsg } 
+      (authError as any).response = error.response || {
+        status: 401,
+        data: { detail: errorMsg },
       };
       (authError as any).requiresAuth = true;
       throw authError;
@@ -1086,9 +1108,18 @@ export const registerFarmerAllInOne = async (data: {
 
 // Convert plot data to the new bulk API format (multiple plots in one request)
 const convertToBulkFormat = (formData: any, plots: any[]) => {
-  const plotsData = plots.map((plot) => {
+  const plotsData = plots.map((plot, index) => {
     // Calculate center coordinates for location
-    const coordinates = plot.geometry.coordinates[0];
+    const coordinates = plot.geometry?.coordinates?.[0];
+
+    if (!coordinates || coordinates.length === 0) {
+      throw new Error(
+        `Plot ${
+          index + 1
+        } is missing boundary coordinates. Please redraw the plot.`
+      );
+    }
+
     const centerLng =
       coordinates.reduce((sum: number, coord: number[]) => sum + coord[0], 0) /
       coordinates.length;
@@ -1110,29 +1141,49 @@ const convertToBulkFormat = (formData: any, plots: any[]) => {
           type: "Point" as const,
           coordinates: [centerLng, centerLat] as [number, number],
         },
+        boundary: {
+          type: "Polygon" as const,
+          coordinates: [
+            coordinates.map((coord: number[]) => [coord[0], coord[1]]),
+          ] as [[[number, number]]],
+        },
       },
       farm: {
-        address: `${plot.village || formData.district}, ${formData.taluka}, ${formData.district}`,
+        address: `${plot.village || formData.district}, ${formData.taluka}, ${
+          formData.district
+        }`,
         area_size: plot.area?.ha?.toString() || plot.area_size || "1.0",
         spacing_a: plot.spacing_A || plot.spacing_a || "3.0",
         spacing_b: plot.spacing_B || plot.spacing_b || "1.5",
         soil_type_name: plot.soil_Type || plot.soil_type_name || "Black Soil",
         crop_type_name: plot.crop_Type || plot.crop_type_name || "Sugarcane",
-        plantation_type: plot.plantation_Type || plot.plantation_type || "adsali",
+        plantation_type:
+          plot.plantation_Type || plot.plantation_type || "adsali",
       },
       irrigation: {
-        irrigation_type_name: plot.irrigation_Type || plot.irrigation_type_name || "drip",
+        irrigation_type_name:
+          plot.irrigation_Type || plot.irrigation_type_name || "drip",
         status: true,
-        ...(plot.irrigation_Type === "drip" || plot.irrigation_type_name === "drip"
+        ...(plot.irrigation_Type === "drip" ||
+        plot.irrigation_type_name === "drip"
           ? {
-              flow_rate_lph: parseFloat(plot.flow_Rate || plot.flow_rate_lph) || 2.0,
-              emitters_count: parseInt(plot.emitters || plot.emitters_count) || 120,
+              flow_rate_lph:
+                parseFloat(plot.flow_Rate || plot.flow_rate_lph) || 2.0,
+              emitters_count:
+                parseInt(plot.emitters || plot.emitters_count) || 120,
             }
-          : plot.irrigation_Type === "flood" || plot.irrigation_type_name === "flood"
+          : plot.irrigation_Type === "flood" ||
+            plot.irrigation_type_name === "flood"
           ? {
-              motor_horsepower: parseFloat(plot.motor_Horsepower || plot.motor_horsepower) || 7.5,
-              pipe_width_inches: parseFloat(plot.pipe_Width || plot.pipe_width_inches) || 4.0,
-              distance_motor_to_plot_m: parseFloat(plot.distance_From_Motor || plot.distance_motor_to_plot_m) || 50.0,
+              motor_horsepower:
+                parseFloat(plot.motor_Horsepower || plot.motor_horsepower) ||
+                7.5,
+              pipe_width_inches:
+                parseFloat(plot.pipe_Width || plot.pipe_width_inches) || 4.0,
+              distance_motor_to_plot_m:
+                parseFloat(
+                  plot.distance_From_Motor || plot.distance_motor_to_plot_m
+                ) || 50.0,
             }
           : {}),
       },
@@ -1166,13 +1217,14 @@ export const registerFarmerAllInOneOnly = async (
   try {
     // Check if user is authenticated - registration endpoint REQUIRES authentication
     const token = getAuthToken();
-    
+
     if (!token || !isValidToken(token)) {
-      const errorMsg = "Authentication required. Please login as a Field Officer or Admin to register farmers.";
+      const errorMsg =
+        "Authentication required. Please login as a Field Officer or Admin to register farmers.";
       const error = new Error(errorMsg);
-      (error as any).response = { 
-        status: 401, 
-        data: { detail: errorMsg } 
+      (error as any).response = {
+        status: 401,
+        data: { detail: errorMsg },
       };
       (error as any).requiresAuth = true;
       throw error;
@@ -1185,21 +1237,23 @@ export const registerFarmerAllInOneOnly = async (
       return response;
     } catch (bulkError: any) {
       // If bulk endpoint doesn't exist or fails, fall back to individual submissions
-      if (bulkError.response?.status === 404 || bulkError.response?.status === 405) {
+      if (
+        bulkError.response?.status === 404 ||
+        bulkError.response?.status === 405
+      ) {
         // Convert form data and plots to all-in-one format (returns array of payloads)
         const allInOneDataArray = convertToAllInOneFormat(formData, plots);
-        
+
         // Submit each plot separately
         const results = [];
         for (let i = 0; i < allInOneDataArray.length; i++) {
           const plotData = allInOneDataArray[i];
-          
           const result = await registerFarmerAllInOne(plotData);
           results.push(result);
-          
+
           // Small delay between submissions to avoid overwhelming the server
           if (i < allInOneDataArray.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise((resolve) => setTimeout(resolve, 500));
           }
         }
         return results;
@@ -1210,8 +1264,12 @@ export const registerFarmerAllInOneOnly = async (
   } catch (error: any) {
     // Only log non-authentication errors to console
     // Authentication errors are expected and handled by the UI
-    if (!error.requiresAuth && error.response?.status !== 401 && error.response?.status !== 403) {
-      console.error('Error in registerFarmerAllInOneOnly:', error);
+    if (
+      !error.requiresAuth &&
+      error.response?.status !== 401 &&
+      error.response?.status !== 403
+    ) {
+      console.error("Error in registerFarmerAllInOneOnly:", error);
     }
     throw error;
   }
@@ -1220,7 +1278,13 @@ export const registerFarmerAllInOneOnly = async (
 // Helper function to convert a single plot to all-in-one API format
 const convertSinglePlotToAllInOneFormat = (formData: any, plot: any) => {
   // Calculate center coordinates for location
-  const coordinates = plot.geometry.coordinates[0];
+  const coordinates = plot.geometry?.coordinates?.[0];
+
+  if (!coordinates || coordinates.length === 0) {
+    throw new Error(
+      "Plot is missing boundary coordinates. Please redraw the plot."
+    );
+  }
 
   const centerLng =
     coordinates.reduce((sum: number, coord: number[]) => sum + coord[0], 0) /
@@ -1264,9 +1328,9 @@ const convertSinglePlotToAllInOneFormat = (formData: any, plot: any) => {
       },
     },
     farm: {
-      address: `${plot.village || formData.district}, ${
-        formData.taluka
-      }, ${formData.district}`,
+      address: `${plot.village || formData.district}, ${formData.taluka}, ${
+        formData.district
+      }`,
       area_size: plot.area.ha.toString(),
       plantation_date: plot.plantation_Date || "2024-01-15",
       spacing_a: plot.spacing_A || "3.0",
@@ -1287,12 +1351,10 @@ const convertSinglePlotToAllInOneFormat = (formData: any, plot: any) => {
       ...(plot.irrigation_Type === "drip"
         ? {
             plants_per_acre:
-              parseFloat(plot.spacing_A) &&
-              parseFloat(plot.spacing_B)
+              parseFloat(plot.spacing_A) && parseFloat(plot.spacing_B)
                 ? Math.floor(
                     43560 /
-                      (parseFloat(plot.spacing_A) *
-                        parseFloat(plot.spacing_B))
+                      (parseFloat(plot.spacing_A) * parseFloat(plot.spacing_B))
                   )
                 : 2000,
             flow_rate_lph: parseFloat(plot.flow_Rate) || 2.5,
@@ -1334,7 +1396,9 @@ const convertToAllInOneFormat = (formData: any, plots: any[]) => {
   }
 
   // Return array of payloads - one for each plot
-  return plots.map((plot, index) => convertSinglePlotToAllInOneFormat(formData, plot));
+  return plots.map((plot, index) =>
+    convertSinglePlotToAllInOneFormat(formData, plot)
+  );
 };
 
 // ==================== SYSTEM/UTILITY API ====================
