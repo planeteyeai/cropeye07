@@ -154,7 +154,7 @@ export const FieldHealthAnalysis: React.FC<FieldHealthAnalysisProps> = ({
                   Status: {computedStatus}
                 </div>
                 <div className="text-sm">
-                  Optimal range: {colors.range}
+                  Optimal range: 60-80
                 </div>
               </div>
             </div>

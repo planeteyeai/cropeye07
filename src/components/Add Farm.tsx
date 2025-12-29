@@ -1366,13 +1366,15 @@ The farmer can now login with Email credentials to access the dashboard and moni
           return filteredTalukas;
         case "plantation_Type":
           // Use plantation_type from crop types API
+          // Filter out null/undefined values
           return cropTypes.length > 0
-            ? [...new Set(cropTypes.map((crop) => crop.plantation_type))]
+            ? [...new Set(cropTypes.map((crop) => crop.plantation_type).filter((val): val is string => val != null && val !== ""))]
             : plantationTypes;
         case "plantation_Method":
           // Use planting_method from crop types API
+          // Filter out null/undefined values
           return cropTypes.length > 0
-            ? [...new Set(cropTypes.map((crop) => crop.planting_method))]
+            ? [...new Set(cropTypes.map((crop) => crop.planting_method).filter((val): val is string => val != null && val !== ""))]
             : plantationMethods;
         case "irrigation_Type":
           return ["drip", "flood"];
@@ -1399,7 +1401,7 @@ The farmer can now login with Email credentials to access the dashboard and moni
               className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm"
             >
               <option value="">Select {key.replace("_", " ")}</option>
-              {options.map((option) => (
+              {options.filter(opt => opt != null && opt !== "").map((option) => (
                 <option key={option} value={option}>
                   {option}
                 </option>
@@ -1774,13 +1776,15 @@ The farmer can now login with Email credentials to access the dashboard and moni
       switch (fieldName) {
         case "plantation_Type":
           // Use plantation_type from crop types API
+          // Filter out null/undefined values
           return cropTypes.length > 0
-            ? [...new Set(cropTypes.map((crop) => crop.plantation_type))]
+            ? [...new Set(cropTypes.map((crop) => crop.plantation_type).filter((val): val is string => val != null && val !== ""))]
             : plantationTypes;
         case "plantation_Method":
           // Use planting_method from crop types API
+          // Filter out null/undefined values
           return cropTypes.length > 0
-            ? [...new Set(cropTypes.map((crop) => crop.planting_method))]
+            ? [...new Set(cropTypes.map((crop) => crop.planting_method).filter((val): val is string => val != null && val !== ""))]
             : plantationMethods;
         case "irrigation_Type":
           return ["drip", "flood"];
@@ -1790,7 +1794,7 @@ The farmer can now login with Email credentials to access the dashboard and moni
     };
 
     const options = getFieldOptions(key);
-    const isSelectField = options !== null;
+    const isSelectField = options !== null && Array.isArray(options);
     const isCropTypeField = key === "crop_type";
 
     return (
@@ -1813,8 +1817,8 @@ The farmer can now login with Email credentials to access the dashboard and moni
               className="block w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm"
             >
               <option value="">Select {key.replace("_", " ")}</option>
-              {options.map((option) => (
-                <option key={option} value={option}>
+              {options.filter(opt => opt != null && opt !== "" && typeof opt === 'string').map((option, index) => (
+                <option key={`${option}-${index}`} value={option}>
                   {option}
                 </option>
               ))}

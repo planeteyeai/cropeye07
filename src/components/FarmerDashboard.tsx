@@ -967,7 +967,7 @@ const FarmerDashboard: React.FC = () => {
               <Calendar className="w-6 h-6 text-orange-600" />
               <div className="text-right">
                 <div className="text-2xl font-bold text-gray-800">
-                  {metrics.daysToHarvest || "-"}
+                  0
                 </div>
                 <div className="text-sm font-semibold text-orange-600">
                   Days

@@ -183,8 +183,8 @@ interface MapProps {
 const CustomTileLayer: React.FC<{
   url: string;
   opacity?: number;
-  key?: string;
-}> = ({ url, opacity = 0.7, key }) => {
+  tileKey?: string;
+}> = ({ url, opacity = 0.7, tileKey }) => {
   // console.log('CustomTileLayer URL:', url);
 
   if (!url) {
@@ -194,7 +194,7 @@ const CustomTileLayer: React.FC<{
 
   return (
     <TileLayer
-      key={key}
+      key={tileKey}
       url={url}
       opacity={opacity}
       maxZoom={22}
@@ -418,7 +418,13 @@ const Map: React.FC<MapProps> = ({
       if (!resp.ok) {
         const errorText = await resp.text().catch(() => 'Unable to read error response');
         console.error("Growth API error response:", errorText);
-        throw new Error(`Growth API failed: ${resp.status} ${resp.statusText} - ${errorText}`);
+        
+        // Handle 502 Bad Gateway - filter out HTML error page
+        if (resp.status === 502 || errorText.includes('<html>') || errorText.includes('Bad Gateway')) {
+          throw new Error('Backend service is temporarily unavailable. Please try again in a few moments.');
+        }
+        
+        throw new Error(`Growth API failed: ${resp.status} ${resp.statusText}`);
       }
 
       const data = await resp.json();
@@ -439,6 +445,20 @@ const Map: React.FC<MapProps> = ({
         endDate: currentEndDate
       });
       setGrowthData(null);
+      
+      // Provide more specific error messages
+      let errorMessage = "Failed to fetch growth data";
+      if (err?.message?.includes("Failed to fetch") || err?.name === "TypeError") {
+        // Check for CORS error specifically
+        if (err?.message?.includes("CORS") || err?.message?.includes("cors")) {
+          errorMessage = "CORS error: Backend server is not allowing requests from this origin. Please check CORS configuration on the server.";
+        } else {
+          errorMessage = "Cannot connect to server. Please check if the backend service is running and accessible.";
+        }
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+      setError(errorMessage);
     }
   };
 
@@ -469,7 +489,13 @@ const Map: React.FC<MapProps> = ({
       if (!resp.ok) {
         const errorText = await resp.text().catch(() => 'Unable to read error response');
         console.error("Water Uptake API error response:", errorText);
-        throw new Error(`Water Uptake API failed: ${resp.status} ${resp.statusText} - ${errorText}`);
+        
+        // Handle 502 Bad Gateway - filter out HTML error page
+        if (resp.status === 502 || errorText.includes('<html>') || errorText.includes('Bad Gateway')) {
+          throw new Error('Backend service is temporarily unavailable. Please try again in a few moments.');
+        }
+        
+        throw new Error(`Water Uptake API failed: ${resp.status} ${resp.statusText}`);
       }
 
       const data = await resp.json();
@@ -490,6 +516,20 @@ const Map: React.FC<MapProps> = ({
         endDate: currentEndDate
       });
       setWaterUptakeData(null);
+      
+      // Provide more specific error messages
+      let errorMessage = "Failed to fetch water uptake data";
+      if (err?.message?.includes("Failed to fetch") || err?.name === "TypeError") {
+        // Check for CORS error specifically
+        if (err?.message?.includes("CORS") || err?.message?.includes("cors")) {
+          errorMessage = "CORS error: Backend server is not allowing requests from this origin. Please check CORS configuration on the server.";
+        } else {
+          errorMessage = "Cannot connect to server. Please check if the backend service is running and accessible.";
+        }
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+      setError(errorMessage);
     }
   };
 
@@ -520,7 +560,13 @@ const Map: React.FC<MapProps> = ({
       if (!resp.ok) {
         const errorText = await resp.text().catch(() => 'Unable to read error response');
         console.error("Soil Moisture API error response:", errorText);
-        throw new Error(`Soil Moisture API failed: ${resp.status} ${resp.statusText} - ${errorText}`);
+        
+        // Handle 502 Bad Gateway - filter out HTML error page
+        if (resp.status === 502 || errorText.includes('<html>') || errorText.includes('Bad Gateway')) {
+          throw new Error('Backend service is temporarily unavailable. Please try again in a few moments.');
+        }
+        
+        throw new Error(`Soil Moisture API failed: ${resp.status} ${resp.statusText}`);
       }
 
       const data = await resp.json();
@@ -541,6 +587,20 @@ const Map: React.FC<MapProps> = ({
         endDate: currentEndDate
       });
       setSoilMoistureData(null);
+      
+      // Provide more specific error messages
+      let errorMessage = "Failed to fetch soil moisture data";
+      if (err?.message?.includes("Failed to fetch") || err?.name === "TypeError") {
+        // Check for CORS error specifically
+        if (err?.message?.includes("CORS") || err?.message?.includes("cors")) {
+          errorMessage = "CORS error: Backend server is not allowing requests from this origin. Please check CORS configuration on the server.";
+        } else {
+          errorMessage = "Cannot connect to server. Please check if the backend service is running and accessible.";
+        }
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+      setError(errorMessage);
     }
   };
 
@@ -573,7 +633,13 @@ const Map: React.FC<MapProps> = ({
       if (!resp.ok) {
         const errorText = await resp.text().catch(() => 'Unable to read error response');
         console.error("Plot API error response:", errorText);
-        throw new Error(`${resp.status} ${resp.statusText} - ${errorText}`);
+        
+        // Handle 502 Bad Gateway - filter out HTML error page
+        if (resp.status === 502 || errorText.includes('<html>') || errorText.includes('Bad Gateway')) {
+          throw new Error('Backend service is temporarily unavailable. Please try again in a few moments.');
+        }
+        
+        throw new Error(`Plot API failed: ${resp.status} ${resp.statusText}`);
       }
 
       const data = await resp.json();
@@ -593,7 +659,20 @@ const Map: React.FC<MapProps> = ({
         plotName: plotName,
         endDate: currentDate
       });
-      setError(err?.message || "Failed to fetch plot data");
+      
+      // Provide more specific error messages
+      let errorMessage = "Failed to fetch plot data";
+      if (err?.message?.includes("Failed to fetch") || err?.name === "TypeError") {
+        // Check for CORS error specifically
+        if (err?.message?.includes("CORS") || err?.message?.includes("cors")) {
+          errorMessage = "CORS error: Backend server is not allowing requests from this origin. Please check CORS configuration on the server.";
+        } else {
+          errorMessage = "Cannot connect to server. Please check if the backend service is running and accessible.";
+        }
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+      setError(errorMessage);
       // Don't clear plotData or plotBoundary on error - keep existing plot visible
       // Only clear if this is a new plot selection
       if (!plotBoundary || plotBoundary.properties?.plot_name !== plotName) {
@@ -694,7 +773,13 @@ const Map: React.FC<MapProps> = ({
       if (!resp.ok) {
         const errorText = await resp.text().catch(() => 'Unable to read error response');
         console.error("Pest detection API error response:", errorText);
-        throw new Error(`Pest detection API failed: ${resp.status} ${resp.statusText} - ${errorText}`);
+        
+        // Handle 502 Bad Gateway - filter out HTML error page
+        if (resp.status === 502 || errorText.includes('<html>') || errorText.includes('Bad Gateway')) {
+          throw new Error('Backend service is temporarily unavailable. Please try again in a few moments.');
+        }
+        
+        throw new Error(`Pest detection API failed: ${resp.status} ${resp.statusText}`);
       }
 
       const data = await resp.json();
@@ -739,6 +824,20 @@ const Map: React.FC<MapProps> = ({
         endDate: currentEndDate
       });
       setPestData(null);
+      
+      // Provide more specific error messages
+      let errorMessage = "Failed to fetch pest data";
+      if (err?.message?.includes("Failed to fetch") || err?.name === "TypeError") {
+        // Check for CORS error specifically
+        if (err?.message?.includes("CORS") || err?.message?.includes("cors")) {
+          errorMessage = "CORS error: Backend server is not allowing requests from this origin. Please check CORS configuration on the server.";
+        } else {
+          errorMessage = "Cannot connect to server. Please check if the backend service is running and accessible.";
+        }
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+      setError(errorMessage);
     }
   };
 
@@ -1497,9 +1596,10 @@ const Map: React.FC<MapProps> = ({
 
           {activeUrl && (
             <CustomTileLayer
+              key={`${activeLayer}-layer-${layerChangeKey}`}
               url={activeUrl}
               opacity={0.7}
-              key={`${activeLayer}-layer-${layerChangeKey}`}
+              tileKey={`${activeLayer}-layer-${layerChangeKey}`}
             />
           )}
 

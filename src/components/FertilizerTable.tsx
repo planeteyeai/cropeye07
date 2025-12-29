@@ -20,13 +20,63 @@ interface FertilizerEntry {
   organic_inputs?: string[];
 }
 
+// Plantation type to months mapping
+const PLANTATION_TYPE_MONTHS: Record<string, number> = {
+  'Suru': 10,
+  'Adsali': 14,
+  'Preseasonal': 12,
+  'Ratoon': 9,
+};
 
 const FertilizerTable: React.FC = () => {
   const [data, setData] = useState<FertilizerEntry[]>([]);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [plantationType, setPlantationType] = useState<string | null>(null);
+  const [monthsCompleted, setMonthsCompleted] = useState<number | null>(null);
+  const [noFertilizerRequired, setNoFertilizerRequired] = useState<boolean>(false);
   const tableRef = useRef<HTMLDivElement>(null);
   const { profile, loading: profileLoading, error: profileError } = useFarmerProfile();
   const { selectedPlotName } = useAppContext();
+
+  // Helper function to calculate months since plantation
+  const calculateMonthsSincePlantation = (plantationDate: string): number => {
+    let plantation: Date;
+    
+    plantation = new Date(plantationDate);
+    
+    if (isNaN(plantation.getTime())) {
+      const parts = plantationDate.split('-');
+      if (parts.length === 3) {
+        plantation = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      } else {
+        const parts2 = plantationDate.split('/');
+        if (parts2.length === 3) {
+          plantation = new Date(parseInt(parts2[2]), parseInt(parts2[1]) - 1, parseInt(parts2[0]));
+        }
+      }
+    }
+    
+    if (isNaN(plantation.getTime())) {
+      console.error('Invalid plantation date:', plantationDate);
+      return 0;
+    }
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    plantation.setHours(0, 0, 0, 0);
+    
+    const yearsDiff = today.getFullYear() - plantation.getFullYear();
+    const monthsDiff = today.getMonth() - plantation.getMonth();
+    const daysDiff = today.getDate() - plantation.getDate();
+    
+    let totalMonths = yearsDiff * 12 + monthsDiff;
+    
+    if (daysDiff < 0) {
+      totalMonths = totalMonths - 1;
+    }
+    
+    return Math.max(0, totalMonths);
+  };
 
   // Helper function to calculate days since plantation
   const calculateDaysSincePlantation = (plantationDate: string): number => {
@@ -150,6 +200,9 @@ const FertilizerTable: React.FC = () => {
     if (!selectedPlotName) {
       setData([]);
       setLocalError(null);
+      setPlantationType(null);
+      setMonthsCompleted(null);
+      setNoFertilizerRequired(false);
       return;
     }
 
@@ -217,12 +270,89 @@ const FertilizerTable: React.FC = () => {
       const plantationDate = firstFarm.plantation_date || 
                            firstFarm.created_at?.split('T')[0];
 
-      // Extract planting_method from crop_type (as per bud.json structure)
-      const plantingMethod = firstFarm.crop_type?.planting_method;
+      // Extract plantation_type from crop_type
+      const plantationTypeValue = firstFarm.crop_type?.plantation_type || 
+                                  firstFarm.crop_type?.plantation_type_display;
+      
+      console.log('FertilizerTable: Farm data', {
+        plantation_type: firstFarm.crop_type?.plantation_type,
+        plantation_type_display: firstFarm.crop_type?.plantation_type_display,
+        plantationTypeValue: plantationTypeValue,
+        crop_type: firstFarm.crop_type
+      });
+      
+      setPlantationType(plantationTypeValue || null);
 
       if (!plantationDate) {
         throw new Error('Plantation date not found in farm data');
       }
+
+      // Calculate months since plantation
+      const monthsSincePlantation = calculateMonthsSincePlantation(plantationDate);
+      setMonthsCompleted(monthsSincePlantation);
+
+      console.log('FertilizerTable: Checking plantation type and months', {
+        plantationTypeValue: plantationTypeValue,
+        monthsSincePlantation: monthsSincePlantation,
+        plantationDate: plantationDate
+      });
+
+      // Check plantation type and months BEFORE requiring planting method
+      // This allows us to show "No fertilizer required" even if planting method is missing
+      if (plantationTypeValue) {
+        // Normalize plantation type for matching (case-insensitive, remove hyphens/spaces)
+        const normalizedPlantationType = plantationTypeValue.trim()
+          .toLowerCase()
+          .replace(/-/g, '')  // Remove hyphens (pre-seasonal -> preseasonal)
+          .replace(/\s+/g, ''); // Remove spaces
+        
+        console.log('FertilizerTable: Normalized plantation type', {
+          original: plantationTypeValue,
+          normalized: normalizedPlantationType,
+          availableKeys: Object.keys(PLANTATION_TYPE_MONTHS)
+        });
+        
+        // Try to find matching plantation type (case-insensitive, ignore hyphens/spaces)
+        const matchingKey = Object.keys(PLANTATION_TYPE_MONTHS).find(
+          key => key.toLowerCase().replace(/-/g, '').replace(/\s+/g, '') === normalizedPlantationType
+        );
+        
+        const requiredMonths = matchingKey ? PLANTATION_TYPE_MONTHS[matchingKey] : null;
+        
+        console.log('FertilizerTable: Matching result', {
+          matchingKey: matchingKey,
+          requiredMonths: requiredMonths,
+          monthsSincePlantation: monthsSincePlantation,
+          shouldHide: requiredMonths !== null && monthsSincePlantation >= requiredMonths
+        });
+        
+        if (requiredMonths !== null && monthsSincePlantation >= requiredMonths) {
+          setNoFertilizerRequired(true);
+          setData([]);
+          setLocalError(null); // Clear any previous errors
+          console.log('✅ FertilizerTable: No fertilizer required - HIDING TABLE', {
+            plantationType: plantationTypeValue,
+            matchingKey: matchingKey,
+            monthsCompleted: monthsSincePlantation,
+            requiredMonths: requiredMonths,
+            plantationDate: plantationDate
+          });
+          return; // Exit early - don't check planting method or generate fertilizer data
+        } else {
+          setNoFertilizerRequired(false);
+          console.log('❌ FertilizerTable: Fertilizer still required', {
+            monthsSincePlantation: monthsSincePlantation,
+            requiredMonths: requiredMonths,
+            matchingKey: matchingKey
+          });
+        }
+      } else {
+        setNoFertilizerRequired(false);
+        console.log('⚠️ FertilizerTable: No plantation type found');
+      }
+
+      // Extract planting_method from crop_type (only needed if fertilizer is still required)
+      const plantingMethod = firstFarm.crop_type?.planting_method;
 
       if (!plantingMethod) {
         throw new Error('Planting method not found in farm data');
@@ -231,7 +361,9 @@ const FertilizerTable: React.FC = () => {
       console.log('FertilizerTable: Generating data for plot', {
         selectedPlotName,
         plantationDate,
-        plantingMethod
+        plantingMethod,
+        plantationType: plantationTypeValue,
+        monthsCompleted: monthsSincePlantation
       });
 
       // Generate fertilizer data using plantation_date and planting_method with bud.json
@@ -240,10 +372,22 @@ const FertilizerTable: React.FC = () => {
       console.log('FertilizerTable: Generated fertilizer data', fertilizerData.length, 'entries');
       
     } catch (error: any) {
-      // Failed to fetch data - show error
+      // Failed to fetch data - show error only if fertilizer is still required
       console.error('FertilizerTable: Error loading fertilizer data:', error?.message || error);
-      setLocalError(`Failed to fetch data: ${error?.message || 'Unknown error occurred'}`);
+      
+      // Only set error if we haven't determined that no fertilizer is required
+      // This prevents showing errors when plantation type check succeeded
+      if (!noFertilizerRequired) {
+        setLocalError(`Failed to fetch data: ${error?.message || 'Unknown error occurred'}`);
+      }
+      
       setData([]);
+      // Don't reset plantation type and months if we already determined no fertilizer is needed
+      if (!noFertilizerRequired) {
+        setPlantationType(null);
+        setMonthsCompleted(null);
+        setNoFertilizerRequired(false);
+      }
     }
   }, [profile, profileLoading, profileError, selectedPlotName]);
 
@@ -306,7 +450,47 @@ const FertilizerTable: React.FC = () => {
         </div>
       )} */}
 
-      {(localError || profileError) && (
+      {/* No Fertilizer Required Message */}
+      {(() => {
+        // Re-check the conditions in render to ensure message shows
+        if (!plantationType || monthsCompleted === null) {
+          return null;
+        }
+        
+        const normalizedPlantationType = plantationType.trim()
+          .toLowerCase()
+          .replace(/-/g, '')
+          .replace(/\s+/g, '');
+        
+        const matchingKey = Object.keys(PLANTATION_TYPE_MONTHS).find(
+          key => key.toLowerCase().replace(/-/g, '').replace(/\s+/g, '') === normalizedPlantationType
+        );
+        const requiredMonths = matchingKey ? PLANTATION_TYPE_MONTHS[matchingKey] : null;
+        
+        // Check if months completed >= required months (direct check in render)
+        const shouldShowMessage = noFertilizerRequired || (requiredMonths !== null && monthsCompleted >= requiredMonths);
+        
+        if (shouldShowMessage) {
+          return (
+            <div className="mb-4 p-6 bg-green-50 border border-green-200 rounded-lg text-center">
+              <svg className="w-12 h-12 text-green-600 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-lg font-bold text-green-800 mb-2">Fertilizer schedule completed</p>
+              <p className="text-lg font-bold text-green-800 mb-2">No Fertilizer required</p>
+              <p className="text-sm text-green-700">
+                {/* The <strong>{plantationType}</strong> plantation has completed <strong>{monthsCompleted}</strong> months  */}
+                {/* {requiredMonths !== null && ` (required: ${requiredMonths} months)`}.  */}
+                {/* No fertilizer application is needed at this time. */}
+              </p>
+            </div>
+          );
+        }
+        
+        return null;
+      })()}
+
+      {(localError || profileError) && !noFertilizerRequired && (
         <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <div className="flex items-start">
             <svg className="w-5 h-5 text-yellow-600 mt-0.5 mr-2" fill="currentColor" viewBox="0 0 20 20">
@@ -324,17 +508,41 @@ const FertilizerTable: React.FC = () => {
           {/* <Satellite className="w-8 h-8 animate-spin text-blue-500" /> */}
           <span className="ml-2 text-gray-600">Loading fertilizer data...</span>
         </div>
-      ) : (localError || profileError || data.length === 0) ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <svg className="w-16 h-16 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <p className="text-lg font-semibold text-gray-800 mb-2">Failed to Fetch Data</p>
-            <p className="text-sm text-gray-600">{localError || profileError || 'No fertilizer data available'}</p>
+      ) : (() => {
+        // Re-check if fertilizer should be hidden (safety check in render)
+        if (plantationType && monthsCompleted !== null) {
+          const normalizedPlantationType = plantationType.trim()
+            .toLowerCase()
+            .replace(/-/g, '')
+            .replace(/\s+/g, '');
+          
+          const matchingKey = Object.keys(PLANTATION_TYPE_MONTHS).find(
+            key => key.toLowerCase().replace(/-/g, '').replace(/\s+/g, '') === normalizedPlantationType
+          );
+          const requiredMonths = matchingKey ? PLANTATION_TYPE_MONTHS[matchingKey] : null;
+          
+          if (requiredMonths !== null && monthsCompleted >= requiredMonths) {
+            // No fertilizer required - message already shown above, table is completely hidden
+            return null;
+          }
+        }
+        
+        // Show error or table only if fertilizer is still required
+        if (noFertilizerRequired) {
+          return null;
+        }
+        
+        return (localError || profileError || data.length === 0) ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <svg className="w-16 h-16 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <p className="text-lg font-semibold text-gray-800 mb-2">Failed to Fetch Data</p>
+              <p className="text-sm text-gray-600">{localError || profileError || 'No fertilizer data available'}</p>
+            </div>
           </div>
-        </div>
-      ) : (
+        ) : (
         <div ref={tableRef} className="overflow-x-auto">
           <div className="mb-4">
             <h3 className="text-lg font-semibold text-gray-700 mb-2">Next 7 Days Fertilizer Schedule</h3>
@@ -454,7 +662,8 @@ const FertilizerTable: React.FC = () => {
             </tbody>
           </table>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 };
