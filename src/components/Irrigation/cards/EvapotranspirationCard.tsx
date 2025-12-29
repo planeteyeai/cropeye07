@@ -4,13 +4,18 @@ import "../Irrigation.css";
 import { useAppContext } from "../../../context/AppContext";
 import { useFarmerProfile } from "../../../hooks/useFarmerProfile";
 
+interface HourlyETRecord {
+  time: string;
+  et0_fao_evapotranspiration: number;
+}
+
 interface ETResponse {
   plot_name: string;
   start_date: string;
   end_date: string;
   area_hectares: number;
   ET_mean_mm_per_day: number;
-  ET_total_liters_per_day: number;
+  hourly_records_et?: HourlyETRecord[];
 }
 
 const EvapotranspirationCard: React.FC = () => {
@@ -20,6 +25,7 @@ const EvapotranspirationCard: React.FC = () => {
   const [plotName, setPlotName] = useState<string>("");
   const etValue = appState?.etValue ?? 0;
   const trendData = Array.isArray(appState?.etTrendData) ? appState.etTrendData : [];
+  const [hourlyData, setHourlyData] = useState<Array<{time: string, value: number}>>([]);
   const [loading, setLoading] = useState<boolean>(!etValue);
   const [error, setError] = useState<string | null>(null);
   const [average] = useState<number>(2.5);
@@ -68,6 +74,10 @@ const EvapotranspirationCard: React.FC = () => {
         etValue: cached.etValue,
         etTrendData: cached.trendData,
       }));
+      // Restore hourly data with time if available
+      if (cached.hourlyData && Array.isArray(cached.hourlyData)) {
+        setHourlyData(cached.hourlyData);
+      }
       setLoading(false);
       return;
     }
@@ -109,12 +119,58 @@ const EvapotranspirationCard: React.FC = () => {
       // Extract ET value from ET_mean_mm_per_day (primary field from API response)
       const etValueExtracted = data.ET_mean_mm_per_day ?? 2.5;
 
-      // Generate trend data based on ET_mean_mm_per_day (API doesn't provide hourly data)
-      const base = etValueExtracted;
-      const trendDataExtracted = Array.from({ length: 24 }, (_, i) => {
-        const fluctuation = (Math.sin(i / 3) + 1) * 0.1 * base;
-        return Math.round((base + fluctuation) * 10) / 10;
-      });
+      // Extract hourly trend data from hourly_records_et array
+      let trendDataExtracted: number[] = [];
+      let hourlyDataWithTime: Array<{time: string, value: number}> = [];
+      
+      if (data.hourly_records_et && Array.isArray(data.hourly_records_et) && data.hourly_records_et.length > 0) {
+        // Use real hourly data from API
+        // Extract both time and et0_fao_evapotranspiration values
+        hourlyDataWithTime = data.hourly_records_et.map((record: HourlyETRecord) => ({
+          time: record.time || '',
+          value: Number(record.et0_fao_evapotranspiration) || 0
+        }));
+        
+        // Map the et0_fao_evapotranspiration values for trendDataExtracted
+        trendDataExtracted = hourlyDataWithTime.map(item => item.value);
+        
+        // Ensure we have exactly 24 hours of data
+        // If we have fewer than 24 records, pad with zeros and generate time
+        while (hourlyDataWithTime.length < 24) {
+          const currentDate = data.start_date || new Date().toISOString().split('T')[0];
+          const hour = hourlyDataWithTime.length.toString().padStart(2, '0');
+          hourlyDataWithTime.push({
+            time: `${currentDate}T${hour}:00`,
+            value: 0
+          });
+          trendDataExtracted.push(0);
+        }
+        
+        // If we have more than 24 records, take only the first 24
+        if (hourlyDataWithTime.length > 24) {
+          hourlyDataWithTime = hourlyDataWithTime.slice(0, 24);
+          trendDataExtracted = trendDataExtracted.slice(0, 24);
+        }
+      } else {
+        // Fallback: Generate trend data if hourly_records_et is not available
+        const base = etValueExtracted;
+        const currentDate = data.start_date || new Date().toISOString().split('T')[0];
+        trendDataExtracted = Array.from({ length: 24 }, (_, i) => {
+          const fluctuation = (Math.sin(i / 3) + 1) * 0.1 * base;
+          return Math.round((base + fluctuation) * 10) / 10;
+        });
+        
+        hourlyDataWithTime = trendDataExtracted.map((value, i) => {
+          const hour = i.toString().padStart(2, '0');
+          return {
+            time: `${currentDate}T${hour}:00`,
+            value: value
+          };
+        });
+      }
+      
+      // Store hourly data with time for tooltips
+      setHourlyData(hourlyDataWithTime);
 
 
       // Update AppContext
@@ -129,6 +185,7 @@ const EvapotranspirationCard: React.FC = () => {
       setCached(cacheKey, {
         etValue: etValueExtracted,
         trendData: trendDataExtracted,
+        hourlyData: hourlyDataWithTime, // Store hourly data with time
       });
 
     } catch (err: any) {
@@ -199,11 +256,17 @@ const EvapotranspirationCard: React.FC = () => {
             {Array.isArray(trendData) && trendData.length > 0 ? (
               trendData.map((val: number, i: number) => {
                 const numVal = Number(val) || 0;
+                // Get time from hourlyData if available, otherwise use index
+                const timeData = hourlyData[i] || null;
+                const displayTime = timeData?.time 
+                  ? new Date(timeData.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+                  : `${i.toString().padStart(2, '0')}:00`;
+                
                 return (
                   <div
                     key={i}
                     className="trend-bar"
-                    title={`${i}:00 - ${numVal.toFixed(2)} mm`}
+                    title={`${displayTime} - ${numVal.toFixed(2)} mm`}
                     style={{
                       height: `${(numVal / maxTrendValue) * 100}%`,
                       minHeight: "2px",
