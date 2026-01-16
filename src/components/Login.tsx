@@ -259,9 +259,14 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       // Store refresh token if available
       if (refreshToken) {
         setRefreshToken(refreshToken);
+        console.log("✅ Refresh token stored successfully");
+      } else {
+        console.warn("⚠️ No refresh token received from login response");
       }
       
       setAuthData(token, userRole, userDataToStore, refreshToken);
+      
+      console.log("✅ Login successful - Access token and refresh token stored");
       
       // Success - call the callback with role and token
       onLoginSuccess(userRole, token);

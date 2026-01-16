@@ -7,6 +7,7 @@ import {
   setRefreshToken,
   clearAuthData,
 } from "./utils/auth";
+import { checkAndRefreshToken, isTokenExpired } from "./utils/tokenManager";
 
 // Set base URL for backend
 
@@ -31,14 +32,30 @@ const publicApi = axios.create({
   },
 });
 
-// Add auth token if available
-api.interceptors.request.use((config) => {
-  const token = getAuthToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+// Add auth token if available and refresh if needed
+api.interceptors.request.use(
+  async (config) => {
+    // Check and refresh token if needed before making request
+    const token = getAuthToken();
+    if (token) {
+      // If token is expired or expiring soon, try to refresh it
+      if (isTokenExpired(token, 300)) {
+        // Token is expired or expiring within 5 minutes, refresh it
+        await checkAndRefreshToken(300);
+      }
+      
+      // Get the (possibly refreshed) token
+      const currentToken = getAuthToken();
+      if (currentToken) {
+        config.headers.Authorization = `Bearer ${currentToken}`;
+      }
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
   }
-  return config;
-});
+);
 
 // Token refresh flag to prevent infinite loops
 let isRefreshing = false;
@@ -111,10 +128,16 @@ api.interceptors.response.use(
               }
             );
 
-            const { access } = response.data;
+            const { access, refresh: newRefreshToken } = response.data;
 
             if (access) {
               setAuthTokenUtil(access);
+              
+              // Update refresh token if a new one is provided
+              if (newRefreshToken) {
+                setRefreshToken(newRefreshToken);
+              }
+              
               originalRequest.headers.Authorization = `Bearer ${access}`;
 
               // Process queued requests
@@ -123,7 +146,7 @@ api.interceptors.response.use(
 
               return api(originalRequest);
             }
-          } catch (refreshError) {
+          } catch (refreshError: any) {
             // Refresh failed - clear auth and redirect to login
             processQueue(refreshError, null);
             isRefreshing = false;
@@ -173,8 +196,9 @@ api.interceptors.response.use(
 //};
 
 //Login function - backend expects phone_number field
+// Uses publicApi since login doesn't require authentication
 export const login = (phone_number: string, password: string) => {
-  return api.post("/login/", { phone_number, password });
+  return publicApi.post("/login/", { phone_number, password });
 };
 
 // Token refresh function

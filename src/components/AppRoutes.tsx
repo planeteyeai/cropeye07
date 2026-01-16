@@ -13,10 +13,12 @@ import {
   getAuthToken,
   getUserRole,
   clearAuthData,
+  clearAllLocalStorage,
   setAuthData,
   isValidToken,
 } from "../utils/auth";
 import { getCurrentUser } from "../api";
+import { initializeTokenRefresh } from "../utils/tokenManager";
 
 export type UserRole =
   | "manager"
@@ -43,6 +45,17 @@ const AppRoutesContent: React.FC = () => {
       setLoading(false);
     }
   }, []);
+
+  // Initialize token refresh when authenticated
+  useEffect(() => {
+    if (isAuthenticated && userRole) {
+      // Set up automatic token refresh
+      const cleanup = initializeTokenRefresh();
+      
+      // Cleanup on unmount or when authentication changes
+      return cleanup;
+    }
+  }, [isAuthenticated, userRole]);
 
   const validateToken = async (token: string, role: UserRole) => {
     try {
@@ -167,12 +180,15 @@ const AppRoutesContent: React.FC = () => {
   };
 
   const handleLogout = () => {
-    // Clear all authentication data using utility function
-    clearAuthData();
+    // Clear ALL localStorage data (auth, cache, app state, etc.)
+    clearAllLocalStorage();
 
     // Reset state
     setUserRole(null);
     setIsAuthenticated(false);
+    
+    // Redirect to login page
+    navigate("/login");
   };
 
   // Show loading screen while checking authentication
