@@ -1,7 +1,37 @@
-export const diseasesData = [
+export interface Disease {
+  name: string;
+  months: string[];
+  symptoms: string[];
+  where: string;
+  why: string;
+  when: {
+    high: string;
+    moderate: string;
+    low: string;
+  };
+  organic: string[];
+  chemical: string[];
+  conditions?: Array<{
+    temperatureRange: string;
+    humidityRange: string;
+  }>;
+  image: string;
+  stage?: {
+    minDays: number;
+    maxDays: number;
+    description: string;
+  };
+}
+
+export const diseasesData: Disease[] = [
   {
     name: "Red Rot",
     months: ["July", "August", "September", "October", "November"],
+    stage: {
+      minDays: 121,
+      maxDays: 365,
+      description: "Grand Growth (121-210 days) to Maturity (211-365 days)"
+    },
     symptoms: [
       "Leaf changes colour from green to yellow, then drying from bottom to top.",
       "Red spots on the back side of the midrib if spores enter through the leaf.",
@@ -32,6 +62,11 @@ export const diseasesData = [
   {
     name: "Smut",
     months: ["February", "March", "April", "May", "June"],
+    stage: {
+      minDays: 0,
+      maxDays: 120,
+      description: "Germination (0-45 days) to Tillering (46-120 days)"
+    },
     symptoms: [
       " A long whip-like structure (25–150 cm) grows from the top of the cane.",
       "This whip is covered with a silvery layer and filled with black powdery spores.",
@@ -62,6 +97,11 @@ export const diseasesData = [
   {
     name: "Grassy Shoot",
     months: ["February", "March", "April", "May"],
+    stage: {
+      minDays: 90,
+      maxDays: 120,
+      description: "3-4 month old crops"
+    },
     symptoms: [
       "In 3–4 month old crops, thin, white papery leaves appear at the top of the cane.",
       "Many white or yellow shoots grow from below these leaves ",
@@ -94,6 +134,11 @@ export const diseasesData = [
   {
     name: "Wilt",
     months: ["July", "August", "September", "October"],
+    stage: {
+      minDays: 121,
+      maxDays: 365,
+      description: "Grand Growth (121-210 days) to Maturity (211-365 days)"
+    },
     symptoms: [
       "Signs of the disease appear when the crop is 4–5 months old.",
       "Leaves slowly turn yellow and dry, and canes become weak and shrink.",
@@ -123,6 +168,11 @@ export const diseasesData = [
   {
     name: "Ratoon Stunting Disease (RSD)",
     months: ["February", "March", "April", "May", "June", "July", "August", "September", "October", "November"],
+    stage: {
+      minDays: 0,
+      maxDays: 365,
+      description: "Any stage, especially ratoon crops"
+    },
     symptoms: [
       "Affected plants are stunted, especially in stubble and ratoon crops.",
       "Small orange dot-like bacteria appear inside the soft tissue near the nodes.",
@@ -151,6 +201,11 @@ export const diseasesData = [
   {
     name: "Leaf Scald",
     months: ["March", "April", "May", "June", "July", "August"],
+    stage: {
+      minDays: 90,
+      maxDays: 300,
+      description: "Tillering to maturity"
+    },
     symptoms: [
       "White “pencil lines” (1–2 mm wide) run along leaf veins with yellow borders.",
       "Leaves turn pale, curl inward, and get brown necrotic patches (“scalded” look)",
@@ -184,6 +239,11 @@ export const diseasesData = [
   {
     name: "Rust",
     months: ["August", "September", "October", "November", "December"],
+    stage: {
+      minDays: 46,
+      maxDays: 365,
+      description: "Tillering (46-120 days) to Maturity (211-365 days)"
+    },
     symptoms: [
       "Small yellow spots appear first on both leaf sides.",
       "Spots grow longer, turn brown or reddish-brown, and merge into big rusty patches.",
@@ -216,7 +276,11 @@ export const diseasesData = [
   },
   {
     name: "Downy Mildew",
-    stage: "Seedling stage",
+    stage: {
+      minDays: 121,
+      maxDays: 210,
+      description: "Grand Growth (121-210 days)"
+    },
     months: ["June", "July", "August"],
     symptoms: [
       "Small yellow spots on leaves that turn into pale yellow or white stripes.",

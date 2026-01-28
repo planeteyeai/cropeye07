@@ -42,18 +42,27 @@ export const PestDisease: React.FC = () => {
       setIsLoading(true);
       
       // Fetch plantation date, weather data, and pest detection data
-      const plantationDate = await fetchPlantationDate();
-      const weatherData = await fetchCurrentWeather();
+      const plantationDate = await fetchPlantationDate(selectedPlotName || undefined);
+      const weatherData = await fetchCurrentWeather(selectedPlotName || undefined);
       const pestData = await fetchPestDetectionData(selectedPlotName || undefined);
       
-      // Generate risk assessment
-      const assessment = await generateRiskAssessment(plantationDate, weatherData);
+      // Generate risk assessment with plotId (API data, stage, and month matching already integrated)
+      const assessment = await generateRiskAssessment(
+        plantationDate, 
+        weatherData, 
+        selectedPlotName || undefined
+      );
       
-      // Modify assessment based on API percentages
-      const modifiedAssessment = modifyAssessmentWithAPIData(assessment, pestData);
-      
-      setRiskAssessment(modifiedAssessment);
+      // Assessment already has correct logic: only HIGH if API percentage > 0 AND stage matches AND month matches
+      setRiskAssessment(assessment);
       setPestDetectionData(pestData);
+      
+      // Auto-select "High" risk level if there are High risk pests or diseases detected
+      if (assessment.pests.High.length > 0 || assessment.diseases.High.length > 0) {
+        setSelectedCategory(assessment.pests.High.length > 0 ? 'Pests' : 'Diseases');
+        setSelectedRiskLevel('High');
+        console.log('✅ Auto-selected High risk level. Pests:', assessment.pests.High.length, 'Diseases:', assessment.diseases.High.length);
+      }
       
     } catch (error) {
       console.error('Failed to load risk assessment:', error);
@@ -62,58 +71,14 @@ export const PestDisease: React.FC = () => {
     }
   };
 
-  // Modify risk assessment to include pests/diseases based on API percentages
+  // Note: modifyAssessmentWithAPIData is no longer needed since the risk assessment
+  // already includes API data, stage, and month matching in generateRiskAssessment.
+  // This function is kept for backward compatibility but should not override the logic.
   const modifyAssessmentWithAPIData = (assessment: RiskAssessmentResult, pestData: PestDetectionData): RiskAssessmentResult => {
-    const modified = { ...assessment };
-    
-    // Add pests to High Risk based on API percentages
-    if (pestData.chewing_affected_pixel_percentage > 0) {
-      const chewingPests = ['Early shoot borer', 'Internode borer', 'Top shoot borer'];
-      chewingPests.forEach(pestName => {
-        if (!modified.pests.High.includes(pestName)) {
-          modified.pests.High.push(pestName);
-          // Remove from other categories if present
-          modified.pests.Moderate = modified.pests.Moderate.filter(p => p !== pestName);
-          modified.pests.Low = modified.pests.Low.filter(p => p !== pestName);
-        }
-      });
-    }
-    
-    if (pestData.sucking_affected_pixel_percentage > 0) {
-      const suckingPests = ['Sugarcane woolly aphids', 'Mealy bug', 'Whitefly', 'Sugarcane scale insect', 'Sugarcane pyrilla'];
-      suckingPests.forEach(pestName => {
-        if (!modified.pests.High.includes(pestName)) {
-          modified.pests.High.push(pestName);
-          modified.pests.Moderate = modified.pests.Moderate.filter(p => p !== pestName);
-          modified.pests.Low = modified.pests.Low.filter(p => p !== pestName);
-        }
-      });
-    }
-    
-    if (pestData.SoilBorn_affected_pixel_percentage > 0) {
-      const soilBornePests = ['White grub', 'Termites'];
-      soilBornePests.forEach(pestName => {
-        if (!modified.pests.High.includes(pestName)) {
-          modified.pests.High.push(pestName);
-          modified.pests.Moderate = modified.pests.Moderate.filter(p => p !== pestName);
-          modified.pests.Low = modified.pests.Low.filter(p => p !== pestName);
-        }
-      });
-    }
-    
-    // Add diseases to High Risk based on Fungi percentage
-    if (pestData.fungi_affected_pixel_percentage > 0) {
-      const fungalDiseases = ['Red Rot', 'Rust'];
-      fungalDiseases.forEach(diseaseName => {
-        if (!modified.diseases.High.includes(diseaseName)) {
-          modified.diseases.High.push(diseaseName);
-          modified.diseases.Moderate = modified.diseases.Moderate.filter(d => d !== diseaseName);
-          modified.diseases.Low = modified.diseases.Low.filter(d => d !== diseaseName);
-        }
-      });
-    }
-    
-    return modified;
+    // The assessment from generateRiskAssessment already has the correct logic:
+    // - Only shows HIGH if API percentage > 0 AND stage matches AND month matches
+    // - No need to modify it further
+    return assessment;
   };
 
   const getRiskCounts = () => {

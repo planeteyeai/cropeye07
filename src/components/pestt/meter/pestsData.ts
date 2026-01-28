@@ -18,6 +18,14 @@ export interface Pest {
   };
   organic: string[];
   chemical: string[];
+  // Stage information: minDays and maxDays since plantation
+  stage?: {
+    minDays: number;
+    maxDays: number;
+    description: string;
+  };
+  // Category for API matching
+  category?: 'chewing' | 'sucking' | 'soil_borne';
 }
 
 export const pestsData: Pest[] = [
@@ -27,6 +35,12 @@ export const pestsData: Pest[] = [
     temperature: "28-32",
     humidity: "70-80",
     image: "/Image/Early-Shoot-Borer.jpg",
+    stage: {
+      minDays: 0,
+      maxDays: 120,
+      description: "Germination (0-45 days) to early tillering (46-120 days)"
+    },
+    category: "chewing",
     symptoms: [
       "Dead heart seen in 1–3 month-old crop",
       "Caterpillar bores into the central shoot and eats inside",
@@ -62,6 +76,12 @@ export const pestsData: Pest[] = [
     temperature: "27-30",
     humidity: "75-85",
     image: "/Image/topshoot borer.jpg",
+    stage: {
+      minDays: 46,
+      maxDays: 210,
+      description: "Tillering (46-120 days) to grand growth (121-210 days)"
+    },
+    category: "chewing",
     symptoms: [
       "Small caterpillars attack the top part of sugarcane, making holes and feeding inside the stem",
 "This causes the center of older canes to die, a problem called dead heart and it can’t be pulled out easily",
@@ -89,11 +109,54 @@ export const pestsData: Pest[] = [
     ]
   },
   {
+    name: "Root borer",
+    months: ["April", "May", "June", "July", "August", "September", "October"],
+    temperature: "28-32",
+    humidity: "70-80",
+    image: "/Image/root-borer.jpg",
+    stage: {
+      minDays: 0,
+      maxDays: 45,
+      description: "Germination stage (0-45 days)"
+    },
+    category: "chewing",
+    symptoms: [
+      "Roots are damaged by borers",
+      "Plant shows stunted growth",
+      "Yellowing of leaves"
+    ],
+    identification: [
+      "Larvae bore into roots",
+      "Roots show holes and damage"
+    ],
+    where: "Roots",
+    why: "Due to climate",
+    when: {
+      high: "Present at the field",
+      moderate: "In next 3–7 days",
+      low: "In next 10–14 days"
+    },
+    organic: [
+      "Neem cake application",
+      "Trichogramma release"
+    ],
+    chemical: [
+      "Chlorantraniliprole 60ml/acre in 200 litre water",
+      "Fipronil 400–600ml/acre in 200 litre water"
+    ]
+  },
+  {
     name: "Internode borer",
     months: ["October", "November", "December"],
     temperature: "30-35",
     humidity: "70-85",
     image: "/Image/internode borer.jpg",
+    stage: {
+      minDays: 121,
+      maxDays: 365,
+      description: "Grand growth (121-210 days) to maturity (211-365 days)"
+    },
+    category: "chewing",
     symptoms: [
       "The stem parts (internodes) become narrow and short with many holes and sawdust-like material (frass) around the joints.",
       "The affected areas turn reddish.",
@@ -126,6 +189,12 @@ export const pestsData: Pest[] = [
     temperature: "25-32",
     humidity: "80-90",
     image: "/Image/White Grub.jfif",
+    stage: {
+      minDays: 46,
+      maxDays: 365,
+      description: "Tillering to maturity (4-10 months)"
+    },
+    category: "soil_borne",
     symptoms: [
       "Yellowing and wilting of leaves",
       "Drying of entire crown",
@@ -156,6 +225,12 @@ export const pestsData: Pest[] = [
     temperature: "30-38",
     humidity: "20-40",
     image: "/Image/termites.jpg",
+    stage: {
+      minDays: 0,
+      maxDays: 365,
+      description: "Germination to maturity (any stage)"
+    },
+    category: "soil_borne",
     symptoms: [
       "Semi-circular bite marks on the edges of sugarcane leaves",
 "Poor sprouting of planted cane pieces (setts)",
@@ -189,6 +264,12 @@ export const pestsData: Pest[] = [
     temperature: "30-35",
     humidity: "30-50",
     image: "/Image/Whitefly.jpg",
+    stage: {
+      minDays: 121,
+      maxDays: 210,
+      description: "Grand growth stage (121-210 days)"
+    },
+    category: "sucking",
     symptoms: [
       "Yellowing of leaves and later it shows pale in colour",
       "Leaf turns pinkish or purple and later gradually dry",
@@ -221,6 +302,12 @@ export const pestsData: Pest[] = [
     temperature: "25-30",
     humidity: "75-85",
     image: "/Image/Wooly Aphids.jpg",
+    stage: {
+      minDays: 121,
+      maxDays: 365,
+      description: "Grand Growth (121-210 days) to Maturity (211-365 days)"
+    },
+    category: "sucking",
     symptoms: [
       "Large number of white coloured nymphs and adults on the under surface of leaf",
       "Yellowing and drying of leaves from the tip along the margins",
@@ -253,6 +340,12 @@ export const pestsData: Pest[] = [
     temperature: "25-30",
     humidity: "70-80",
     image: "/Image/pyrilla.png",
+    stage: {
+      minDays: 121,
+      maxDays: 365,
+      description: "Grand Growth (121-210 days) to Maturity (211-365 days)"
+    },
+    category: "sucking",
     symptoms: [
        "Leaves become yellow",
        "Covered with black sooty mould",
@@ -280,10 +373,16 @@ export const pestsData: Pest[] = [
   },
   {
     name: "Mealy bug",
-    months: ["March", "April", "May", "June", "July", "August", "September", "October"],
+    months: ["February", "March", "September", "October", "November", "December"],
     temperature: "30-38",
     humidity: "30-50",
     image: "/Image/mealybug.jpg",
+    stage: {
+      minDays: 121,
+      maxDays: 365,
+      description: "Grand Growth (121-210 days) to Maturity (211-365 days)"
+    },
+    category: "sucking",
     symptoms: [
       "Pinkish oval insects under leaf sheath on nodes with white mealy coating",
       "Main cane growth is stunted and roots attacked",
@@ -316,6 +415,12 @@ export const pestsData: Pest[] = [
     temperature: "28-32",
     humidity: "75-85",
     image: "/Image/scale insect.jpg",
+    stage: {
+      minDays: 46,
+      maxDays: 365,
+      description: "Tillering (46-120 days) to Maturity (211-365 days)"
+    },
+    category: "sucking",
     symptoms: [
       "Leaves dry at the tip and look pale or yellow.",
       "Canes can dry out completely and look brownish red inside when cut open",
@@ -346,38 +451,5 @@ export const pestsData: Pest[] = [
       "Fish oil resin soap: 2.5 ml per liter water (mix with insecticide)"
     ]
   },
-  {
-    name: "Army worm",
-    months: ["January", "February", "March", "April"],
-    temperature: "27-32",
-    humidity: "70-85",
-    image: "/Image/armyworm.png",
-    symptoms: [
-      "Leaves get holes or are eaten, especially the green parts.",
-       "Young larvae scrape the leaf surface, leaving silver-colored",
-       "Older larvae make ragged edges and bigger holes in leaves.",
-       "You might see small black droppings (frass) on leaves.",
-        "Damage is worse with repeated feeding during summer.",
-    ],
-    identification: [
-          "Larvae eat leaves, causing holes and leaf loss which weakens the plant.",
-          "Older larvae may tunnel into stems or damage growing points, slowing plant growth.",
-          "Heavy feeding can stunt young plants or kill them, reducing yield and sugar quality.",
-    ],
-    where: "On leaves",
-    why: "Due to climate",
-    when: {
-      high: "Present at the field",
-      moderate: "In next 3–7 days",
-      low: "In next 10–14 days"
-    },
-    organic: [
-      "Neem extract (Azadirachtin): 5 ml per liter of water",
-      "Trichogramma wasps (biocontrol): Release 50,000 eggs per 10 days",
-    ],
-    chemical: [
-      "Chlorantraniliprole 18.5% SC: 60 ml per acre",
-      "Spinetoram 11.7% SC: 180 ml per acre",
-    ]
-  }
+  
 ];
