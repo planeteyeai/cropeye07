@@ -98,8 +98,8 @@ const CATEGORY_INFO: Record<
   },
 };
 
-const REMOTE_API_BASE = 'http://192.168.41.93:8000/api';
-const LOCAL_API_BASE = 'http://localhost:8000';
+const REMOTE_API_BASE = 'https://cropeye-server-1.onrender.com/api';
+const LOCAL_API_BASE = 'https://cropeye-server-1.onrender.com';
 
 const ensureArray = (payload: any): any[] => {
   if (!payload) return [];
@@ -1060,7 +1060,7 @@ const TeamList: React.FC = () => {
               </ResponsiveContainer>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-1 grid grid-cols-2 gap-3 mt-6">
               {stats.map((stat) => (
                 <div
                   key={stat.name}
@@ -1138,7 +1138,7 @@ const TeamList: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-4">
+          <div className="p-4 " style={{ minHeight: '200px', maxHeight: '200px', overflowY: 'auto' }}>
             {loading ? (
               <div className="text-center py-12 text-gray-500">
                 Loading team data...
