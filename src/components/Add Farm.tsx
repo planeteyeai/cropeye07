@@ -56,6 +56,7 @@ interface Plot {
   village: string;
   pin_code: string;
   crop_type: string;
+  crop_variety: string;
   plantation_Type: string;
   plantation_Method: string;
   plantation_Date: string;
@@ -657,6 +658,7 @@ function AddFarm() {
         village: "",
         pin_code: "",
         crop_type: "2", // Fixed crop type ID for sugarcane
+        crop_variety: "",
         plantation_Type: "",
         plantation_Method: "",
         plantation_Date: "",
@@ -2062,6 +2064,11 @@ The farmer can now login with Email credentials to access the dashboard and moni
                             plot.id,
                             "crop_type",
                             plot.crop_type
+                          )}
+                          {renderPlotField(
+                            plot.id,
+                            "crop_variety",
+                            plot.crop_variety
                           )}
                           {renderPlotField(
                             plot.id,
