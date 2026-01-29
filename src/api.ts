@@ -304,20 +304,47 @@ export const getorders = () => {
 
 // Update order using PATCH method (partial update)
 export const patchOrder = (id: string | number, data: any) => {
+  console.log('patchOrder API call:', {
+    endpoint: `/orders/${id}/`,
+    baseURL: API_BASE_URL,
+    fullURL: `${API_BASE_URL}/orders/${id}/`,
+    method: 'PATCH',
+    data: data
+  });
   return api.patch(`/orders/${id}/`, data);
+};
+
+// Update order using PUT method (full update)
+export const putOrder = (id: string | number, data: any) => {
+  return api.put(`/orders/${id}/`, data);
 };
 
 // Delete order
 export const deleteOrder = (id: string | number) => {
   return api.delete(`/orders/${id}/`);
 };
+/**
+ * POST Create Stock
+ * POST /api/stock/
+ * @param data - Stock item data
+ * @example
+ * {
+ *   item_name: "Tractor",
+ *   item_type: "equipment", // Valid: "logistic", "transport", "equipment", "office_purpose", "storage", "processing"
+ *   make: "John Deere",
+ *   year_of_make: "2020",
+ *   estimate_cost: "500000",
+ *   status: "working", // Valid: "working", "not_working", "under_repair"
+ *   remark: "In good condition"
+ * }
+ */
 export const addStock = (data: {
   item_name: string;
-  item_type: string;
+  item_type: string; // Backend expects: "logistic", "transport", "equipment", "office_purpose", "storage", "processing"
   make: string;
   year_of_make: string;
   estimate_cost: string;
-  status: string;
+  status: string; // Backend expects: "working", "not_working", "under_repair"
   remark: string;
 }) => {
   return api.post("/stock/", data);
@@ -342,7 +369,13 @@ export const addBooking = (data: {
   end_date: string;
   status: string;
 }) => {
-  return api.post("/addbooking", data);
+  console.log('addBooking API call:', {
+    endpoint: '/bookings/',
+    baseURL: API_BASE_URL,
+    fullURL: `${API_BASE_URL}/bookings/`,
+    data: data
+  });
+  return api.post("/bookings/", data);
 };
 export const getbookings = () => {
   return api.get("/bookings/");
@@ -957,6 +990,7 @@ export const getFarmerProfile = async () => {
             crop_type: {
               id: farm.crop_type?.id || 1,
               crop_type: farm.crop_type_name || "Sugarcane",
+              crop_variety: farm.crop_type?.crop_variety || farm.crop_variety || "",
               plantation_type: farm.plantation_type || "adsali",
               plantation_type_display: farm.plantation_type || "Adsali",
               planting_method: farm.planting_method || "3_bud",
@@ -1068,6 +1102,7 @@ export const registerFarmerAllInOne = async (data: {
     area_size: string;
     soil_type_name: string;
     crop_type_name: string;
+    crop_variety?: string;
     plantation_type: string;
     planting_method: string;
   };
@@ -1182,6 +1217,7 @@ const convertToBulkFormat = (formData: any, plots: any[]) => {
         spacing_b: plot.spacing_B || plot.spacing_b || "1.5",
         soil_type_name: plot.soil_Type || plot.soil_type_name || "Black Soil",
         crop_type_name: plot.crop_Type || plot.crop_type_name || "Sugarcane",
+        ...(plot.crop_variety && plot.crop_variety.trim() ? { crop_variety: plot.crop_variety.trim() } : {}),
         plantation_type:
           plot.plantation_Type || plot.plantation_type || "adsali",
         plantation_date: plot.plantation_Date || "2024-01-15",
@@ -1364,6 +1400,7 @@ const convertSinglePlotToAllInOneFormat = (formData: any, plot: any) => {
       spacing_b: plot.spacing_B || "1.5",
       soil_type_name: "Loamy", // Default - you can make this dynamic
       crop_type_name: "Sugarcane", // Fixed as per your requirement
+      ...(plot.crop_variety && plot.crop_variety.trim() ? { crop_variety: plot.crop_variety.trim() } : {}),
       plantation_type: plot.plantation_Type || "adsali",
       planting_method: plot.plantation_Method || "3_bud",
     },

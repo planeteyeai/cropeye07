@@ -39,14 +39,25 @@ const WaterUptakeCard: React.FC = () => {
         setLoading(true);
         setError(null);
         
-        const url = `https://dev-plot.cropeye.ai/wateruptake?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`;
-        const response = await fetch(
-          url,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-          }
-        );
+        // Calculate current end date in YYYY-MM-DD format
+        const currentEndDate = new Date().toISOString().split('T')[0];
+        
+        // Use proxy in development to avoid CORS issues, direct URL in production
+        const baseUrl = import.meta.env.DEV 
+          ? '/api/dev-plot' 
+          : 'https://dev-plot.cropeye.ai';
+        const url = `${baseUrl}/wateruptake?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`;
+        
+        // Fetch with explicit CORS mode and proper headers matching other API calls
+        const response = await fetch(url, {
+          method: "POST",
+          mode: "cors",
+          cache: "no-cache",
+          credentials: "omit",
+          headers: { 
+            "Accept": "application/json"
+          },
+        });
 
         if (!response.ok) {
           const errorText = await response.text().catch(() => '');
@@ -58,20 +69,35 @@ const WaterUptakeCard: React.FC = () => {
         const pixelSummary = data.pixel_summary;
 
         if (!pixelSummary) {
+          console.warn('WaterUptakeCard: No pixel_summary in API response', data);
           setEfficiency(0);
           setLoading(false);
           return;
         }
 
+        // Use the correct field names: adequat_pixel_percentage and excellent_pixel_percentage
         const adequate = pixelSummary?.adequat_pixel_percentage ?? 0;
         const excellent = pixelSummary?.excellent_pixel_percentage ?? 0;
 
+        // Calculate total efficiency by adding adequate and excellent percentages
         const totalEfficiency = Math.round(adequate + excellent);
+
+        console.log('WaterUptakeCard: Efficiency calculation', {
+          adequate,
+          excellent,
+          totalEfficiency,
+          pixelSummary
+        });
 
         setEfficiency(totalEfficiency);
         setError(null);
         setLoading(false);
       } catch (err: any) {
+        console.error('WaterUptakeCard: Error fetching efficiency data', {
+          error: err,
+          message: err?.message,
+          plotName
+        });
         setError("Failed to fetch efficiency data");
         setEfficiency(null);
         setLoading(false);

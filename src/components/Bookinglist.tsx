@@ -138,7 +138,8 @@ export const BookingList: React.FC<BookingListProps> = ({ bookings, setBookings 
       }
 
       if (editedBooking.status !== undefined && editedBooking.status !== null && editedBooking.status !== '') {
-        apiData.status = editedBooking.status;
+        // Ensure status is lowercase to match backend format
+        apiData.status = editedBooking.status.toLowerCase();
       }
 
       // Validate that at least one field is being updated
@@ -390,8 +391,8 @@ export const BookingList: React.FC<BookingListProps> = ({ bookings, setBookings 
                             className="border rounded px-2 py-1 w-full text-sm"
                             disabled={saving}
                           >
-                            <option value="Available">Available</option>
-                            <option value="Book">Book</option>
+                            <option value="available">available</option>
+                            <option value="book">book</option>
                           </select>
                         </td>
                         <td className="px-4 py-2 space-x-3">
@@ -527,8 +528,8 @@ export const BookingList: React.FC<BookingListProps> = ({ bookings, setBookings 
                     <div className="flex justify-between items-start mb-3">
                       <h3 className="font-medium text-gray-900 text-sm flex-1 pr-2">{booking.itemName || booking.item_name || 'N/A'}</h3>
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        booking.status === 'Book' ? 'bg-green-100 text-green-800' :
-                        booking.status === 'Available' ? 'bg-blue-100 text-blue-800' :
+                        booking.status === 'book' || booking.status === 'Book' ? 'bg-green-100 text-green-800' :
+                        booking.status === 'available' || booking.status === 'Available' ? 'bg-blue-100 text-blue-800' :
                         'bg-gray-100 text-gray-800'
                       }`}>
                         {booking.status || 'N/A'}

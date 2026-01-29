@@ -39,7 +39,8 @@ interface Farmer {
   area: number;
   area_hectares?: number;
   plantation_type: string;
-  variety_type: string;
+  crop_type: string;
+  crop_variety: string;
   farmer?: {
     id: number;
     username: string;
@@ -89,7 +90,8 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
   const [farmEditForms, setFarmEditForms] = useState<Record<string, {
     area: string;
     plantation_type: string;
-    variety_type: string;
+    crop_type: string;
+    crop_variety: string;
   }>>({});
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -159,7 +161,8 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
             area: Number(farmAreaAcresRaw.toFixed(2)),
             area_hectares: Number(farmAreaHectares.toFixed(4)),
             plantation_type: firstFarm?.plantation_type || 'N/A',
-            variety_type: firstFarm?.crop_type || 'N/A',
+            crop_type: firstFarm?.crop_type?.crop_type || firstFarm?.crop_type_name || 'Sugarcane',
+            crop_variety: firstFarm?.crop_type?.crop_variety || firstFarm?.crop_variety || '',
             farmer: {
               id: farmer.id,
               username: farmer.username,
@@ -250,7 +253,8 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
     const farmForms: Record<string, {
       area: string;
       plantation_type: string;
-      variety_type: string;
+      crop_type: string;
+      crop_variety: string;
     }> = {};
 
     farmsList.forEach((farm: any) => {
@@ -259,7 +263,8 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
         farmForms[farm.id.toString()] = {
           area: areaInAcres !== 'N/A' ? areaInAcres : formatAcresValue(farmer.area),
           plantation_type: farm.plantation_type || farmer.plantation_type || '',
-          variety_type: farm.crop_type || farmer.variety_type || '',
+          crop_type: farm.crop_type?.crop_type || farm.crop_type_name || farmer.crop_type || 'Sugarcane',
+          crop_variety: farm.crop_type?.crop_variety || farm.crop_variety || farmer.crop_variety || '',
         };
       }
     });
@@ -291,7 +296,7 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
     setEditError(null);
   };
 
-  const handleFarmFormChange = (farmId: string, field: 'area' | 'plantation_type' | 'variety_type', value: string) => {
+  const handleFarmFormChange = (farmId: string, field: 'area' | 'plantation_type' | 'crop_type' | 'crop_variety', value: string) => {
     setFarmEditForms(prev => ({
       ...prev,
       [farmId]: {
@@ -355,9 +360,16 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
           farmUpdateData.plantation_type = farmForm.plantation_type;
         }
         
-        // Check if variety_type (crop_type) changed
-        if (farmForm.variety_type && farmForm.variety_type !== farm.crop_type) {
-          farmUpdateData.crop_type = farmForm.variety_type;
+        // Check if crop_type changed
+        const currentCropType = farm.crop_type?.crop_type || farm.crop_type_name || farm.crop_type;
+        if (farmForm.crop_type && farmForm.crop_type !== currentCropType) {
+          farmUpdateData.crop_type = farmForm.crop_type;
+        }
+        
+        // Check if crop_variety changed
+        const currentCropVariety = farm.crop_type?.crop_variety || farm.crop_variety;
+        if (farmForm.crop_variety !== undefined && farmForm.crop_variety !== currentCropVariety) {
+          farmUpdateData.crop_variety = farmForm.crop_variety;
         }
         
         // Check if area changed
@@ -435,7 +447,8 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
           area: Number(farmAreaAcresRaw.toFixed(2)),
           area_hectares: Number(farmAreaHectares.toFixed(4)),
           plantation_type: firstFarm?.plantation_type || 'N/A',
-          variety_type: firstFarm?.crop_type || 'N/A',
+          crop_type: firstFarm?.crop_type?.crop_type || firstFarm?.crop_type_name || 'Sugarcane',
+          crop_variety: firstFarm?.crop_type?.crop_variety || firstFarm?.crop_variety || '',
           farmer: {
             id: farmer.id,
             username: farmer.username,
@@ -522,6 +535,7 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
             if (farm.id) {
               farmForms[farm.id.toString()] = {
                 crop_type: farm.crop_type || '',
+                crop_variety: farm.crop_type?.crop_variety || farm.crop_variety || '',
                 plantation_type: farm.plantation_type || '',
                 plantation_date: farm.plantation_date || '',
                 planting_method: farm.planting_method || '',
@@ -632,6 +646,7 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
               if (farmForm && farm.id) {
                 const farmUpdateData: any = {};
                 if (farmForm.crop_type !== farm.crop_type) farmUpdateData.crop_type = farmForm.crop_type;
+                if (farmForm.crop_variety !== (farm.crop_type?.crop_variety || farm.crop_variety)) farmUpdateData.crop_variety = farmForm.crop_variety;
                 if (farmForm.plantation_type !== farm.plantation_type) farmUpdateData.plantation_type = farmForm.plantation_type;
                 if (farmForm.plantation_date !== farm.plantation_date) farmUpdateData.plantation_date = farmForm.plantation_date;
                 if (farmForm.planting_method !== farm.planting_method) farmUpdateData.planting_method = farmForm.planting_method;
@@ -714,7 +729,8 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
           area: Number(farmAreaAcresRaw.toFixed(2)),
           area_hectares: Number(farmAreaHectares.toFixed(4)),
           plantation_type: firstFarm?.plantation_type || 'N/A',
-          variety_type: firstFarm?.crop_type || 'N/A',
+          crop_type: firstFarm?.crop_type?.crop_type || firstFarm?.crop_type_name || 'Sugarcane',
+          crop_variety: firstFarm?.crop_type?.crop_variety || firstFarm?.crop_variety || '',
           farmer: {
             id: updatedFarmer.id,
             username: updatedFarmer.username,
@@ -789,7 +805,8 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
       'Total Area (acres)',
       'Total Area (hectares)',
       'Plantation Type',
-      'Variety Type',
+      'Crop Type',
+      'Crop Variety',
       'Irrigation Type',
       'Emitters Count',
       'Flow Rate (LPH)',
@@ -844,7 +861,8 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
       totalAreaAcres,
       totalAreaHectares,
       farmer.plantation_type,
-      farmer.variety_type,
+      farmer.crop_type,
+      farmer.crop_variety || 'N/A',
       farmer.irrigation?.irrigation_type || 'N/A',
       farmer.irrigation?.emitters_count || 'N/A',
       farmer.irrigation?.flow_rate_lph || 'N/A',
@@ -1022,7 +1040,8 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
       'Total Area (acres)',
       'Total Area (hectares)',
       'Plantation Type',
-      'Variety Type',
+      'Crop Type',
+      'Crop Variety',
       'Irrigation Type',
       'Emitters Count',
       'Flow Rate (LPH)',
@@ -1079,7 +1098,8 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
         totalAreaAcres,
         totalAreaHectares,
         farmer.plantation_type,
-        farmer.variety_type,
+        farmer.crop_type,
+      farmer.crop_variety || 'N/A',
         farmer.irrigation?.irrigation_type || 'N/A',
         farmer.irrigation?.emitters_count || 'N/A',
         farmer.irrigation?.flow_rate_lph || 'N/A',
@@ -1239,7 +1259,8 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
       user.phone_number.toString().includes(searchTerm) ||
       formatAcresValue(user.area).includes(searchTerm) ||
       user.plantation_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.variety_type.toLowerCase().includes(searchTerm.toLowerCase())
+      user.crop_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (user.crop_variety && user.crop_variety.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
@@ -1309,7 +1330,8 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                 <th className="px-4 py-2">Phone Number</th>
                 <th className="px-4 py-2">Area (acres)</th>
                 <th className="px-4 py-2">Plantation Type</th>
-                <th className="px-4 py-2">Variety Type</th>
+                <th className="px-4 py-2">Crop Type</th>
+                <th className="px-4 py-2">Crop Variety</th>
                 <th className="px-4 py-2">Actions</th>
               </tr>
             </thead>
@@ -1325,13 +1347,13 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-8 text-red-600">
+                  <td colSpan={8} className="text-center py-8 text-red-600">
                     Error: {error}
                   </td>
                 </tr>
               ) : paginatedData.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-4">No farms found</td>
+                  <td colSpan={8} className="text-center py-4">No farms found</td>
                 </tr>
               ) : (
                 paginatedData.map((user) => (
@@ -1348,7 +1370,8 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                     <td className="px-4 py-2">{user.phone_number}</td>
                     <td className="px-4 py-2">{formatAcresValue(user.area)} acres</td>
                     <td className="px-4 py-2">{user.plantation_type}</td>
-                    <td className="px-4 py-2">{user.variety_type}</td>
+                    <td className="px-4 py-2">{user.crop_type}</td>
+                    <td className="px-4 py-2">{user.crop_variety || 'N/A'}</td>
                     <td className="px-4 py-2 space-x-3">
                       <button 
                         onClick={() => handleViewDetails(user)} 
@@ -1457,8 +1480,12 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                       <p className="font-medium">{user.plantation_type}</p>
                     </div>
                     <div>
-                      <span className="text-gray-500">Variety:</span>
-                      <p className="font-medium">{user.variety_type}</p>
+                      <span className="text-gray-500">Crop Type:</span>
+                      <p className="font-medium">{user.crop_type}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Crop Variety:</span>
+                      <p className="font-medium">{user.crop_variety || 'N/A'}</p>
                     </div>
                     <div>
                       <span className="text-gray-500">Actions:</span>
@@ -1817,12 +1844,23 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                                 {isViewModalEditMode ? (
                                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-4">
                                     <div>
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">Variety (Crop Type)</label>
+                                      <label className="block text-sm font-medium text-gray-700 mb-1">Crop Type</label>
                                       <input
                                         type="text"
                                         value={farmForm.crop_type}
                                         onChange={(e) => handleViewModalFarmFormChange(farmId, 'crop_type', e.target.value)}
                                         className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        disabled={savingViewModalEdit}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-700 mb-1">Crop Variety</label>
+                                      <input
+                                        type="text"
+                                        value={farmForm.crop_variety || ''}
+                                        onChange={(e) => handleViewModalFarmFormChange(farmId, 'crop_variety', e.target.value)}
+                                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        placeholder="Enter crop Variety"
                                         disabled={savingViewModalEdit}
                                       />
                                     </div>
@@ -2160,7 +2198,8 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                       const farmForm = farmEditForms[farmId] || {
                         area: farm.area_size ? formatAcresFromHectaresOrNA(farm.area_size) : '0',
                         plantation_type: farm.plantation_type || '',
-                        variety_type: farm.crop_type || '',
+                        crop_type: farm.crop_type?.crop_type || farm.crop_type_name || farm.crop_type || 'Sugarcane',
+                        crop_variety: farm.crop_type?.crop_variety || farm.crop_variety || '',
                       };
 
                       return (
@@ -2198,15 +2237,30 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                               />
                             </div>
 
-                            {/* Variety Type */}
+                            {/* Crop Type */}
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Variety Type (Crop Type)
+                                Crop Type
                               </label>
                               <input
                                 type="text"
-                                value={farmForm.variety_type}
-                                onChange={(e) => handleFarmFormChange(farmId, 'variety_type', e.target.value)}
+                                value={farmForm.crop_type}
+                                onChange={(e) => handleFarmFormChange(farmId, 'crop_type', e.target.value)}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                disabled={savingEdit}
+                              />
+                            </div>
+
+                            {/* Crop Variety */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Crop Variety
+                              </label>
+                              <input
+                                type="text"
+                                value={farmForm.crop_variety}
+                                onChange={(e) => handleFarmFormChange(farmId, 'crop_variety', e.target.value)}
+                                placeholder="Enter crop Variety"
                                 className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 disabled={savingEdit}
                               />

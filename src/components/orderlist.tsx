@@ -7,18 +7,12 @@ const ITEMS_PER_PAGE = 5;
 
 interface User {
   id: number;
-  vendorName?: string;
   vendor_name?: string;
-  invoiceDate?: string;
   invoice_date?: string;
-  invoiceNumber?: string;
-  invoice_number?: string;
+invoice_number?: string;
   state: string;
-  itemName?: string;
   item_name?: string;
-  yearMake?: string;
   year_of_make?: string;
-  estimateCost?: string;
   estimate_cost?: string;
   remark: string;
 }
@@ -33,6 +27,7 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [editId, setEditId] = useState<number | null>(null);
   const [editFormData, setEditFormData] = useState<Partial<User>>({});
+  const [originalOrderData, setOriginalOrderData] = useState<any>(null); // Store original order structure
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<number | null>(null);
@@ -66,27 +61,27 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
           const firstItem = items[0] || {};
           
           // Handle vendor - can be ID (number) or object with vendor_name
-          let vendorName = '';
+          let vendor_name = '';
           if (typeof order.vendor === 'object' && order.vendor !== null) {
-            vendorName = order.vendor.vendor_name || order.vendor.name || '';
+            vendor_name = order.vendor.vendor_name || order.vendor.name || '';
           } else if (order.vendor_name) {
-            vendorName = order.vendor_name;
-          } else if (order.vendorName) {
-            vendorName = order.vendorName;
+            vendor_name = order.vendor_name;
+          } else if (order.vendor_name) {
+            vendor_name = order.vendor_name;
           } else if (order.vendor) {
             // If vendor is just an ID, we'll show it as "Vendor #ID"
-            vendorName = `Vendor #${order.vendor}`;
+            vendor_name = `Vendor #${order.vendor}`;
           }
           
           return {
             id: order.id,
-            vendorName: vendorName,
-            invoiceDate: order.invoice_date || order.invoiceDate || '',
-            invoiceNumber: order.invoice_number || order.invoiceNumber || '',
+            vendor_name: vendor_name,
+           invoice_date: order.invoice_date || order.invoiceDate || '',
+            invoice_number: order.invoice_number || order.invoice_number || '',
             state: order.state || '',
-            itemName: firstItem.item_name || order.item_name || order.itemName || '',
-            yearMake: firstItem.year_of_make || order.year_of_make || order.yearMake || '',
-            estimateCost: firstItem.estimate_cost || order.estimate_cost || order.estimateCost || '',
+            item_name: firstItem.item_name || order.item_name || order.item_name || '',
+            year_of_make: firstItem.year_of_make || order.year_of_make || order.year_of_make || '',
+           estimate_cost: firstItem.estimate_cost || order.estimate_cost || order.estimateCost || '',
             remark: firstItem.remark || order.remark || '',
           };
         });
@@ -130,17 +125,34 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
       // Note: For PATCH, we only send the fields that are being updated
       const apiData: any = {};
       
-      // Only include fields that have actual values
-      if (editFormData.invoiceDate || editFormData.invoice_date) {
-        apiData.invoice_date = editFormData.invoiceDate || editFormData.invoice_date;
+      // Include all editable fields from editFormData (PATCH allows partial updates)
+      // Only include fields that have values (not empty, null, or undefined)
+      if (editFormData.invoice_date !== undefined && editFormData.invoice_date !== null && editFormData.invoice_date !== '') {
+        apiData.invoice_date = editFormData.invoice_date;
       }
       
-      if (editFormData.invoiceNumber || editFormData.invoice_number) {
-        apiData.invoice_number = editFormData.invoiceNumber || editFormData.invoice_number;
+      if (editFormData.invoice_number !== undefined && editFormData.invoice_number !== null && editFormData.invoice_number !== '') {
+        apiData.invoice_number = editFormData.invoice_number;
       }
       
-      if (editFormData.state) {
+      if (editFormData.state !== undefined && editFormData.state !== null && editFormData.state !== '') {
         apiData.state = editFormData.state;
+      }
+      
+      if (editFormData.item_name !== undefined && editFormData.item_name !== null && editFormData.item_name !== '') {
+        apiData.item_name = editFormData.item_name;
+      }
+      
+      if (editFormData.year_of_make !== undefined && editFormData.year_of_make !== null && editFormData.year_of_make !== '') {
+        apiData.year_of_make = editFormData.year_of_make;
+      }
+      
+      if (editFormData.estimate_cost !== undefined && editFormData.estimate_cost !== null && editFormData.estimate_cost !== '') {
+        apiData.estimate_cost = editFormData.estimate_cost;
+      }
+      
+      if (editFormData.remark !== undefined && editFormData.remark !== null && editFormData.remark !== '') {
+        apiData.remark = editFormData.remark;
       }
 
       // Validate that at least one field is being updated
@@ -150,15 +162,13 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
         return;
       }
 
-      // Remove empty strings
-      Object.keys(apiData).forEach(key => {
-        if (apiData[key] === undefined || apiData[key] === '' || apiData[key] === null) {
-          delete apiData[key];
-        }
+      console.log('Patching order with data:', {
+        id: editId,
+        data: apiData
       });
-
       
-      await patchOrder(editId, apiData);
+      const response = await patchOrder(editId, apiData);
+      console.log('Order patch response:', response);
       
       // Refresh data from API to ensure consistency
       const fetchOrders = async () => {
@@ -181,26 +191,26 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
             const items = order?.items || [];
             const firstItem = items[0] || {};
             
-            let vendorName = '';
+            let vendor_name = '';
             if (typeof order.vendor === 'object' && order.vendor !== null) {
-              vendorName = order.vendor.vendor_name || order.vendor.name || '';
+              vendor_name = order.vendor.vendor_name || order.vendor.name || '';
             } else if (order.vendor_name) {
-              vendorName = order.vendor_name;
-            } else if (order.vendorName) {
-              vendorName = order.vendorName;
+              vendor_name = order.vendor_name;
+            } else if (order.vendor_name) {
+              vendor_name = order.vendor_name;
             } else if (order.vendor) {
-              vendorName = `Vendor #${order.vendor}`;
+              vendor_name = `Vendor #${order.vendor}`;
             }
             
             return {
               id: order.id,
-              vendorName: vendorName,
-              invoiceDate: order.invoice_date || order.invoiceDate || '',
-              invoiceNumber: order.invoice_number || order.invoiceNumber || '',
+              vendor_name: vendor_name,
+             invoice_date: order.invoice_date || order.invoiceDate || '',
+              invoice_number: order.invoice_number || order.invoice_number || '',
               state: order.state || '',
-              itemName: firstItem.item_name || order.item_name || order.itemName || '',
-              yearMake: firstItem.year_of_make || order.year_of_make || order.yearMake || '',
-              estimateCost: firstItem.estimate_cost || order.estimate_cost || order.estimateCost || '',
+              item_name: firstItem.item_name || order.item_name || order.item_name || '',
+              year_of_make: firstItem.year_of_make || order.year_of_make || order.year_of_make || '',
+             estimate_cost: firstItem.estimate_cost || order.estimate_cost || order.estimateCost || '',
               remark: firstItem.remark || order.remark || '',
             };
           });
@@ -261,11 +271,11 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
   };
 
   const handleDownload = () => {
-    const header = ['vendorName', 'invoiceNumber', 'invoiceDate', 'estimateCost', 'yearMake', 'state', 'itemName', 'remark'];
+    const header = ['vendor_name', 'invoice_number', 'invoice_date', 'estimate_cost', 'year_of_make', 'state', 'item_name', 'remark'];
     const csvRows = [
       header.join(','),
-      ...items.map(({ vendorName, invoiceNumber, invoiceDate, estimateCost, yearMake, state, itemName, remark }) =>
-        [vendorName, invoiceNumber, invoiceDate, estimateCost, yearMake, state, itemName, remark].map(val =>
+      ...items.map(({ vendor_name, invoice_number,invoice_date,estimate_cost, year_of_make, state, item_name, remark }) =>
+        [vendor_name, invoice_number,invoice_date,estimate_cost, year_of_make, state, item_name, remark].map(val =>
           `"${(val || '').replace(/"/g, '""')}"`
         ).join(',')
       ),
@@ -293,9 +303,9 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
   };
 
   const filtered = items.filter((item) =>
-    (item.invoiceDate && item.invoiceDate.includes(searchTerm)) ||
-    (item.vendorName && item.vendorName.includes(searchTerm)) ||
-    (item.invoiceNumber && item.invoiceNumber.includes(searchTerm))
+    (item.invoice_date && item.invoice_date.includes(searchTerm)) ||
+    (item.vendor_name && item.vendor_name.includes(searchTerm)) ||
+    (item.invoice_number && item.invoice_number.includes(searchTerm))
   );
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
@@ -383,8 +393,8 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
                         <td className="px-4 py-2">
                           <input
                             type="text"
-                            name="vendorName"
-                            value={editFormData.vendorName || ''}
+                            name="vendor_name"
+                            value={editFormData.vendor_name || ''}
                             onChange={handleInputChange}
                             className="border border-gray-300 rounded px-2 py-1 w-full"
                           />
@@ -392,8 +402,8 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
                         <td className="px-4 py-2">
                           <input
                             type="text"
-                            name="itemName"
-                            value={editFormData.itemName || ''}
+                            name="item_name"
+                            value={editFormData.item_name || ''}
                             onChange={handleInputChange}
                             className="border border-gray-300 rounded px-2 py-1 w-full"
                           />
@@ -401,8 +411,8 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
                         <td className="px-4 py-2">
                           <input
                             type="date"
-                            name="invoiceDate"
-                            value={editFormData.invoiceDate || ''}
+                            name="invoice_date"
+                            value={editFormData.invoice_date || ''}
                             onChange={handleInputChange}
                             className="border border-gray-300 rounded px-2 py-1 w-full"
                           />
@@ -410,8 +420,8 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
                         <td className="px-4 py-2">
                           <input
                             type="text"
-                            name="invoiceNumber"
-                            value={editFormData.invoiceNumber || ''}
+                            name="invoice_number"
+                            value={editFormData.invoice_number || ''}
                             onChange={handleInputChange}
                             className="border border-gray-300 rounded px-2 py-1 w-full"
                           />
@@ -419,8 +429,8 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
                         <td className="px-4 py-2">
                           <input
                             type="text"
-                            name="estimateCost"
-                            value={editFormData.estimateCost || ''}
+                            name="estimate_cost"
+                            value={editFormData.estimate_cost || ''}
                             onChange={handleInputChange}
                             className="border border-gray-300 rounded px-2 py-1 w-full"
                           />
@@ -428,8 +438,8 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
                         <td className="px-4 py-2">
                           <input
                             type="text"
-                            name="yearMake"
-                            value={editFormData.yearMake || ''}
+                            name="year_of_make"
+                            value={editFormData.year_of_make || ''}
                             onChange={handleInputChange}
                             className="border border-gray-300 rounded px-2 py-1 w-full"
                           />
@@ -472,12 +482,12 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
                       </>
                     ) : (
                       <>
-                        <td className="px-4 py-2">{user.vendorName}</td>
-                        <td className="px-4 py-2">{user.itemName}</td>
-                        <td className="px-4 py-2">{user.invoiceDate}</td>
-                        <td className="px-4 py-2">{user.invoiceNumber}</td>
-                        <td className="px-4 py-2">{user.estimateCost}</td>
-                        <td className="px-4 py-2">{user.yearMake}</td>
+                        <td className="px-4 py-2">{user.vendor_name}</td>
+                        <td className="px-4 py-2">{user.item_name}</td>
+                        <td className="px-4 py-2">{user.invoice_date}</td>
+                        <td className="px-4 py-2">{user.invoice_number}</td>
+                        <td className="px-4 py-2">{user.estimate_cost}</td>
+                        <td className="px-4 py-2">{user.year_of_make}</td>
                         <td className="px-4 py-2">{user.state}</td>
                         <td className="px-4 py-2">{user.remark}</td>
                         <td className="px-4 py-2 space-x-2">
@@ -515,8 +525,8 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Vendor Name</label>
                       <input
                         type="text"
-                        name="vendorName"
-                        value={editFormData.vendorName || ''}
+                        name="vendor_name"
+                        value={editFormData.vendor_name || ''}
                         onChange={handleInputChange}
                         className="border px-3 py-2 rounded w-full text-sm"
                       />
@@ -525,8 +535,8 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
                       <input
                         type="text"
-                        name="itemName"
-                        value={editFormData.itemName || ''}
+                        name="item_name"
+                        value={editFormData.item_name || ''}
                         onChange={handleInputChange}
                         className="border px-3 py-2 rounded w-full text-sm"
                       />
@@ -535,8 +545,8 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Date</label>
                       <input
                         type="date"
-                        name="invoiceDate"
-                        value={editFormData.invoiceDate || ''}
+                        name="invoice_date"
+                        value={editFormData.invoice_date || ''}
                         onChange={handleInputChange}
                         className="border px-3 py-2 rounded w-full text-sm"
                       />
@@ -545,8 +555,8 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Number</label>
                       <input
                         type="text"
-                        name="invoiceNumber"
-                        value={editFormData.invoiceNumber || ''}
+                        name="invoice_number"
+                        value={editFormData.invoice_number || ''}
                         onChange={handleInputChange}
                         className="border px-3 py-2 rounded w-full text-sm"
                       />
@@ -555,8 +565,8 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Estimate Cost</label>
                       <input
                         type="text"
-                        name="estimateCost"
-                        value={editFormData.estimateCost || ''}
+                        name="estimate_cost"
+                        value={editFormData.estimate_cost || ''}
                         onChange={handleInputChange}
                         className="border px-3 py-2 rounded w-full text-sm"
                       />
@@ -565,8 +575,8 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Year of Make</label>
                       <input
                         type="text"
-                        name="yearMake"
-                        value={editFormData.yearMake || ''}
+                        name="year_of_make"
+                        value={editFormData.year_of_make || ''}
                         onChange={handleInputChange}
                         className="border px-3 py-2 rounded w-full text-sm"
                       />
@@ -610,26 +620,26 @@ export const OrderList: React.FC<OrderListProps> = ({ items, setItems }) => {
                 ) : (
                   <>
                     <div className="flex justify-between items-start mb-3">
-                      <h3 className="font-medium text-gray-900 text-sm flex-1 pr-2">{user.vendorName}</h3>
-                      <span className="text-xs text-gray-500">{user.invoiceDate}</span>
+                      <h3 className="font-medium text-gray-900 text-sm flex-1 pr-2">{user.vendor_name}</h3>
+                      <span className="text-xs text-gray-500">{user.invoice_date}</span>
                     </div>
                     
                     <div className="space-y-2 text-sm text-gray-600">
                       <div className="flex items-center">
                         <span className="font-medium w-20">Item:</span>
-                        <span>{user.itemName}</span>
+                        <span>{user.item_name}</span>
                       </div>
                       <div className="flex items-center">
                         <span className="font-medium w-20">Invoice:</span>
-                        <span>{user.invoiceNumber}</span>
+                        <span>{user.invoice_number}</span>
                       </div>
                       <div className="flex items-center">
                         <span className="font-medium w-20">Cost:</span>
-                        <span>{user.estimateCost}</span>
+                        <span>{user.estimate_cost}</span>
                       </div>
                       <div className="flex items-center">
                         <span className="font-medium w-20">Year:</span>
-                        <span>{user.yearMake}</span>
+                        <span>{user.year_of_make}</span>
                       </div>
                       <div className="flex items-center">
                         <span className="font-medium w-20">State:</span>

@@ -220,12 +220,11 @@ const CropHealthAnalysis: React.FC = () => {
       const weatherData = await fetchCurrentWeather();
       const pestData = await fetchPestDetectionData(selectedPlotName || undefined);
       
-      // Generate risk assessment
-      const assessment = await generateRiskAssessment(plantationDate, weatherData);
+      // Generate risk assessment (already includes API data, stage, and month matching)
+      const assessment = await generateRiskAssessment(plantationDate, weatherData, plotId);
       
-      // Modify assessment based on API percentages (same logic as Pest & Disease component)
-      const modifiedAssessment = modifyAssessmentWithAPIData(assessment, pestData);
-      setRiskAssessment(modifiedAssessment);
+      // Assessment already has correct logic: only HIGH if API percentage > 0 AND stage matches AND month matches
+      setRiskAssessment(assessment);
       
     } catch (error) {
       console.error('Failed to load risk assessment:', error);
@@ -234,59 +233,9 @@ const CropHealthAnalysis: React.FC = () => {
     }
   };
 
-  // Modify risk assessment to include pests/diseases based on API percentages
-  const modifyAssessmentWithAPIData = (assessment: RiskAssessmentResult, pestData: PestDetectionData): RiskAssessmentResult => {
-    const modified = { ...assessment };
-    
-    // Add pests to High Risk based on API percentages
-    if (pestData.chewing_affected_pixel_percentage > 0) {
-      const chewingPests = ['Early shoot borer', 'Internode borer', 'Top shoot borer'];
-      chewingPests.forEach(pestName => {
-        if (!modified.pests.High.includes(pestName)) {
-          modified.pests.High.push(pestName);
-          // Remove from other categories if present
-          modified.pests.Moderate = modified.pests.Moderate.filter(p => p !== pestName);
-          modified.pests.Low = modified.pests.Low.filter(p => p !== pestName);
-        }
-      });
-    }
-    
-    if (pestData.sucking_affected_pixel_percentage > 0) {
-      const suckingPests = ['Sugarcane woolly aphids', 'Mealy bug', 'Whitefly', 'Sugarcane scale insect', 'Sugarcane pyrilla'];
-      suckingPests.forEach(pestName => {
-        if (!modified.pests.High.includes(pestName)) {
-          modified.pests.High.push(pestName);
-          modified.pests.Moderate = modified.pests.Moderate.filter(p => p !== pestName);
-          modified.pests.Low = modified.pests.Low.filter(p => p !== pestName);
-        }
-      });
-    }
-    
-    if (pestData.SoilBorn_affected_pixel_percentage > 0) {
-      const soilBornePests = ['White grub', 'Termites'];
-      soilBornePests.forEach(pestName => {
-        if (!modified.pests.High.includes(pestName)) {
-          modified.pests.High.push(pestName);
-          modified.pests.Moderate = modified.pests.Moderate.filter(p => p !== pestName);
-          modified.pests.Low = modified.pests.Low.filter(p => p !== pestName);
-        }
-      });
-    }
-    
-    // Add diseases to High Risk based on Fungi percentage
-    if (pestData.fungi_affected_pixel_percentage > 0) {
-      const fungalDiseases = ['Red Rot', 'Rust'];
-      fungalDiseases.forEach(diseaseName => {
-        if (!modified.diseases.High.includes(diseaseName)) {
-          modified.diseases.High.push(diseaseName);
-          modified.diseases.Moderate = modified.diseases.Moderate.filter(d => d !== diseaseName);
-          modified.diseases.Low = modified.diseases.Low.filter(d => d !== diseaseName);
-        }
-      });
-    }
-    
-    return modified;
-  };
+  // Note: modifyAssessmentWithAPIData is no longer needed since generateRiskAssessment
+  // already includes API data, stage, and month matching logic.
+  // The assessment only shows HIGH if: API percentage > 0 AND stage matches AND month matches
 
   // Generate pest controls from risk assessment data
   const generatePestControls = (): PestControl[] => {

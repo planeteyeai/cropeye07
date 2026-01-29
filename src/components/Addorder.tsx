@@ -42,37 +42,56 @@ export const Addorder: React.FC<AddOrderProps> = ({ items, setItems }) => {
     'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal'
   ];
 
-  // Fetch vendors on component mount
+  // Fetch vendors on component mount using getVendors API
   useEffect(() => {
     const fetchVendors = async () => {
       setLoadingVendors(true);
+      setError(''); // Clear previous errors
       try {
+        // Call GET /api/vendors/ endpoint
         const response = await getVendors();
         const data = response?.data;
         
-        // Handle different response formats
+        // Handle different response formats from API
         let vendorsList: any[] = [];
         if (Array.isArray(data)) {
+          // Direct array response: [{id, vendor_name, ...}, ...]
           vendorsList = data;
         } else if (Array.isArray(data?.results)) {
+          // Paginated response: {results: [...], count: ...}
           vendorsList = data.results;
         } else if (Array.isArray(data?.data)) {
+          // Nested data: {data: [...]}
           vendorsList = data.data;
         } else if (data?.vendors && Array.isArray(data.vendors)) {
+          // Wrapped in vendors key: {vendors: [...]}
           vendorsList = data.vendors;
         }
         
-        // Transform to Vendor interface
+        // Transform API response to Vendor interface
         const transformedVendors: Vendor[] = vendorsList.map((vendor: any) => ({
-          id: vendor.id,
-          vendor_name: vendor.vendor_name || vendor.name || '',
+          id: vendor.id || vendor.vendor_id,
+          vendor_name: vendor.vendor_name || vendor.name || vendor.vendorName || 'Unknown Vendor',
           email: vendor.email || '',
-          mobile: vendor.mobile || vendor.phone || '',
+          mobile: vendor.mobile || vendor.phone || vendor.phone_number || '',
         }));
         
         setVendors(transformedVendors);
+        
+        // Log for debugging
+        if (transformedVendors.length === 0) {
+          console.warn('No vendors found in API response:', data);
+        } else {
+          console.log(`Loaded ${transformedVendors.length} vendor(s) from API`);
+        }
       } catch (err: any) {
-        setError('Failed to load vendors. Please refresh the page.');
+        console.error('Error fetching vendors:', err);
+        const errorMessage = err?.response?.data?.detail || 
+                           err?.response?.data?.message || 
+                           err?.message || 
+                           'Failed to load vendors. Please refresh the page.';
+        setError(errorMessage);
+        setVendors([]); // Clear vendors on error
       } finally {
         setLoadingVendors(false);
       }
@@ -233,7 +252,9 @@ export const Addorder: React.FC<AddOrderProps> = ({ items, setItems }) => {
                 </option>
                 {vendors.map((vendor) => (
                   <option key={vendor.id} value={vendor.id.toString()}>
-                    {vendor.vendor_name} {vendor.email ? `(${vendor.email})` : ''}
+                    {vendor.vendor_name}
+                    {vendor.email ? ` - ${vendor.email}` : ''}
+                    {vendor.mobile ? ` (${vendor.mobile})` : ''}
                   </option>
                 ))}
               </select>

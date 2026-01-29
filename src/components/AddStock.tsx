@@ -31,20 +31,42 @@ export const AddStock: React.FC<AddStockProps> = ({ setStocks }) => {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
 
+  // Map frontend values to backend-expected values
+  const mapItemTypeToBackend = (frontendValue: string): string => {
+    const mapping: Record<string, string> = {
+      'Logistic': 'logistic',
+      'Transport': 'transport',
+      'Equipment': 'equipment',
+      'Office Purpose': 'office_purpose',
+      'Storage': 'storage',
+      'Processing': 'processing'
+    };
+    return mapping[frontendValue] || frontendValue.toLowerCase().replace(/\s+/g, '_');
+  };
+
+  const mapStatusToBackend = (frontendValue: string): string => {
+    const mapping: Record<string, string> = {
+      'Working': 'working',
+      'Not working': 'not_working',
+      'underRepair': 'under_repair'
+    };
+    return mapping[frontendValue] || frontendValue.toLowerCase().replace(/\s+/g, '_');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setSuccess('');
     setError('');
     try {
-      // Prepare data for API (convert frontend field names to backend field names)
+      // Prepare data for API (convert frontend field names and values to backend format)
       const apiData = {
         item_name: formData.itemName,
-        item_type: formData.itemType,
+        item_type: mapItemTypeToBackend(formData.itemType), // Convert to backend format
         make: formData.Make,
         year_of_make: formData.yearMake,
         estimate_cost: formData.estimateCost,
-        status: formData.status,
+        status: mapStatusToBackend(formData.status), // Convert to backend format
         remark: formData.remark || ''
       };
 

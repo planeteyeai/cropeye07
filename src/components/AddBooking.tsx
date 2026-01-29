@@ -13,7 +13,7 @@ const AddBooking: React.FC<AddBookingProps> = ({ bookings, setBookings }) => {
     userRole: '',
     startDate: '',
     endDate: '',
-    status: 'Available',
+    status: 'available',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,17 +34,33 @@ const AddBooking: React.FC<AddBookingProps> = ({ bookings, setBookings }) => {
     setError(null);
     setSuccess(false);
 
+    // Validate required fields
+    if (!formData.itemName || !formData.userRole || !formData.startDate || !formData.endDate || !formData.status) {
+      setError('Please fill in all required fields.');
+      setLoading(false);
+      return;
+    }
+
+    // Validate dates
+    if (new Date(formData.endDate) < new Date(formData.startDate)) {
+      setError('End date must be after start date.');
+      setLoading(false);
+      return;
+    }
+
     try {
-      // Map frontend field names to backend field names
+      // Map frontend field names to backend field names (values are already in backend format)
       const apiData = {
-        item_name: formData.itemName,
-        user_role: formData.userRole,
+        item_name: formData.itemName.trim(),
+        user_role: formData.userRole.trim(),
         start_date: formData.startDate,
         end_date: formData.endDate,
-        status: formData.status,
+        status: formData.status.trim(),
       };
 
+      console.log('Sending booking data:', apiData);
       const response = await addBooking(apiData);
+      console.log('Booking response:', response);
 
       // Update local state with the new booking
       const newBooking = {
@@ -67,16 +83,67 @@ const AddBooking: React.FC<AddBookingProps> = ({ bookings, setBookings }) => {
         userRole: '',
         startDate: '',
         endDate: '',
-        status: 'Available',
+        status: 'available',
       });
 
       // Clear success message after 3 seconds
       setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
-      const errorMessage = err?.response?.data?.message || 
-                          err?.response?.data?.detail || 
-                          err?.message || 
-                          'Failed to add booking. Please try again.';
+      console.error('AddBooking Error:', {
+        message: err?.message,
+        status: err?.response?.status,
+        statusText: err?.response?.statusText,
+        data: err?.response?.data,
+        url: err?.config?.url,
+        baseURL: err?.config?.baseURL,
+        fullURL: err?.config?.baseURL + err?.config?.url,
+        requestData: err?.config?.data,
+      });
+      
+      let errorMessage = 'Failed to add booking. Please try again.';
+      const status = err?.response?.status;
+      
+      if (status === 404) {
+        const fullUrl = err?.config?.baseURL + err?.config?.url;
+        errorMessage = `API endpoint not found (404). URL: ${fullUrl}. Please check if the bookings endpoint exists on the server.`;
+      } else if (status === 500) {
+        // Server error - show detailed error message from backend if available
+        const errorData = err?.response?.data;
+        console.error('Server error (500) details:', {
+          errorData,
+          requestData: err?.config?.data,
+          url: err?.config?.url,
+          fullURL: err?.config?.baseURL + err?.config?.url
+        });
+        
+        if (errorData) {
+          const errorDetail = errorData.detail || errorData.message || errorData.error;
+          if (errorDetail) {
+            errorMessage = `Server Error (500): ${errorDetail}. Please check with the backend team or try again later.`;
+          } else {
+            errorMessage = `Server Error (500): ${JSON.stringify(errorData)}. Please check the backend logs.`;
+          }
+        } else {
+          errorMessage = 'Server Error (500): Internal server error. The backend encountered an unexpected error. Please try again later or contact support.';
+        }
+      } else if (status === 400) {
+        const errorData = err?.response?.data;
+        if (errorData) {
+          const fieldErrors = Object.entries(errorData)
+            .filter(([key]) => key !== 'detail' && key !== 'message')
+            .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+            .join('; ');
+          
+          errorMessage = errorData.detail || errorData.message || fieldErrors || 'Invalid data format. Please check all fields.';
+        } else {
+          errorMessage = 'Invalid request format (400). Please check all required fields are filled.';
+        }
+      } else if (err?.response?.data) {
+        errorMessage = err.response.data.detail || err.response.data.message || err.message || errorMessage;
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+      
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -130,11 +197,11 @@ const AddBooking: React.FC<AddBookingProps> = ({ bookings, setBookings }) => {
                   className="block w-full px-4 py-3 text-base rounded-lg border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
                 >
                   <option value="">Select Role</option>
-                  <option value="Factory Head Office">Factory Head Office</option>
-                  <option value="Manager">Manager</option>
-                  <option value="Field Officer">Field Officer</option>
-                  <option value="Vendor">Vendor</option>
-                  <option value="Farmer">Farmer</option>
+                  <option value="owner">owner</option>
+                  <option value="manager">manager</option>
+                  <option value="field_officer">field_officer</option>
+                  <option value="vendor">vendor</option>
+                  <option value="farmer">farmer</option>
                 </select>
               </div>
 
@@ -177,8 +244,8 @@ const AddBooking: React.FC<AddBookingProps> = ({ bookings, setBookings }) => {
                   onChange={handleChange}
                   className="block w-full px-4 py-3 text-base rounded-lg border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
                 >
-                  <option value="Available">Available</option>
-                  <option value="Book">Book</option>
+                  <option value="available">available</option>
+                  <option value="book">book</option>
                 </select>
               </div>
             </div>

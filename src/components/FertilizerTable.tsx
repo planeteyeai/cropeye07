@@ -251,8 +251,19 @@ const FertilizerTable: React.FC = () => {
       return;
     }
 
-    // Wait for plot selection
-    if (!selectedPlotName) {
+    // Determine which plot to use: selectedPlotName > first plot from profile
+    let plotToUse = selectedPlotName;
+    
+    // Fallback to first plot if no selection
+    if (!plotToUse && profile?.plots && profile.plots.length > 0) {
+      const firstPlot = profile.plots[0];
+      plotToUse = firstPlot.fastapi_plot_id || 
+                  `${firstPlot.gat_number}_${firstPlot.plot_number}`;
+      console.log('FertilizerTable: No plot selected, using first plot:', plotToUse);
+    }
+
+    // Wait for plot selection (either from context or fallback)
+    if (!plotToUse) {
       setData([]);
       setLocalError(null);
       setPlantationType(null);
@@ -272,7 +283,7 @@ const FertilizerTable: React.FC = () => {
       // Get the selected plot by fastapi_plot_id (primary matching method)
       // API response structure: plots[].fastapi_plot_id (e.g., "258_25")
       let selectedPlot = profile.plots.find(
-        (p) => p.fastapi_plot_id === selectedPlotName
+        (p) => p.fastapi_plot_id === plotToUse
       );
 
       // If not found by fastapi_plot_id, try matching by constructed plot ID
@@ -280,13 +291,13 @@ const FertilizerTable: React.FC = () => {
         selectedPlot = profile.plots.find((p) => {
           const plotId =
             p.fastapi_plot_id || `${p.gat_number}_${p.plot_number}`;
-          return plotId === selectedPlotName;
+          return plotId === plotToUse;
         });
       }
 
       // If still not found, try matching by gat_number and plot_number
       if (!selectedPlot) {
-        const [gatNum, plotNum] = selectedPlotName.split("_");
+        const [gatNum, plotNum] = plotToUse.split("_");
         selectedPlot = profile.plots.find(
           (p) => p.gat_number === gatNum && p.plot_number === plotNum
         );
@@ -294,7 +305,7 @@ const FertilizerTable: React.FC = () => {
 
       if (!selectedPlot) {
         console.error("FertilizerTable: Selected plot not found", {
-          selectedPlotName,
+          plotToUse,
           availablePlots: profile.plots.map((p) => ({
             fastapi_plot_id: p.fastapi_plot_id,
             gat_number: p.gat_number,
@@ -302,12 +313,12 @@ const FertilizerTable: React.FC = () => {
           })),
         });
         throw new Error(
-          `Selected plot "${selectedPlotName}" not found in farmer profile`
+          `Selected plot "${plotToUse}" not found in farmer profile`
         );
       }
 
       console.log("FertilizerTable: Found plot by fastapi_plot_id", {
-        selectedPlotName,
+        plotToUse,
         foundPlot: {
           fastapi_plot_id: selectedPlot.fastapi_plot_id,
           gat_number: selectedPlot.gat_number,
@@ -466,7 +477,7 @@ const FertilizerTable: React.FC = () => {
           }
         );
         throw new Error(
-          `Planting method not found in farm data for plot "${selectedPlotName}". Please ensure planting method is set for this farm in the backend.`
+          `Planting method not found in farm data for plot "${plotToUse}". Please ensure planting method is set for this farm in the backend.`
         );
       }
 
@@ -478,7 +489,7 @@ const FertilizerTable: React.FC = () => {
 
       console.log("FertilizerTable: Generating fertilizer schedule", {
         fastapi_plot_id: selectedPlot.fastapi_plot_id,
-        selectedPlotName,
+        plotToUse,
         plantationDate,
         plantingMethod,
         plantationType: plantationTypeValue,
@@ -757,7 +768,7 @@ const FertilizerTable: React.FC = () => {
                 ". Please ensure the plantation date is set for this farm.";
             } else if (errorMessage.includes("not found")) {
               errorMessage += ". Please select a valid plot from the dropdown.";
-            } else if (!selectedPlotName) {
+            } else if (!selectedPlotName && (!profile?.plots || profile.plots.length === 0)) {
               errorMessage =
                 "Please select a plot to view fertilizer schedule.";
             }
@@ -782,7 +793,7 @@ const FertilizerTable: React.FC = () => {
                     Unable to Load Fertilizer Schedule
                   </p>
                   <p className="text-sm text-gray-600 mb-4">{errorMessage}</p>
-                  {!selectedPlotName && (
+                  {!selectedPlotName && (!profile?.plots || profile.plots.length === 0) && (
                     <p className="text-xs text-gray-500 mt-2">
                       Tip: Make sure you have selected a plot from the dropdown
                       above.

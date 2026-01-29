@@ -117,6 +117,7 @@ interface FarmerProfile {
       crop_type?: {
         id?: number;
         crop_type?: string;
+        crop_variety?: string;
         plantation_type?: string;
         plantation_type_display?: string;
         planting_method?: string;
