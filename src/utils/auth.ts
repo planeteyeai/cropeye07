@@ -81,6 +81,13 @@ export const clearAuthData = (): void => {
   localStorage.removeItem(IS_AUTHENTICATED_KEY);
 };
 
+// Clear ALL localStorage data (used on logout)
+export const clearAllLocalStorage = (): void => {
+  // Clear all localStorage data
+  localStorage.clear();
+  console.log('✅ All localStorage data cleared on logout');
+};
+
 // Set all authentication data after successful login
 export const setAuthData = (token: string, role: string, userData?: any, refreshToken?: string): void => {
   setAuthToken(token);
