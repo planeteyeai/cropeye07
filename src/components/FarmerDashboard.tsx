@@ -417,37 +417,6 @@ const FarmerDashboard: React.FC = () => {
 
       setStressEvents(stressData?.events ?? []);
 
-      const agroStatsCacheKey = `agroStats_${currentPlotId}_${endDate}_${Date.now()}`;
-      const agroStatsUrl = `https://dev-events.cropeye.ai/plots/agroStats?end_date=${endDate}`;
-
-      console.log(`[DB] 1. Fetching bulk plot data from: ${agroStatsUrl}`);
-
-      const agroStatsRes = await axios.get(agroStatsUrl);
-      const allPlotsData = agroStatsRes.data;
-      setCache(agroStatsCacheKey, allPlotsData);
-
-      console.log("[DB] 2. Fetched fresh data from API:", allPlotsData);
-      console.log(
-        `[DB] 3. Searching for plot ID "${currentPlotId}" in the response.`
-      );
-      console.log(
-        "[DB] Available plots in API response:",
-        Object.keys(allPlotsData || {})
-      );
-
-      const currentPlotData = allPlotsData ? allPlotsData[currentPlotId] : null;
-      console.log("[DB] 4. Data for current plot:", currentPlotData);
-
-      if (currentPlotData?.brix_sugar?.brix) {
-        console.log("[DB] Brix data:", {
-          mean: currentPlotData.brix_sugar.brix.mean,
-          min: currentPlotData.brix_sugar.brix.min,
-          max: currentPlotData.brix_sugar.brix.max,
-        });
-      } else {
-        console.log("[DB] No brix data found for this plot!");
-      }
-
       const irrigationCacheKey = `irrigation_${currentPlotId}`;
       let irrigationData = getCache(irrigationCacheKey);
 
@@ -474,6 +443,8 @@ const FarmerDashboard: React.FC = () => {
       const harvestCacheKey = `harvest_${currentPlotId}_${endDate}`;
       let harvestStatus = null;
       let harvestData = getCache(harvestCacheKey);
+      let harvestDate = null;
+      let isHarvested = false;
 
       if (!harvestData) {
         try {
@@ -487,12 +458,69 @@ const FarmerDashboard: React.FC = () => {
         }
       }
 
-      // Extract harvest_status from response
+      // Extract harvest_status and harvest_date from response
       if (harvestData) {
+        const harvestProperties =
+          harvestData?.features?.[0]?.properties ||
+          harvestData?.harvest_summary;
+        
         harvestStatus =
+          harvestProperties?.harvest_status ||
           harvestData?.harvest_summary?.harvest_status ||
-          harvestData?.features?.[0]?.properties?.harvest_status ||
           null;
+        
+        harvestDate = harvestProperties?.harvest_date || null;
+        isHarvested =
+          harvestProperties?.has_harvest === true &&
+          harvestProperties?.harvest_status === "harvested";
+
+        console.log("[DB] Harvest data extracted:", {
+          harvestStatus,
+          harvestDate,
+          isHarvested,
+          has_harvest: harvestProperties?.has_harvest,
+        });
+      }
+
+      // Determine which date to use for fetching yield data
+      // For harvested plots, use harvest_date; for others, use end_date
+      const yieldDataDate = isHarvested && harvestDate ? harvestDate : endDate;
+      const agroStatsCacheKey = `agroStats_${currentPlotId}_${yieldDataDate}_${Date.now()}`;
+      const agroStatsUrl = `https://dev-events.cropeye.ai/plots/agroStats?end_date=${yieldDataDate}`;
+
+      console.log(`[DB] 1. Fetching bulk plot data from: ${agroStatsUrl}`);
+      console.log(`[DB] Using date: ${yieldDataDate} (${isHarvested ? 'harvest_date' : 'end_date'})`);
+
+      const agroStatsRes = await axios.get(agroStatsUrl);
+      const allPlotsData = agroStatsRes.data;
+      setCache(agroStatsCacheKey, allPlotsData);
+
+      console.log("[DB] 2. Fetched fresh data from API:", allPlotsData);
+      console.log(
+        `[DB] 3. Searching for plot ID "${currentPlotId}" in the response.`
+      );
+      console.log(
+        "[DB] Available plots in API response:",
+        Object.keys(allPlotsData || {})
+      );
+
+      const currentPlotData = allPlotsData ? allPlotsData[currentPlotId] : null;
+      console.log("[DB] 4. Data for current plot:", currentPlotData);
+      console.log("[DB] Yield data source:", {
+        isHarvested,
+        harvestDate,
+        yieldDataDate,
+        usingHarvestDate: isHarvested && harvestDate,
+      });
+
+      if (currentPlotData?.brix_sugar?.brix) {
+        console.log("[DB] Brix data:", {
+          mean: currentPlotData.brix_sugar.brix.mean,
+          min: currentPlotData.brix_sugar.brix.min,
+          max: currentPlotData.brix_sugar.brix.max,
+        });
+      } else {
+        console.log("[DB] No brix data found for this plot!");
       }
 
       const stats = soilData?.features?.[0]?.properties?.statistics;

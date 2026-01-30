@@ -48,9 +48,14 @@ export default defineConfig({
         entryFileNames: 'assets/entry-[hash].js',
         assetFileNames: 'assets/asset-[hash].[ext]',
         
-        // Sanitize any file paths that might leak source structure
+        // Sanitize file names but PRESERVE extension so CSS/JS get correct MIME types
         sanitizeFileName(name) {
-          // Remove any path separators or source references
+          const lastDot = name.lastIndexOf('.');
+          if (lastDot !== -1) {
+            const base = name.slice(0, lastDot).replace(/[^a-zA-Z0-9-_]/g, '-').toLowerCase();
+            const ext = name.slice(lastDot + 1).toLowerCase();
+            return `${base}.${ext}`;
+          }
           return name.replace(/[^a-zA-Z0-9-_]/g, '-').toLowerCase();
         },
         
