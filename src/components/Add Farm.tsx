@@ -56,6 +56,7 @@ interface Plot {
   village: string;
   pin_code: string;
   crop_type: string;
+  crop_type_id?: number; // Resolved from crop types API to avoid backend "multiple CropType" error
   crop_variety: string;
   plantation_Type: string;
   plantation_Method: string;
@@ -699,6 +700,18 @@ function AddFarm() {
     }
   };
 
+  // Resolve crop_type_id from crop types API when plantation_Type is selected (fixes backend "get() returned more than one CropType" error)
+  const resolveCropTypeId = (plantationType: string): number | undefined => {
+    if (!plantationType || !cropTypes.length) return undefined;
+    const normalized = plantationType.trim().toLowerCase();
+    const match = cropTypes.find(
+      (c) =>
+        (c.plantation_type || "").trim().toLowerCase() === normalized &&
+        (c.crop_type || "").toLowerCase() === "sugarcane"
+    );
+    return match?.id;
+  };
+
   // Function to update plot details
   const handlePlotDetailChange = (
     plotId: string,
@@ -706,9 +719,15 @@ function AddFarm() {
     value: string
   ) => {
     setPlots((prev) =>
-      prev.map((plot) =>
-        plot.id === plotId ? { ...plot, [field]: value } : plot
-      )
+      prev.map((plot) => {
+        if (plot.id !== plotId) return plot;
+        const next = { ...plot, [field]: value };
+        if (field === "plantation_Type") {
+          const id = resolveCropTypeId(value);
+          if (id != null) next.crop_type_id = id;
+        }
+        return next;
+      })
     );
   };
 

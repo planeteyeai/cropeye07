@@ -1216,10 +1216,14 @@ const convertToBulkFormat = (formData: any, plots: any[]) => {
         spacing_a: plot.spacing_A || plot.spacing_a || "3.0",
         spacing_b: plot.spacing_B || plot.spacing_b || "1.5",
         soil_type_name: plot.soil_Type || plot.soil_type_name || "Black Soil",
-        crop_type_name: plot.crop_Type || plot.crop_type_name || "Sugarcane",
+        ...(plot.crop_type_id != null
+          ? { crop_type_id: plot.crop_type_id }
+          : {
+              crop_type_name: plot.crop_Type || plot.crop_type_name || "Sugarcane",
+              plantation_type:
+                plot.plantation_Type || plot.plantation_type || "adsali",
+            }),
         ...(plot.crop_variety && plot.crop_variety.trim() ? { crop_variety: plot.crop_variety.trim() } : {}),
-        plantation_type:
-          plot.plantation_Type || plot.plantation_type || "adsali",
         plantation_date: plot.plantation_Date || "2024-01-15",
         planting_method: plot.plantation_Method || "3_bud",
       },
@@ -1398,10 +1402,14 @@ const convertSinglePlotToAllInOneFormat = (formData: any, plot: any) => {
       plantation_date: plot.plantation_Date || "2024-01-15",
       spacing_a: plot.spacing_A || "3.0",
       spacing_b: plot.spacing_B || "1.5",
-      soil_type_name: "Loamy", // Default - you can make this dynamic
-      crop_type_name: "Sugarcane", // Fixed as per your requirement
+      soil_type_name: "Loamy",
+      ...(plot.crop_type_id != null
+        ? { crop_type_id: plot.crop_type_id }
+        : {
+            crop_type_name: "Sugarcane",
+            plantation_type: plot.plantation_Type || "adsali",
+          }),
       ...(plot.crop_variety && plot.crop_variety.trim() ? { crop_variety: plot.crop_variety.trim() } : {}),
-      plantation_type: plot.plantation_Type || "adsali",
       planting_method: plot.plantation_Method || "3_bud",
     },
     irrigation: {
