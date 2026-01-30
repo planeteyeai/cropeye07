@@ -11,118 +11,25 @@ export default defineConfig({
     dedupe: ["react", "react-dom"],
   },
 
-  // 🔥 IMPORTANT FIX - Hide source files in production
   build: {
-    sourcemap: false,        // ❌ Disable source maps (hides source files)
-    minify: "terser",        // ✔ Use terser for better obfuscation (hides code structure)
-    outDir: "dist",          // ✔ Ensure only build output is created
-    
-    // Terser options for better obfuscation - REMOVES ALL SOURCE REFERENCES
-    terserOptions: {
-      compress: {
-        drop_console: true,   // Remove all console logs
-        drop_debugger: true,  // Remove debugger statements
-        pure_funcs: ['console.log', 'console.debug', 'console.info', 'console.warn'], // Remove specific console methods
-        // Remove source file references
-        module: true,
-        passes: 3,            // Multiple passes for better minification
-      },
-      format: {
-        comments: false,      // Remove ALL comments (including source references)
-        preserve_annotations: false,
-      },
-      mangle: {
-        toplevel: true,
-        reserved: [
-          "React", "react", "ReactDOM", "reactDom",
-          "isElement", "createElement", "createContext", "Component", "Fragment",
-          "useState", "useEffect", "useRef", "useContext", "useMemo", "useCallback",
-        ],
-        properties: {
-          regex: /^_/,
-          reserved: ["isElement", "createElement", "createContext", "Component", "Fragment"],
-        },
-        keep_classnames: false,
-        keep_fnames: false,
-      },
-      keep_classnames: false,
-      keep_fnames: false,
-    },
-    
-    // 📦 Code Splitting - Split large bundles with COMPLETELY GENERIC names
+    sourcemap: false,
+    minify: "esbuild",       // esbuild: safe for React; terser mangling was breaking React.isElement
+    outDir: "dist",
     rollupOptions: {
       output: {
-        // COMPLETELY GENERIC file names - NO source hints
-        chunkFileNames: 'assets/chunk-[hash].js',
-        entryFileNames: 'assets/entry-[hash].js',
-        assetFileNames: 'assets/asset-[hash].[ext]',
-        
-        // Sanitize file names but PRESERVE extension so CSS/JS get correct MIME types
+        chunkFileNames: "assets/[name]-[hash].js",
+        entryFileNames: "assets/[name]-[hash].js",
+        assetFileNames: "assets/[name]-[hash].[ext]",
         sanitizeFileName(name) {
-          const lastDot = name.lastIndexOf('.');
+          const lastDot = name.lastIndexOf(".");
           if (lastDot !== -1) {
-            const base = name.slice(0, lastDot).replace(/[^a-zA-Z0-9-_]/g, '-').toLowerCase();
+            const base = name.slice(0, lastDot).replace(/[^a-zA-Z0-9-_]/g, "-").toLowerCase();
             const ext = name.slice(lastDot + 1).toLowerCase();
             return `${base}.${ext}`;
           }
-          return name.replace(/[^a-zA-Z0-9-_]/g, '-').toLowerCase();
-        },
-        
-        // Manual chunks with COMPLETELY GENERIC names
-        manualChunks(id) {
-          // Remove all source path information
-          const cleanId = id.split('?')[0]; // Remove query params
-          
-          if (cleanId.includes('node_modules')) {
-            // Use ONLY numbers/letters - NO library names visible
-            // Keep React + react-dom + framer-motion in same chunk so they share one React (fixes isElement)
-            if (cleanId.includes('react') || cleanId.includes('react-dom') || cleanId.includes('react-router') || cleanId.includes('framer-motion')) {
-              return 'v1';
-            }
-            if (cleanId.includes('leaflet')) {
-              return 'v2';
-            }
-            if (cleanId.includes('recharts')) {
-              return 'v3';
-            }
-            if (cleanId.includes('lucide-react') || cleanId.includes('react-icons')) {
-              return 'v4';
-            }
-            if (cleanId.includes('axios') || cleanId.includes('lodash') || cleanId.includes('date-fns') || cleanId.includes('jwt-decode')) {
-              return 'v5';
-            }
-            if (cleanId.includes('xlsx') || cleanId.includes('papaparse') || cleanId.includes('jspdf') || cleanId.includes('html2canvas')) {
-              return 'v6';
-            }
-            if (cleanId.includes('react-calendar') || cleanId.includes('react-datepicker')) {
-              return 'v7';
-            }
-            return 'v8';
-          }
-          
-          // Component chunks - use generic numbers only
-          if (cleanId.includes('components')) {
-            if (cleanId.includes('Map') || cleanId.includes('Farm')) {
-              return 'c1';
-            }
-            if (cleanId.includes('Dashboard') || cleanId.includes('Dash')) {
-              return 'c2';
-            }
-            if (cleanId.includes('List') || cleanId.includes('list')) {
-              return 'c3';
-            }
-            return 'c4';
-          }
-        },
-        
-        // Remove source file paths from output
-        generatedCode: {
-          preset: 'es2015',
-          constBindings: true,
+          return name.replace(/[^a-zA-Z0-9-_]/g, "-").toLowerCase();
         },
       },
-      
-      // Externalize nothing - bundle everything to hide dependencies
       external: [],
     },
     
