@@ -6,6 +6,11 @@ export default defineConfig({
   plugins: [react()],
   assetsInclude: ["**/*.geojson"],
 
+  // Ensure single React instance (fixes "isElement" undefined errors with chunking)
+  resolve: {
+    dedupe: ["react", "react-dom"],
+  },
+
   // 🔥 IMPORTANT FIX - Hide source files in production
   build: {
     sourcemap: false,        // ❌ Disable source maps (hides source files)
@@ -27,14 +32,18 @@ export default defineConfig({
         preserve_annotations: false,
       },
       mangle: {
-        toplevel: true,       // Obfuscate top-level names
-        reserved: [],         // Don't reserve any names
+        toplevel: true,
+        reserved: [
+          "React", "react", "ReactDOM", "reactDom",
+          "isElement", "createElement", "createContext", "Component", "Fragment",
+          "useState", "useEffect", "useRef", "useContext", "useMemo", "useCallback",
+        ],
         properties: {
-          regex: /^_/,        // Mangle properties starting with _
-          reserved: [],       // Don't reserve property names
+          regex: /^_/,
+          reserved: ["isElement", "createElement", "createContext", "Component", "Fragment"],
         },
-        keep_classnames: false,  // Obfuscate class names
-        keep_fnames: false,      // Obfuscate function names
+        keep_classnames: false,
+        keep_fnames: false,
       },
       keep_classnames: false,
       keep_fnames: false,
@@ -66,7 +75,8 @@ export default defineConfig({
           
           if (cleanId.includes('node_modules')) {
             // Use ONLY numbers/letters - NO library names visible
-            if (cleanId.includes('react') || cleanId.includes('react-dom') || cleanId.includes('react-router')) {
+            // Keep React + react-dom + framer-motion in same chunk so they share one React (fixes isElement)
+            if (cleanId.includes('react') || cleanId.includes('react-dom') || cleanId.includes('react-router') || cleanId.includes('framer-motion')) {
               return 'v1';
             }
             if (cleanId.includes('leaflet')) {
@@ -75,7 +85,7 @@ export default defineConfig({
             if (cleanId.includes('recharts')) {
               return 'v3';
             }
-            if (cleanId.includes('lucide-react') || cleanId.includes('react-icons') || cleanId.includes('framer-motion')) {
+            if (cleanId.includes('lucide-react') || cleanId.includes('react-icons')) {
               return 'v4';
             }
             if (cleanId.includes('axios') || cleanId.includes('lodash') || cleanId.includes('date-fns') || cleanId.includes('jwt-decode')) {
