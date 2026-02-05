@@ -1,24 +1,24 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Eye, EyeOff, RefreshCw, Search, Users } from 'lucide-react';
-import { PieChart, Pie, ResponsiveContainer, Cell } from 'recharts';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Eye, EyeOff, RefreshCw, Search, Users } from "lucide-react";
+import { PieChart, Pie, ResponsiveContainer, Cell } from "recharts";
 import {
   getRecentFarmers,
   getContactDetails,
   getUsers,
   getCurrentUser,
   getTeamConnect,
-} from '../api';
-import { getAuthToken } from '../utils/auth';
+} from "../api";
+import { getAuthToken } from "../utils/auth";
 
 type CategoryKey =
-  | 'farmers'
-  | 'fieldOfficers'
-  | 'managers'
-  | 'owners'
-  | 'vendors'
-  | 'stock'
-  | 'bookings'
-  | 'orders';
+  | "farmers"
+  | "fieldOfficers"
+  | "managers"
+  | "owners"
+  | "vendors"
+  | "stock"
+  | "bookings"
+  | "orders";
 
 interface TeamMember {
   id: string | number;
@@ -42,14 +42,14 @@ const EMPTY_TEAM_DATA = (): Record<CategoryKey, TeamMember[]> => ({
 });
 
 const CATEGORY_ORDER: CategoryKey[] = [
-  'farmers',
-  'fieldOfficers',
-  'managers',
-  'owners',
-  'vendors',
-  'stock',
-  'bookings',
-  'orders',
+  "farmers",
+  "fieldOfficers",
+  "managers",
+  "owners",
+  "vendors",
+  "stock",
+  "bookings",
+  "orders",
 ];
 
 const CATEGORY_INFO: Record<
@@ -57,49 +57,54 @@ const CATEGORY_INFO: Record<
   { label: string; color: string; description: string }
 > = {
   farmers: {
-    label: 'Farmers',
-    color: '#2563eb',
-    description: 'Farmers registered in the system (via farm list)',
+    label: "Farmers",
+    color: "#2563eb",
+    description: "Farmers registered in the system (via farm list)",
   },
   fieldOfficers: {
-    label: 'Field Officers',
-    color: '#f97316',
-    description: 'Field officers fetched from the user directory',
+    label: "Field Officers",
+    color: "#f97316",
+    description: "Field officers fetched from the user directory",
   },
   managers: {
-    label: 'Managers',
-    color: '#8b5cf6',
-    description: 'Managers from the user directory',
+    label: "Managers",
+    color: "#8b5cf6",
+    description: "Managers from the user directory",
   },
   owners: {
-    label: 'Factory Head Office',
-    color: '#16a34a',
-    description: 'Factory Head Office and admins from the user directory',
+    label: "Factory Head Office",
+    color: "#16a34a",
+    description: "Factory Head Office and admins from the user directory",
   },
   vendors: {
-    label: 'Vendors',
-    color: '#9333ea',
-    description: 'Vendors from the vendor list (Add New)',
+    label: "Vendors",
+    color: "#9333ea",
+    description: "Vendors from the vendor list (Add New)",
   },
   stock: {
-    label: 'Stock',
-    color: '#f59e0b',
-    description: 'Stock entries added under inventory',
+    label: "Stock",
+    color: "#f59e0b",
+    description: "Stock entries added under inventory",
   },
   bookings: {
-    label: 'Bookings',
-    color: '#0ea5e9',
-    description: 'Booking requests captured through Add Booking',
+    label: "Bookings",
+    color: "#0ea5e9",
+    description: "Booking requests captured through Add Booking",
   },
   orders: {
-    label: 'Orders',
-    color: '#ef4444',
-    description: 'Purchase orders raised in the system',
+    label: "Orders",
+    color: "#ef4444",
+    description: "Purchase orders raised in the system",
   },
 };
 
-const REMOTE_API_BASE = 'https://cropeye-server-1.onrender.com/api';
-const LOCAL_API_BASE = 'https://cropeye-server-1.onrender.com';
+const REMOTE_API_BASE =
+  import.meta.env.VITE_API_BASE_URL ||
+  "https://cropeye-server-flyio.onrender.com/api";
+const LOCAL_API_BASE = (
+  import.meta.env.VITE_API_BASE_URL ||
+  "https://cropeye-server-flyio.onrender.com/api"
+).replace(/\/api\/?$/, "");
 
 const ensureArray = (payload: any): any[] => {
   if (!payload) return [];
@@ -111,13 +116,13 @@ const ensureArray = (payload: any): any[] => {
   return [];
 };
 
-const toStringValue = (value: any, fallback = 'N/A'): string => {
+const toStringValue = (value: any, fallback = "N/A"): string => {
   if (value === null || value === undefined) return fallback;
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : fallback;
   }
-  if (typeof value === 'number' || typeof value === 'boolean') {
+  if (typeof value === "number" || typeof value === "boolean") {
     return String(value);
   }
   return fallback;
@@ -137,22 +142,22 @@ const extractRoleName = (user: any): string => {
 
   for (const candidate of candidates) {
     if (!candidate) continue;
-    if (typeof candidate === 'string' && candidate.trim()) return candidate;
-    if (typeof candidate === 'object') {
-      if (typeof candidate.name === 'string' && candidate.name.trim()) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate;
+    if (typeof candidate === "object") {
+      if (typeof candidate.name === "string" && candidate.name.trim()) {
         return candidate.name;
       }
-      if (typeof candidate.label === 'string' && candidate.label.trim()) {
+      if (typeof candidate.label === "string" && candidate.label.trim()) {
         return candidate.label;
       }
     }
   }
-  return '';
+  return "";
 };
 
 const parseNumericValue = (value: any): number => {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string') {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
     const parsed = parseFloat(value);
     return Number.isFinite(parsed) ? parsed : 0;
   }
@@ -166,18 +171,18 @@ const hectaresToAcres = (hectares: any): number =>
 
 const fetchFromEndpointList = async (
   remotePaths: string[],
-  localPaths: string[] = []
+  localPaths: string[] = [],
 ): Promise<any[]> => {
   const token = getAuthToken();
   const baseHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   };
   if (token) {
     baseHeaders.Authorization = `Bearer ${token}`;
   }
   const tryFetch = async (url: string) => {
     const response = await fetch(url, {
-      method: 'GET',
+      method: "GET",
       headers: baseHeaders,
     });
     if (!response.ok) {
@@ -216,14 +221,14 @@ const mapUserRecord = (
   record: any,
   fallbackRole: string,
   index: number,
-  overrides: Partial<TeamMember> = {}
+  overrides: Partial<TeamMember> = {},
 ): TeamMember => {
   const username =
-    toStringValue(record?.username, '').trim() ||
+    toStringValue(record?.username, "").trim() ||
     [record?.first_name, record?.last_name]
-      .map((part: any) => toStringValue(part, '').trim())
+      .map((part: any) => toStringValue(part, "").trim())
       .filter(Boolean)
-      .join(' ') ||
+      .join(" ") ||
     `${fallbackRole} ${index + 1}`;
 
   const phone =
@@ -233,12 +238,12 @@ const mapUserRecord = (
         record?.mobile ??
         record?.contact_number ??
         record?.contact,
-      'N/A'
-    ) || 'N/A';
+      "N/A",
+    ) || "N/A";
 
   const email = toStringValue(
     record?.email ?? record?.contact_email ?? record?.mail,
-    'N/A'
+    "N/A",
   );
 
   const password = toStringValue(
@@ -247,13 +252,12 @@ const mapUserRecord = (
       record?.raw_password ??
       record?.password_text ??
       record?.passcode,
-    'N/A'
+    "N/A",
   );
 
   const roleFromRecord = extractRoleName(record);
   const role =
-    overrides.role ??
-    (roleFromRecord ? roleFromRecord : fallbackRole);
+    overrides.role ?? (roleFromRecord ? roleFromRecord : fallbackRole);
 
   return {
     id: overrides.id ?? record?.id ?? `${fallbackRole}-${index}`,
@@ -275,8 +279,8 @@ const fetchFarmersData = async (): Promise<TeamMember[]> => {
     const farms = Array.isArray(farmer?.farms)
       ? farmer.farms
       : Array.isArray(farmer?.plots)
-      ? farmer.plots.flatMap((plot: any) => ensureArray(plot?.farms))
-      : [];
+        ? farmer.plots.flatMap((plot: any) => ensureArray(plot?.farms))
+        : [];
 
     const firstFarm = farms?.[0];
     const areaSource =
@@ -289,28 +293,28 @@ const fetchFarmersData = async (): Promise<TeamMember[]> => {
       : parseNumericValue(farmer?.area);
 
     if (Number.isFinite(areaAcres)) {
-      meta['Area (acres)'] = `${areaAcres.toFixed(2)} acres`;
+      meta["Area (acres)"] = `${areaAcres.toFixed(2)} acres`;
     }
 
     const crop = firstFarm?.crop_type ?? farmer?.crop_type;
     const plantation = firstFarm?.plantation_type ?? farmer?.plantation_type;
 
     if (crop) {
-      meta['Crop'] = toStringValue(crop, 'N/A');
+      meta["Crop"] = toStringValue(crop, "N/A");
     }
     if (plantation) {
-      meta['Plantation'] = toStringValue(plantation, 'N/A');
+      meta["Plantation"] = toStringValue(plantation, "N/A");
     }
 
-    meta['Location'] =
+    meta["Location"] =
       [farmer?.village, farmer?.taluka, farmer?.district]
-        .map((part) => toStringValue(part, '').trim())
+        .map((part) => toStringValue(part, "").trim())
         .filter(Boolean)
-        .join(', ') || 'N/A';
+        .join(", ") || "N/A";
 
     if (farmer?.created_at || farmer?.date_joined) {
-      meta['Created'] = new Date(
-        farmer?.created_at ?? farmer?.date_joined
+      meta["Created"] = new Date(
+        farmer?.created_at ?? farmer?.date_joined,
       ).toLocaleDateString();
     }
 
@@ -318,22 +322,22 @@ const fetchFarmersData = async (): Promise<TeamMember[]> => {
       {
         ...farmer,
         username:
-          toStringValue(farmer?.username, '').trim() ||
+          toStringValue(farmer?.username, "").trim() ||
           [farmer?.first_name, farmer?.last_name]
-            .map((part: any) => toStringValue(part, '').trim())
+            .map((part: any) => toStringValue(part, "").trim())
             .filter(Boolean)
-            .join(' ') ||
+            .join(" ") ||
           `Farmer ${index + 1}`,
         phone_number: farmer?.phone_number ?? farmer?.farmer?.phone_number,
         email: farmer?.email ?? farmer?.farmer?.email,
       },
-      'Farmer',
+      "Farmer",
       index,
       {
-        role: 'Farmer',
+        role: "Farmer",
         meta,
-        password: 'N/A',
-      }
+        password: "N/A",
+      },
     );
   });
 };
@@ -357,18 +361,22 @@ const fetchContactsData = async (): Promise<{
     fieldOfficersRaw.push(...contacts.fieldOfficers);
 
   const owners = ownersRaw.map((record, index) =>
-    mapUserRecord(record, 'Factory Head Office', index, { role: 'Factory Head Office' })
+    mapUserRecord(record, "Factory Head Office", index, {
+      role: "Factory Head Office",
+    }),
   );
 
   const fieldOfficers = fieldOfficersRaw.map((record, index) =>
-    mapUserRecord(record, 'Field Officer', index, { role: 'Field Officer' })
+    mapUserRecord(record, "Field Officer", index, { role: "Field Officer" }),
   );
 
   return { owners, fieldOfficers };
 };
 
 // Fetch team connect data from the new API endpoint
-const fetchTeamConnectData = async (industryId?: number | string): Promise<{
+const fetchTeamConnectData = async (
+  industryId?: number | string,
+): Promise<{
   owners: TeamMember[];
   fieldOfficers: TeamMember[];
   farmers: TeamMember[];
@@ -376,18 +384,18 @@ const fetchTeamConnectData = async (industryId?: number | string): Promise<{
 }> => {
   try {
     if (!industryId) {
-      throw new Error('industry_id is required for team-connect API');
+      throw new Error("industry_id is required for team-connect API");
     }
-    
+
     const response = await getTeamConnect(industryId);
     const data = response?.data;
-    
+
     // Handle different response formats
     let ownersRaw: any[] = [];
     let fieldOfficersRaw: any[] = [];
     let farmersRaw: any[] = [];
     let managersRaw: any[] = [];
-    
+
     // Check if data has role-based arrays
     if (data) {
       // Format 1: { users_by_role: { owners: [], field_officers: [], farmers: [] } }
@@ -405,7 +413,7 @@ const fetchTeamConnectData = async (industryId?: number | string): Promise<{
           managersRaw = data.users_by_role.managers;
         }
       }
-      
+
       // Format 2: { owners: [], field_officers: [], farmers: [] } (direct format)
       if (Array.isArray(data.owners)) {
         ownersRaw = data.owners;
@@ -422,128 +430,178 @@ const fetchTeamConnectData = async (industryId?: number | string): Promise<{
       if (Array.isArray(data.managers)) {
         managersRaw = data.managers;
       }
-      
+
       // Format 2: { results: [] } with role field in each item
       if (Array.isArray(data.results)) {
         data.results.forEach((user: any) => {
           const roleName = extractRoleName(user).toLowerCase();
           const roleId = user?.role_id ?? user?.role?.id;
-          
+
           // Check by role_id first (1=farmer, 2=fieldofficer, 3=manager, 4=owner)
-          if (roleId === 4 || roleName.includes('owner') || roleName === 'admin' || roleName === 'administrator') {
+          if (
+            roleId === 4 ||
+            roleName.includes("owner") ||
+            roleName === "admin" ||
+            roleName === "administrator"
+          ) {
             ownersRaw.push(user);
-          } else if (roleId === 2 || (roleName.includes('field') && roleName.includes('officer'))) {
+          } else if (
+            roleId === 2 ||
+            (roleName.includes("field") && roleName.includes("officer"))
+          ) {
             fieldOfficersRaw.push(user);
-          } else if (roleId === 1 || roleName.includes('farmer') || roleName === 'farmer') {
+          } else if (
+            roleId === 1 ||
+            roleName.includes("farmer") ||
+            roleName === "farmer"
+          ) {
             farmersRaw.push(user);
-          } else if (roleId === 3 || roleName.includes('manager') || roleName === 'manager') {
+          } else if (
+            roleId === 3 ||
+            roleName.includes("manager") ||
+            roleName === "manager"
+          ) {
             managersRaw.push(user);
           }
         });
       }
-      
+
       // Format 3: Direct array with role field
       if (Array.isArray(data)) {
         data.forEach((user: any) => {
           const roleName = extractRoleName(user).toLowerCase();
           const roleId = user?.role_id ?? user?.role?.id;
-          
+
           // Check by role_id first (1=farmer, 2=fieldofficer, 3=manager, 4=owner)
-          if (roleId === 4 || roleName.includes('owner') || roleName === 'admin' || roleName === 'administrator') {
+          if (
+            roleId === 4 ||
+            roleName.includes("owner") ||
+            roleName === "admin" ||
+            roleName === "administrator"
+          ) {
             ownersRaw.push(user);
-          } else if (roleId === 2 || (roleName.includes('field') && roleName.includes('officer'))) {
+          } else if (
+            roleId === 2 ||
+            (roleName.includes("field") && roleName.includes("officer"))
+          ) {
             fieldOfficersRaw.push(user);
-          } else if (roleId === 1 || roleName.includes('farmer') || roleName === 'farmer') {
+          } else if (
+            roleId === 1 ||
+            roleName.includes("farmer") ||
+            roleName === "farmer"
+          ) {
             farmersRaw.push(user);
-          } else if (roleId === 3 || roleName.includes('manager') || roleName === 'manager') {
+          } else if (
+            roleId === 3 ||
+            roleName.includes("manager") ||
+            roleName === "manager"
+          ) {
             managersRaw.push(user);
           }
         });
       }
-      
+
       // Format 4: Check for nested data structures (data.data)
       if (data.data && Array.isArray(data.data)) {
         data.data.forEach((user: any) => {
           const roleName = extractRoleName(user).toLowerCase();
           const roleId = user?.role_id ?? user?.role?.id;
-          
+
           // Check by role_id first (1=farmer, 2=fieldofficer, 3=manager, 4=owner)
-          if (roleId === 4 || roleName.includes('owner') || roleName === 'admin' || roleName === 'administrator') {
+          if (
+            roleId === 4 ||
+            roleName.includes("owner") ||
+            roleName === "admin" ||
+            roleName === "administrator"
+          ) {
             ownersRaw.push(user);
-          } else if (roleId === 2 || (roleName.includes('field') && roleName.includes('officer'))) {
+          } else if (
+            roleId === 2 ||
+            (roleName.includes("field") && roleName.includes("officer"))
+          ) {
             fieldOfficersRaw.push(user);
-          } else if (roleId === 1 || roleName.includes('farmer') || roleName === 'farmer') {
+          } else if (
+            roleId === 1 ||
+            roleName.includes("farmer") ||
+            roleName === "farmer"
+          ) {
             farmersRaw.push(user);
-          } else if (roleId === 3 || roleName.includes('manager') || roleName === 'manager') {
+          } else if (
+            roleId === 3 ||
+            roleName.includes("manager") ||
+            roleName === "manager"
+          ) {
             managersRaw.push(user);
           }
         });
       }
     }
-    
-    
+
     // Map to TeamMember format
     const owners = ownersRaw.map((user, index) =>
-      mapUserRecord(user, 'Factory Head Office', index, {
-        role: 'Factory Head Office',
+      mapUserRecord(user, "Factory Head Office", index, {
+        role: "Factory Head Office",
         meta: {
-          'Full Name': [user?.first_name, user?.last_name]
-            .map((part: any) => toStringValue(part, '').trim())
-            .filter(Boolean)
-            .join(' ') || 'N/A',
+          "Full Name":
+            [user?.first_name, user?.last_name]
+              .map((part: any) => toStringValue(part, "").trim())
+              .filter(Boolean)
+              .join(" ") || "N/A",
         },
-      })
+      }),
     );
-    
+
     const fieldOfficers = fieldOfficersRaw.map((user, index) =>
-      mapUserRecord(user, 'Field Officer', index, {
-        role: 'Field Officer',
+      mapUserRecord(user, "Field Officer", index, {
+        role: "Field Officer",
         meta: {
-          'Full Name': [user?.first_name, user?.last_name]
-            .map((part: any) => toStringValue(part, '').trim())
-            .filter(Boolean)
-            .join(' ') || 'N/A',
+          "Full Name":
+            [user?.first_name, user?.last_name]
+              .map((part: any) => toStringValue(part, "").trim())
+              .filter(Boolean)
+              .join(" ") || "N/A",
         },
-      })
+      }),
     );
-    
+
     const farmers = farmersRaw.map((user, index) => {
       const meta: Record<string, string> = {};
       if (user?.village || user?.taluka || user?.district) {
-        meta['Location'] = [user?.village, user?.taluka, user?.district]
-          .map((part) => toStringValue(part, '').trim())
-          .filter(Boolean)
-          .join(', ') || 'N/A';
+        meta["Location"] =
+          [user?.village, user?.taluka, user?.district]
+            .map((part) => toStringValue(part, "").trim())
+            .filter(Boolean)
+            .join(", ") || "N/A";
       }
       if (user?.created_at || user?.date_joined) {
-        meta['Created'] = new Date(
-          user?.created_at ?? user?.date_joined
+        meta["Created"] = new Date(
+          user?.created_at ?? user?.date_joined,
         ).toLocaleDateString();
       }
-      
-      return mapUserRecord(user, 'Farmer', index, {
-        role: 'Farmer',
+
+      return mapUserRecord(user, "Farmer", index, {
+        role: "Farmer",
         meta,
-        password: 'N/A',
+        password: "N/A",
       });
     });
-    
+
     const managers = managersRaw.map((user, index) =>
-      mapUserRecord(user, 'Manager', index, {
-        role: 'Manager',
+      mapUserRecord(user, "Manager", index, {
+        role: "Manager",
         meta: {
-          'Full Name': [user?.first_name, user?.last_name]
-            .map((part: any) => toStringValue(part, '').trim())
-            .filter(Boolean)
-            .join(' ') || 'N/A',
+          "Full Name":
+            [user?.first_name, user?.last_name]
+              .map((part: any) => toStringValue(part, "").trim())
+              .filter(Boolean)
+              .join(" ") || "N/A",
         },
-      })
+      }),
     );
-    
-    
+
     return { owners, fieldOfficers, farmers, managers };
   } catch (error: any) {
-    throw error;  
+    throw error;
   }
 };
 
@@ -555,11 +613,15 @@ const fetchOwnersAndFieldOfficersFromUsers = async (): Promise<{
   const response = await getUsers();
   let records = response?.data;
 
-  if (records && typeof records === 'object' && Array.isArray(records.results)) {
+  if (
+    records &&
+    typeof records === "object" &&
+    Array.isArray(records.results)
+  ) {
     records = records.results;
   } else if (
     records &&
-    typeof records === 'object' &&
+    typeof records === "object" &&
     Array.isArray(records.data)
   ) {
     records = records.data;
@@ -578,50 +640,53 @@ const fetchOwnersAndFieldOfficersFromUsers = async (): Promise<{
     const roleName = extractRoleName(user).toLowerCase();
 
     if (
-      roleName.includes('owner') ||
-      roleName === 'admin' ||
-      roleName === 'administrator'
+      roleName.includes("owner") ||
+      roleName === "admin" ||
+      roleName === "administrator"
     ) {
       owners.push(
-        mapUserRecord(user, 'Factory Head Office', ownerIndex++, {
-          role: 'Factory Head Office',
+        mapUserRecord(user, "Factory Head Office", ownerIndex++, {
+          role: "Factory Head Office",
           meta: {
-            'Full Name': [user?.first_name, user?.last_name]
-              .map((part: any) => toStringValue(part, '').trim())
-              .filter(Boolean)
-              .join(' ') || 'N/A',
+            "Full Name":
+              [user?.first_name, user?.last_name]
+                .map((part: any) => toStringValue(part, "").trim())
+                .filter(Boolean)
+                .join(" ") || "N/A",
           },
-        })
+        }),
       );
       return;
     }
 
-    if (roleName.includes('manager') || roleName === 'manager') {
+    if (roleName.includes("manager") || roleName === "manager") {
       managers.push(
-        mapUserRecord(user, 'Manager', managerIndex++, {
-          role: 'Manager',
+        mapUserRecord(user, "Manager", managerIndex++, {
+          role: "Manager",
           meta: {
-            'Full Name': [user?.first_name, user?.last_name]
-              .map((part: any) => toStringValue(part, '').trim())
-              .filter(Boolean)
-              .join(' ') || 'N/A',
+            "Full Name":
+              [user?.first_name, user?.last_name]
+                .map((part: any) => toStringValue(part, "").trim())
+                .filter(Boolean)
+                .join(" ") || "N/A",
           },
-        })
+        }),
       );
       return;
     }
 
-    if (roleName.includes('field') && roleName.includes('officer')) {
+    if (roleName.includes("field") && roleName.includes("officer")) {
       fieldOfficers.push(
-        mapUserRecord(user, 'Field Officer', fieldOfficerIndex++, {
-          role: 'Field Officer',
+        mapUserRecord(user, "Field Officer", fieldOfficerIndex++, {
+          role: "Field Officer",
           meta: {
-            'Full Name': [user?.first_name, user?.last_name]
-              .map((part: any) => toStringValue(part, '').trim())
-              .filter(Boolean)
-              .join(' ') || 'N/A',
+            "Full Name":
+              [user?.first_name, user?.last_name]
+                .map((part: any) => toStringValue(part, "").trim())
+                .filter(Boolean)
+                .join(" ") || "N/A",
           },
-        })
+        }),
       );
     }
   });
@@ -637,17 +702,18 @@ const fetchCurrentUserOwner = async (): Promise<TeamMember | null> => {
 
     const roleName = extractRoleName(user).toLowerCase();
     if (
-      roleName.includes('owner') ||
-      roleName === 'admin' ||
-      roleName === 'administrator'
+      roleName.includes("owner") ||
+      roleName === "admin" ||
+      roleName === "administrator"
     ) {
-      return mapUserRecord(user, 'Factory Head Office', 0, {
-        role: 'Factory Head Office',
+      return mapUserRecord(user, "Factory Head Office", 0, {
+        role: "Factory Head Office",
         meta: {
-          'Full Name': [user?.first_name, user?.last_name]
-            .map((part: any) => toStringValue(part, '').trim())
-            .filter(Boolean)
-            .join(' ') || 'N/A',
+          "Full Name":
+            [user?.first_name, user?.last_name]
+              .map((part: any) => toStringValue(part, "").trim())
+              .filter(Boolean)
+              .join(" ") || "N/A",
         },
       });
     }
@@ -664,18 +730,18 @@ const fetchVendorsData = async (): Promise<TeamMember[]> => {
       `${REMOTE_API_BASE}/vendorlist`,
       `${REMOTE_API_BASE}/vendors`,
     ],
-    [`${LOCAL_API_BASE}/vendorlist`]
+    [`${LOCAL_API_BASE}/vendorlist`],
   );
 
   return vendors.map((vendor, index) =>
-    mapUserRecord(vendor, 'Vendor', index, {
-      role: 'Vendor',
+    mapUserRecord(vendor, "Vendor", index, {
+      role: "Vendor",
       meta: {
-        GSTIN: toStringValue(vendor?.gstin, 'N/A'),
-        State: toStringValue(vendor?.state, 'N/A'),
-        City: toStringValue(vendor?.city, 'N/A'),
+        GSTIN: toStringValue(vendor?.gstin, "N/A"),
+        State: toStringValue(vendor?.state, "N/A"),
+        City: toStringValue(vendor?.city, "N/A"),
       },
-    })
+    }),
   );
 };
 
@@ -686,7 +752,7 @@ const fetchStockData = async (): Promise<TeamMember[]> => {
       `${REMOTE_API_BASE}/stocks/`,
       `${REMOTE_API_BASE}/stocklist`,
     ],
-    [`${LOCAL_API_BASE}/stocklist`]
+    [`${LOCAL_API_BASE}/stocklist`],
   );
 
   return stocks.map((stock, index) =>
@@ -697,21 +763,21 @@ const fetchStockData = async (): Promise<TeamMember[]> => {
         phone_number: null,
         email: null,
       },
-      'Stock',
+      "Stock",
       index,
       {
-        role: 'Stock',
-        phone: 'N/A',
-        email: 'N/A',
-        password: 'N/A',
+        role: "Stock",
+        phone: "N/A",
+        email: "N/A",
+        password: "N/A",
         meta: {
-          Type: toStringValue(stock?.itemType, 'N/A'),
-          Status: toStringValue(stock?.status, 'N/A'),
-          Make: toStringValue(stock?.make, 'N/A'),
-          Cost: toStringValue(stock?.estimateCost, 'N/A'),
+          Type: toStringValue(stock?.itemType, "N/A"),
+          Status: toStringValue(stock?.status, "N/A"),
+          Make: toStringValue(stock?.make, "N/A"),
+          Cost: toStringValue(stock?.estimateCost, "N/A"),
         },
-      } as Partial<TeamMember>
-    )
+      } as Partial<TeamMember>,
+    ),
   );
 };
 
@@ -722,7 +788,7 @@ const fetchBookingsData = async (): Promise<TeamMember[]> => {
       `${REMOTE_API_BASE}/bookinglist`,
       `${REMOTE_API_BASE}/bookings`,
     ],
-    [`${LOCAL_API_BASE}/bookinglist`]
+    [`${LOCAL_API_BASE}/bookinglist`],
   );
 
   return bookings.map((booking, index) =>
@@ -731,21 +797,21 @@ const fetchBookingsData = async (): Promise<TeamMember[]> => {
         ...booking,
         username: booking?.itemName,
       },
-      'Booking',
+      "Booking",
       index,
       {
-        role: 'Booking',
-        phone: 'N/A',
-        email: 'N/A',
-        password: 'N/A',
+        role: "Booking",
+        phone: "N/A",
+        email: "N/A",
+        password: "N/A",
         meta: {
-          'User Role': toStringValue(booking?.userRole, 'N/A'),
-          'Start Date': toStringValue(booking?.startDate, 'N/A'),
-          'End Date': toStringValue(booking?.endDate, 'N/A'),
-          Status: toStringValue(booking?.status, 'N/A'),
+          "User Role": toStringValue(booking?.userRole, "N/A"),
+          "Start Date": toStringValue(booking?.startDate, "N/A"),
+          "End Date": toStringValue(booking?.endDate, "N/A"),
+          Status: toStringValue(booking?.status, "N/A"),
         },
-      } as Partial<TeamMember>
-    )
+      } as Partial<TeamMember>,
+    ),
   );
 };
 
@@ -756,7 +822,7 @@ const fetchOrdersData = async (): Promise<TeamMember[]> => {
       `${REMOTE_API_BASE}/orderlist`,
       `${REMOTE_API_BASE}/orders`,
     ],
-    [`${LOCAL_API_BASE}/orderlist`]
+    [`${LOCAL_API_BASE}/orderlist`],
   );
 
   return orders.map((order, index) =>
@@ -765,36 +831,32 @@ const fetchOrdersData = async (): Promise<TeamMember[]> => {
         ...order,
         username: order?.vendorName ?? order?.itemName,
       },
-      'Order',
+      "Order",
       index,
       {
-        role: 'Order',
-        phone: 'N/A',
-        email: 'N/A',
-        password: 'N/A',
+        role: "Order",
+        phone: "N/A",
+        email: "N/A",
+        password: "N/A",
         meta: {
-          Item: toStringValue(order?.itemName ?? order?.item, 'N/A'),
-          Invoice: toStringValue(order?.invoiceNumber, 'N/A'),
-          Date: toStringValue(order?.invoiceDate, 'N/A'),
-          State: toStringValue(order?.state, 'N/A'),
+          Item: toStringValue(order?.itemName ?? order?.item, "N/A"),
+          Invoice: toStringValue(order?.invoiceNumber, "N/A"),
+          Date: toStringValue(order?.invoiceDate, "N/A"),
+          State: toStringValue(order?.state, "N/A"),
         },
-      } as Partial<TeamMember>
-    )
+      } as Partial<TeamMember>,
+    ),
   );
 };
 
 const TeamList: React.FC = () => {
-  const [teamData, setTeamData] = useState<Record<CategoryKey, TeamMember[]>>(
-    EMPTY_TEAM_DATA
-  );
+  const [teamData, setTeamData] =
+    useState<Record<CategoryKey, TeamMember[]>>(EMPTY_TEAM_DATA);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeCategory, setActiveCategory] =
-    useState<CategoryKey>('farmers');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showPassword, setShowPassword] = useState<Record<string, boolean>>(
-    {}
-  );
+  const [activeCategory, setActiveCategory] = useState<CategoryKey>("farmers");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showPassword, setShowPassword] = useState<Record<string, boolean>>({});
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -808,29 +870,30 @@ const TeamList: React.FC = () => {
     try {
       const currentUserResponse = await getCurrentUser();
       const currentUser = currentUserResponse?.data;
-      
+
       if (currentUser) {
         // Try different possible field names for industry_id
-        industryId = 
-          currentUser?.industry_id ?? 
-          currentUser?.industry?.id ?? 
-          currentUser?.industryId ?? 
+        industryId =
+          currentUser?.industry_id ??
+          currentUser?.industry?.id ??
+          currentUser?.industryId ??
           currentUser?.industry?.industry_id;
       }
-    } catch (err) {
-    }
+    } catch (err) {}
 
     // PRIORITY: Try to fetch from team-connect API first with industry_id
     try {
       if (!industryId) {
-        throw new Error('industry_id is required but not found in current user data');
+        throw new Error(
+          "industry_id is required but not found in current user data",
+        );
       }
-      
+
       const teamConnectData = await fetchTeamConnectData(industryId);
       nextData.owners = teamConnectData.owners;
       nextData.fieldOfficers = teamConnectData.fieldOfficers;
       nextData.managers = teamConnectData.managers;
-      
+
       // If team-connect API returns farmers, use them; otherwise fallback to getRecentFarmers
       if (teamConnectData.farmers.length > 0) {
         nextData.farmers = teamConnectData.farmers;
@@ -839,17 +902,17 @@ const TeamList: React.FC = () => {
         try {
           nextData.farmers = await fetchFarmersData();
         } catch (err) {
-          errors.push('farmers');
+          errors.push("farmers");
         }
       }
     } catch (teamConnectErr: any) {
-      errors.push('team-connect');
-      
+      errors.push("team-connect");
+
       // Fallback 1: Try getRecentFarmers for farmers
       try {
         nextData.farmers = await fetchFarmersData();
       } catch (err) {
-        errors.push('farmers');
+        errors.push("farmers");
       }
 
       // Fallback 2: Try getUsers for owners, field officers, managers
@@ -860,14 +923,14 @@ const TeamList: React.FC = () => {
         nextData.fieldOfficers = fieldOfficers;
         nextData.managers = managers;
       } catch (err) {
-        errors.push('user directory');
+        errors.push("user directory");
         // Fallback 3: Try getContactDetails
         try {
           const { owners, fieldOfficers } = await fetchContactsData();
           nextData.owners = owners;
           nextData.fieldOfficers = fieldOfficers;
         } catch (fallbackError) {
-          errors.push('contact users');
+          errors.push("contact users");
         }
       }
     }
@@ -883,25 +946,25 @@ const TeamList: React.FC = () => {
     try {
       nextData.vendors = await fetchVendorsData();
     } catch (err) {
-      errors.push('vendors');
+      errors.push("vendors");
     }
 
     try {
       nextData.stock = await fetchStockData();
     } catch (err) {
-      errors.push('stock');
+      errors.push("stock");
     }
 
     try {
       nextData.bookings = await fetchBookingsData();
     } catch (err) {
-      errors.push('bookings');
+      errors.push("bookings");
     }
 
     try {
       nextData.orders = await fetchOrdersData();
     } catch (err) {
-      errors.push('orders');
+      errors.push("orders");
     }
 
     setTeamData(nextData);
@@ -909,7 +972,7 @@ const TeamList: React.FC = () => {
 
     if (errors.length > 0) {
       setError(
-        `Some data could not be loaded (${errors.join(', ')}). Please try refreshing.`
+        `Some data could not be loaded (${errors.join(", ")}). Please try refreshing.`,
       );
     } else {
       setError(null);
@@ -927,12 +990,16 @@ const TeamList: React.FC = () => {
         value: teamData[key]?.length ?? 0,
         color: CATEGORY_INFO[key].color,
       })),
-    [teamData]
+    [teamData],
   );
 
   const totalMembers = useMemo(
-    () => CATEGORY_ORDER.reduce((sum, key) => sum + (teamData[key]?.length ?? 0), 0),
-    [teamData]
+    () =>
+      CATEGORY_ORDER.reduce(
+        (sum, key) => sum + (teamData[key]?.length ?? 0),
+        0,
+      ),
+    [teamData],
   );
 
   const searchTermLower = searchTerm.trim().toLowerCase();
@@ -955,9 +1022,7 @@ const TeamList: React.FC = () => {
       }
 
       return values.some((value) =>
-        toStringValue(value, '')
-          .toLowerCase()
-          .includes(searchTermLower)
+        toStringValue(value, "").toLowerCase().includes(searchTermLower),
       );
     });
   }, [teamData, activeCategory, searchTermLower]);
@@ -1009,13 +1074,14 @@ const TeamList: React.FC = () => {
                   Team Connect Overview
                 </h2>
                 <p className="text-xs text-gray-500">
-                  Live breakdown of farmers, team members, and add-new resources.
+                  Live breakdown of farmers, team members, and add-new
+                  resources.
                 </p>
               </div>
             </div>
             <div className="flex items-center space-x-3">
               <p className="text-sm text-gray-600">
-                Total Records:{' '}
+                Total Records:{" "}
                 <span className="font-semibold text-gray-900">
                   {totalMembers}
                 </span>
@@ -1026,7 +1092,7 @@ const TeamList: React.FC = () => {
                 disabled={loading}
               >
                 <RefreshCw
-                  className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`}
+                  className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
                 />
                 Refresh
               </button>
@@ -1079,7 +1145,7 @@ const TeamList: React.FC = () => {
                         {
                           CATEGORY_INFO[
                             CATEGORY_ORDER.find(
-                              (key) => CATEGORY_INFO[key].label === stat.name
+                              (key) => CATEGORY_INFO[key].label === stat.name,
                             ) as CategoryKey
                           ].description
                         }
@@ -1103,7 +1169,8 @@ const TeamList: React.FC = () => {
                   Team Connect Directory
                 </h1>
                 <p className="text-xs text-gray-500">
-                  Browse farmers, team members, and operational resources fetched from live APIs.
+                  Browse farmers, team members, and operational resources
+                  fetched from live APIs.
                 </p>
               </div>
               <div className="relative w-full sm:w-72">
@@ -1125,11 +1192,11 @@ const TeamList: React.FC = () => {
                   onClick={() => setActiveCategory(key)}
                   className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                     activeCategory === key
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                   }`}
                 >
-                  {CATEGORY_INFO[key].label}{' '}
+                  {CATEGORY_INFO[key].label}{" "}
                   <span className="ml-1 text-xs text-gray-400">
                     ({teamData[key]?.length ?? 0})
                   </span>
@@ -1138,7 +1205,14 @@ const TeamList: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-4 " style={{ minHeight: '200px', maxHeight: '200px', overflowY: 'auto' }}>
+          <div
+            className="p-4 "
+            style={{
+              minHeight: "200px",
+              maxHeight: "200px",
+              overflowY: "auto",
+            }}
+          >
             {loading ? (
               <div className="text-center py-12 text-gray-500">
                 Loading team data...
@@ -1170,22 +1244,27 @@ const TeamList: React.FC = () => {
 
                         <div className="text-sm text-gray-600 space-y-2">
                           <div>
-                            <span className="font-medium">Phone:</span>{' '}
+                            <span className="font-medium">Phone:</span>{" "}
                             {member.phone}
                           </div>
                           <div>
-                            <span className="font-medium">Email:</span>{' '}
+                            <span className="font-medium">Email:</span>{" "}
                             {member.email}
                           </div>
                           <div className="flex items-center space-x-2">
                             <span className="font-medium">Password:</span>
                             <span>
-                              {showPassword[showKey] ? member.password : '••••••••'}
+                              {showPassword[showKey]
+                                ? member.password
+                                : "••••••••"}
                             </span>
-                            {member.password !== 'N/A' && (
+                            {member.password !== "N/A" && (
                               <button
                                 onClick={() =>
-                                  handleTogglePassword(activeCategory, member.id)
+                                  handleTogglePassword(
+                                    activeCategory,
+                                    member.id,
+                                  )
                                 }
                                 className="text-gray-500"
                                 aria-label="Toggle password visibility"
@@ -1200,12 +1279,14 @@ const TeamList: React.FC = () => {
                           </div>
                           {member.meta && (
                             <div className="space-y-1 pt-2 border-t border-gray-100">
-                              {Object.entries(member.meta).map(([key, value]) => (
-                                <div key={key}>
-                                  <span className="font-medium">{key}:</span>{' '}
-                                  {value}
-                                </div>
-                              ))}
+                              {Object.entries(member.meta).map(
+                                ([key, value]) => (
+                                  <div key={key}>
+                                    <span className="font-medium">{key}:</span>{" "}
+                                    {value}
+                                  </div>
+                                ),
+                              )}
                             </div>
                           )}
                         </div>
@@ -1220,12 +1301,12 @@ const TeamList: React.FC = () => {
                       <thead className="bg-gray-50">
                         <tr>
                           {[
-                            'Username / Name',
-                            'Phone Number',
-                            'Email',
-                            'Password',
-                            'Role',
-                            'Details',
+                            "Username / Name",
+                            "Phone Number",
+                            "Email",
+                            "Password",
+                            "Role",
+                            "Details",
                           ].map((header) => (
                             <th
                               key={header}
@@ -1255,14 +1336,14 @@ const TeamList: React.FC = () => {
                                   <span>
                                     {showPassword[showKey]
                                       ? member.password
-                                      : '••••••••'}
+                                      : "••••••••"}
                                   </span>
-                                  {member.password !== 'N/A' && (
+                                  {member.password !== "N/A" && (
                                     <button
                                       onClick={() =>
                                         handleTogglePassword(
                                           activeCategory,
-                                          member.id
+                                          member.id,
                                         )
                                       }
                                       className="text-gray-500 hover:text-gray-700"
@@ -1290,10 +1371,10 @@ const TeamList: React.FC = () => {
                                         <li key={key}>
                                           <span className="font-medium">
                                             {key}:
-                                          </span>{' '}
+                                          </span>{" "}
                                           {value}
                                         </li>
-                                      )
+                                      ),
                                     )}
                                   </ul>
                                 ) : (

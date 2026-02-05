@@ -9,9 +9,10 @@ import {
 } from "./utils/auth";
 import { checkAndRefreshToken, isTokenExpired } from "./utils/tokenManager";
 
-// Set base URL for backend
-
-const API_BASE_URL = "https://cropeye-server-1.onrender.com/api"; // changed to root API URL
+// Set base URL for backend (use .env VITE_API_BASE_URL or new Render backend)
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  "https://cropeye-server-flyio.onrender.com/api";
 
 // KML/GeoJSON API URL
 const KML_API_URL = "http://192.168.41.51";
@@ -43,7 +44,7 @@ api.interceptors.request.use(
         // Token is expired or expiring within 5 minutes, refresh it
         await checkAndRefreshToken(300);
       }
-      
+
       // Get the (possibly refreshed) token
       const currentToken = getAuthToken();
       if (currentToken) {
@@ -54,7 +55,7 @@ api.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error);
-  }
+  },
 );
 
 // Token refresh flag to prevent infinite loops
@@ -125,19 +126,19 @@ api.interceptors.response.use(
               `${API_BASE_URL}/token/refresh/`,
               {
                 refresh: refreshToken,
-              }
+              },
             );
 
             const { access, refresh: newRefreshToken } = response.data;
 
             if (access) {
               setAuthTokenUtil(access);
-              
+
               // Update refresh token if a new one is provided
               if (newRefreshToken) {
                 setRefreshToken(newRefreshToken);
               }
-              
+
               originalRequest.headers.Authorization = `Bearer ${access}`;
 
               // Process queued requests
@@ -180,7 +181,7 @@ api.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 // ==================== AUTHENTICATION API ====================
@@ -304,12 +305,12 @@ export const getorders = () => {
 
 // Update order using PATCH method (partial update)
 export const patchOrder = (id: string | number, data: any) => {
-  console.log('patchOrder API call:', {
+  console.log("patchOrder API call:", {
     endpoint: `/orders/${id}/`,
     baseURL: API_BASE_URL,
     fullURL: `${API_BASE_URL}/orders/${id}/`,
-    method: 'PATCH',
-    data: data
+    method: "PATCH",
+    data: data,
   });
   return api.patch(`/orders/${id}/`, data);
 };
@@ -369,11 +370,11 @@ export const addBooking = (data: {
   end_date: string;
   status: string;
 }) => {
-  console.log('addBooking API call:', {
-    endpoint: '/bookings/',
+  console.log("addBooking API call:", {
+    endpoint: "/bookings/",
     baseURL: API_BASE_URL,
     fullURL: `${API_BASE_URL}/bookings/`,
-    data: data
+    data: data,
   });
   return api.post("/bookings/", data);
 };
@@ -507,7 +508,7 @@ export const updateFarmRegistration = (
       lng: string;
     };
     documents?: FileList | null;
-  }
+  },
 ) => {
   return api.put(`/farms/${id}/`, data);
 };
@@ -722,7 +723,7 @@ export const createPlot = (
       coordinates: [[[number, number]]]; // GeoJSON Polygon
     };
   },
-  token?: string
+  token?: string,
 ) => {
   const headers: any = {
     "Content-Type": "application/json",
@@ -745,7 +746,7 @@ export const createFarmWithPlot = (
     crop_type_id: string;
     farm_document: File | null;
   },
-  token?: string
+  token?: string,
 ) => {
   const formData = new FormData();
   formData.append("plot_id", data.plot_id.toString());
@@ -829,7 +830,7 @@ export const createFarmRegistration = (data: {
 
 // Utility function to calculate area from GeoJSON polygon coordinates (in hectares)
 export const calculatePolygonArea = (
-  coordinates: [number, number][]
+  coordinates: [number, number][],
 ): number => {
   if (coordinates.length < 3) return 0;
 
@@ -934,10 +935,10 @@ export const getFarmerProfile = async () => {
 
       agriculturalSummary.crop_types = Array.from(cropTypes) as string[];
       agriculturalSummary.plantation_types = Array.from(
-        plantationTypes
+        plantationTypes,
       ) as string[];
       agriculturalSummary.irrigation_types = Array.from(
-        irrigationTypes
+        irrigationTypes,
       ) as string[];
       agriculturalSummary.total_farm_area = totalArea;
 
@@ -990,7 +991,8 @@ export const getFarmerProfile = async () => {
             crop_type: {
               id: farm.crop_type?.id || 1,
               crop_type: farm.crop_type_name || "Sugarcane",
-              crop_variety: farm.crop_type?.crop_variety || farm.crop_variety || "",
+              crop_variety:
+                farm.crop_type?.crop_variety || farm.crop_variety || "",
               plantation_type: farm.plantation_type || "adsali",
               plantation_type_display: farm.plantation_type || "Adsali",
               planting_method: farm.planting_method || "3_bud",
@@ -1049,7 +1051,7 @@ export const getFarmerProfile = async () => {
       throw new Error("Authentication failed. Please login again.");
     } else if (error.response?.status === 403) {
       throw new Error(
-        "Access denied. You may not have permission to access farmer profile."
+        "Access denied. You may not have permission to access farmer profile.",
       );
     } else if (error.response?.status >= 500) {
       throw new Error("Server error. Please try again later.");
@@ -1057,7 +1059,7 @@ export const getFarmerProfile = async () => {
       throw new Error(
         `Failed to fetch farmer profile: ${
           error.response?.data?.detail || error.message
-        }`
+        }`,
       );
     }
   }
@@ -1176,7 +1178,7 @@ const convertToBulkFormat = (formData: any, plots: any[]) => {
       throw new Error(
         `Plot ${
           index + 1
-        } is missing boundary coordinates. Please redraw the plot.`
+        } is missing boundary coordinates. Please redraw the plot.`,
       );
     }
 
@@ -1219,11 +1221,14 @@ const convertToBulkFormat = (formData: any, plots: any[]) => {
         ...(plot.crop_type_id != null
           ? { crop_type_id: plot.crop_type_id }
           : {
-              crop_type_name: plot.crop_Type || plot.crop_type_name || "Sugarcane",
+              crop_type_name:
+                plot.crop_Type || plot.crop_type_name || "Sugarcane",
               plantation_type:
                 plot.plantation_Type || plot.plantation_type || "adsali",
             }),
-        ...(plot.crop_variety && plot.crop_variety.trim() ? { crop_variety: plot.crop_variety.trim() } : {}),
+        ...(plot.crop_variety && plot.crop_variety.trim()
+          ? { crop_variety: plot.crop_variety.trim() }
+          : {}),
         plantation_date: plot.plantation_Date || "2024-01-15",
         planting_method: plot.plantation_Method || "3_bud",
       },
@@ -1240,19 +1245,19 @@ const convertToBulkFormat = (formData: any, plots: any[]) => {
                 parseInt(plot.emitters || plot.emitters_count) || 120,
             }
           : plot.irrigation_Type === "flood" ||
-            plot.irrigation_type_name === "flood"
-          ? {
-              motor_horsepower:
-                parseFloat(plot.motor_Horsepower || plot.motor_horsepower) ||
-                7.5,
-              pipe_width_inches:
-                parseFloat(plot.pipe_Width || plot.pipe_width_inches) || 4.0,
-              distance_motor_to_plot_m:
-                parseFloat(
-                  plot.distance_From_Motor || plot.distance_motor_to_plot_m
-                ) || 50.0,
-            }
-          : {}),
+              plot.irrigation_type_name === "flood"
+            ? {
+                motor_horsepower:
+                  parseFloat(plot.motor_Horsepower || plot.motor_horsepower) ||
+                  7.5,
+                pipe_width_inches:
+                  parseFloat(plot.pipe_Width || plot.pipe_width_inches) || 4.0,
+                distance_motor_to_plot_m:
+                  parseFloat(
+                    plot.distance_From_Motor || plot.distance_motor_to_plot_m,
+                  ) || 50.0,
+              }
+            : {}),
       },
     };
   });
@@ -1279,7 +1284,7 @@ const convertToBulkFormat = (formData: any, plots: any[]) => {
 // Now handles MULTIPLE plots - tries bulk endpoint first, falls back to individual submissions
 export const registerFarmerAllInOneOnly = async (
   formData: any,
-  plots: any[]
+  plots: any[],
 ) => {
   try {
     // Check if user is authenticated - registration endpoint REQUIRES authentication
@@ -1349,7 +1354,7 @@ const convertSinglePlotToAllInOneFormat = (formData: any, plot: any) => {
 
   if (!coordinates || coordinates.length === 0) {
     throw new Error(
-      "Plot is missing boundary coordinates. Please redraw the plot."
+      "Plot is missing boundary coordinates. Please redraw the plot.",
     );
   }
 
@@ -1409,7 +1414,9 @@ const convertSinglePlotToAllInOneFormat = (formData: any, plot: any) => {
             crop_type_name: "Sugarcane",
             plantation_type: plot.plantation_Type || "adsali",
           }),
-      ...(plot.crop_variety && plot.crop_variety.trim() ? { crop_variety: plot.crop_variety.trim() } : {}),
+      ...(plot.crop_variety && plot.crop_variety.trim()
+        ? { crop_variety: plot.crop_variety.trim() }
+        : {}),
       planting_method: plot.plantation_Method || "3_bud",
     },
     irrigation: {
@@ -1426,32 +1433,32 @@ const convertSinglePlotToAllInOneFormat = (formData: any, plot: any) => {
               parseFloat(plot.spacing_A) && parseFloat(plot.spacing_B)
                 ? Math.floor(
                     43560 /
-                      (parseFloat(plot.spacing_A) * parseFloat(plot.spacing_B))
+                      (parseFloat(plot.spacing_A) * parseFloat(plot.spacing_B)),
                   )
                 : 2000,
             flow_rate_lph: parseFloat(plot.flow_Rate) || 2.5,
             emitters_count: parseInt(plot.emitters) || 150,
           }
         : plot.irrigation_Type === "flood"
-        ? {
-            motor_horsepower: parseFloat(plot.motor_Horsepower) || 7.5,
-            pipe_width_inches: parseFloat(plot.pipe_Width) || 6.0,
-            distance_motor_to_plot_m:
-              parseFloat(plot.distance_From_Motor) || 75.0,
-          }
-        : {}),
+          ? {
+              motor_horsepower: parseFloat(plot.motor_Horsepower) || 7.5,
+              pipe_width_inches: parseFloat(plot.pipe_Width) || 6.0,
+              distance_motor_to_plot_m:
+                parseFloat(plot.distance_From_Motor) || 75.0,
+            }
+          : {}),
     },
   };
 
   // Validate that GAT and plot numbers are provided
   if (!payload.plot.gat_number || payload.plot.gat_number.trim() === "") {
     throw new Error(
-      "GAT Number is required. Please fill in the GAT Number field in the form."
+      "GAT Number is required. Please fill in the GAT Number field in the form.",
     );
   }
   if (!payload.plot.plot_number || payload.plot.plot_number.trim() === "") {
     throw new Error(
-      "Plot Number is required. Please fill in the Plot Number field in the form."
+      "Plot Number is required. Please fill in the Plot Number field in the form.",
     );
   }
 
@@ -1469,7 +1476,7 @@ const convertToAllInOneFormat = (formData: any, plots: any[]) => {
 
   // Return array of payloads - one for each plot
   return plots.map((plot, index) =>
-    convertSinglePlotToAllInOneFormat(formData, plot)
+    convertSinglePlotToAllInOneFormat(formData, plot),
   );
 };
 
@@ -1501,8 +1508,8 @@ export const refreshApiEndpoints = async () => {
           ok: false,
           error: error.response?.data || error.message,
         };
-      }
-    )
+      },
+    ),
   );
 
   // Use Promise.allSettled to ensure all promises complete, regardless of success or failure
@@ -1607,7 +1614,7 @@ export const getKMLData = async () => {
     throw new Error(
       `Failed to fetch KML data: ${
         error.response?.data?.detail || error.message
-      }`
+      }`,
     );
   }
 };
@@ -1629,7 +1636,7 @@ export const getKMLDataWithAuth = async (token?: string) => {
     throw new Error(
       `Failed to fetch KML data: ${
         error.response?.data?.detail || error.message
-      }`
+      }`,
     );
   }
 };

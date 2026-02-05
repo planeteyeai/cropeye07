@@ -166,7 +166,7 @@ const ManagerFarmDash: React.FC = () => {
 
   const [lineChartData, setLineChartData] = useState<LineChartData[]>([]);
   const [plotCoordinates, setPlotCoordinates] = useState<[number, number][]>(
-    []
+    [],
   );
   const [visibleLines, setVisibleLines] = useState<VisibleLines>({
     growth: true,
@@ -199,7 +199,7 @@ const ManagerFarmDash: React.FC = () => {
   const [ndreStressEvents] = useState<StressEvent[]>([]);
   const [showNDREEvents] = useState<boolean>(false);
   const [combinedChartData, setCombinedChartData] = useState<LineChartData[]>(
-    []
+    [],
   );
   const [timePeriod, setTimePeriod] = useState<TimePeriod>("weekly");
   const [aggregatedData, setAggregatedData] = useState<LineChartData[]>([]);
@@ -228,7 +228,7 @@ const ManagerFarmDash: React.FC = () => {
   const setPlotCoordinatesFromState = (plotId: string): void => {
     // Find the selected farmer and their plot
     const farmer = farmersForSelectedOfficer.find(
-      (f) => String(f.id) === selectedFarmerId
+      (f) => String(f.id) === selectedFarmerId,
     );
     const plot = farmer?.plots?.find((p: any) => p.fastapi_plot_id === plotId);
 
@@ -255,7 +255,7 @@ const ManagerFarmDash: React.FC = () => {
   useEffect(() => {
     if (selectedFieldOfficerId) {
       const officer = fieldOfficers.find(
-        (fo) => String(fo.id) === selectedFieldOfficerId
+        (fo) => String(fo.id) === selectedFieldOfficerId,
       );
       const farmersList = officer ? officer.farmers : [];
       setFarmersForSelectedOfficer(farmersList);
@@ -272,7 +272,8 @@ const ManagerFarmDash: React.FC = () => {
     if (selectedFarmerId) {
       const selectedFarmer = farmersForSelectedOfficer.find(
         (f) =>
-          String(f.id || f.farmer_id || f.farmerId) === String(selectedFarmerId)
+          String(f.id || f.farmer_id || f.farmerId) ===
+          String(selectedFarmerId),
       );
 
       if (selectedFarmer) {
@@ -343,7 +344,7 @@ const ManagerFarmDash: React.FC = () => {
   const makeRequestWithRetry = async (
     url: string,
     retries = 1,
-    timeout = 15000
+    timeout = 15000,
   ): Promise<any> => {
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => {
@@ -372,7 +373,7 @@ const ManagerFarmDash: React.FC = () => {
         throw new Error(
           `CORS error: The server at ${
             new URL(url).origin
-          } is not configured to allow requests from this origin. Please contact the API administrator.`
+          } is not configured to allow requests from this origin. Please contact the API administrator.`,
         );
       }
 
@@ -388,7 +389,7 @@ const ManagerFarmDash: React.FC = () => {
           return makeRequestWithRetry(url, retries - 1, timeout);
         }
         throw new Error(
-          `Request timeout: The server took too long to respond. Please try again later.`
+          `Request timeout: The server took too long to respond. Please try again later.`,
         );
       }
 
@@ -402,7 +403,7 @@ const ManagerFarmDash: React.FC = () => {
           return makeRequestWithRetry(url, retries - 1, timeout);
         }
         throw new Error(
-          `Network error: Unable to connect to the server. Please check your internet connection.`
+          `Network error: Unable to connect to the server. Please check your internet connection.`,
         );
       }
 
@@ -413,7 +414,7 @@ const ManagerFarmDash: React.FC = () => {
           return makeRequestWithRetry(url, retries - 1, timeout);
         }
         throw new Error(
-          `Gateway timeout: The server is taking too long to process your request. Please try again later.`
+          `Gateway timeout: The server is taking too long to process your request. Please try again later.`,
         );
       }
 
@@ -444,7 +445,7 @@ const ManagerFarmDash: React.FC = () => {
           const agroStatsRes = await makeRequestWithRetry(
             `https://dev-events.cropeye.ai/plots/agroStats?end_date=${today}`,
             1,
-            12000 // Reduced timeout for faster retrieval
+            12000, // Reduced timeout for faster retrieval
           );
           allPlotsData = agroStatsRes;
           setCache(agroStatsCacheKey, allPlotsData);
@@ -496,12 +497,11 @@ const ManagerFarmDash: React.FC = () => {
       if (!harvestData) {
         try {
           const harvestRes = await axios.post(
-            `${BASE_URL}/sugarcane-harvest?plot_name=${selectedPlotId}&end_date=${today}`
+            `${BASE_URL}/sugarcane-harvest?plot_name=${selectedPlotId}&end_date=${today}`,
           );
           harvestData = harvestRes.data;
           setCache(harvestCacheKey, harvestData);
-        } catch (harvestErr) {
-        }
+        } catch (harvestErr) {}
       }
 
       // Extract harvest_status from response
@@ -528,7 +528,8 @@ const ManagerFarmDash: React.FC = () => {
           totalBiomass: totalBiomassForMetric,
           expectedYield: expectedYieldValue,
           daysToHarvest: currentPlotData?.days_to_harvest ?? null,
-          growthStage: harvestStatus || currentPlotData?.Sugarcane_Status || null,
+          growthStage:
+            harvestStatus || currentPlotData?.Sugarcane_Status || null,
           soilPH: currentPlotData?.soil?.phh2o ?? null,
           organicCarbonDensity:
             currentPlotData?.soil?.organic_carbon_stock != null
@@ -556,7 +557,7 @@ const ManagerFarmDash: React.FC = () => {
           makeRequestWithRetry(
             `${BASE_URL}/plots/${selectedPlotId}/indices`,
             1,
-            10000 // Shorter timeout for indices
+            10000, // Shorter timeout for indices
           )
             .then((data) => {
               const processed = data.map((item: any) => ({
@@ -569,11 +570,11 @@ const ManagerFarmDash: React.FC = () => {
               setCache(indicesCacheKey, processed);
               return { type: "indices", data: processed };
             })
-            .catch(() => ({ type: "indices", data: null }))
+            .catch(() => ({ type: "indices", data: null })),
         );
       } else {
         fetchPromises.push(
-          Promise.resolve({ type: "indices", data: cachedIndices })
+          Promise.resolve({ type: "indices", data: cachedIndices }),
         );
       }
 
@@ -582,7 +583,7 @@ const ManagerFarmDash: React.FC = () => {
           makeRequestWithRetry(
             `${BASE_URL}/plots/${selectedPlotId}/stress?index_type=NDRE&threshold=0.15`,
             1,
-            10000
+            10000,
           )
             .then((data) => {
               setCache(stressCacheKey, data);
@@ -591,11 +592,11 @@ const ManagerFarmDash: React.FC = () => {
             .catch(() => ({
               type: "stress",
               data: { events: [], total_events: 0 },
-            }))
+            })),
         );
       } else {
         fetchPromises.push(
-          Promise.resolve({ type: "stress", data: cachedStress })
+          Promise.resolve({ type: "stress", data: cachedStress }),
         );
       }
 
@@ -604,17 +605,20 @@ const ManagerFarmDash: React.FC = () => {
           makeRequestWithRetry(
             `${BASE_URL}/plots/${selectedPlotId}/irrigation?threshold_ndmi=0.05&threshold_ndwi=0.05&min_days_between_events=10`,
             1,
-            10000
+            10000,
           )
             .then((data) => {
               setCache(irrigationCacheKey, data);
               return { type: "irrigation", data };
             })
-            .catch(() => ({ type: "irrigation", data: { total_events: null } }))
+            .catch(() => ({
+              type: "irrigation",
+              data: { total_events: null },
+            })),
         );
       } else {
         fetchPromises.push(
-          Promise.resolve({ type: "irrigation", data: cachedIrrigation })
+          Promise.resolve({ type: "irrigation", data: cachedIrrigation }),
         );
       }
 
@@ -661,7 +665,7 @@ const ManagerFarmDash: React.FC = () => {
     try {
       // Use authenticated API call from api.ts
       const response = await api.get(
-        "https://cropeye-server-1.onrender.com/api/users/my-field-officers/"
+        `${import.meta.env.VITE_API_BASE_URL || "https://cropeye-server-flyio.onrender.com/api"}/users/my-field-officers/`,
       );
       const responseData = response.data;
       // Extract the array of field officers from the response object
@@ -714,7 +718,7 @@ const ManagerFarmDash: React.FC = () => {
     try {
       const today = new Date().toISOString().slice(0, 10);
       const response = await axios.post(
-        `${BASE_URL}/analyze?plot_name=${plotId}&date=${today}`
+        `${BASE_URL}/analyze?plot_name=${plotId}&date=${today}`,
       );
 
       const geom = response.data?.features?.[0]?.geometry?.coordinates?.[0];
@@ -730,8 +734,7 @@ const ManagerFarmDash: React.FC = () => {
         setMapCenter(center);
         setMapKey((prev) => prev + 1);
       }
-    } catch (error) {
-    }
+    } catch (error) {}
   };
 
   // Calculate center point from coordinates
@@ -747,12 +750,12 @@ const ManagerFarmDash: React.FC = () => {
   // Aggregation logic (same as FarmerDashboard)
   const aggregateDataByPeriod = (
     data: LineChartData[],
-    period: TimePeriod
+    period: TimePeriod,
   ): LineChartData[] => {
     if (period === "daily") {
       if (data.length < 2) return data;
       const sorted = [...data].sort(
-        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
       );
       const last = sorted[sorted.length - 1];
       const secondLast = sorted[sorted.length - 2];
@@ -771,7 +774,7 @@ const ManagerFarmDash: React.FC = () => {
         case "monthly":
           key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
             2,
-            "0"
+            "0",
           )}`;
           break;
         case "yearly":
@@ -786,7 +789,7 @@ const ManagerFarmDash: React.FC = () => {
     });
     if (period === "yearly") {
       return [...data].sort(
-        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
       );
     }
     return Object.entries(groupedData)
@@ -804,7 +807,7 @@ const ManagerFarmDash: React.FC = () => {
           const [year, month] = key.split("-");
           displayDate = new Date(
             parseInt(year),
-            parseInt(month) - 1
+            parseInt(month) - 1,
           ).toLocaleDateString("en-US", { month: "short", year: "numeric" });
         } else {
           displayDate = key;
@@ -839,7 +842,7 @@ const ManagerFarmDash: React.FC = () => {
     const isOnlyThis = Object.keys(visibleLines).every((k) =>
       k === key
         ? visibleLines[k as keyof VisibleLines]
-        : !visibleLines[k as keyof VisibleLines]
+        : !visibleLines[k as keyof VisibleLines],
     );
 
     if (isOnlyThis) {
@@ -942,7 +945,7 @@ const ManagerFarmDash: React.FC = () => {
           >
             {period.charAt(0).toUpperCase() + period.slice(1)}
           </button>
-        )
+        ),
       )}
     </div>
   );
@@ -1084,9 +1087,8 @@ const ManagerFarmDash: React.FC = () => {
 
   const totalFarmers = fieldOfficers.reduce(
     (acc, officer) => acc + (officer.farmers?.length || 0),
-    0
+    0,
   );
-
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
@@ -1104,8 +1106,7 @@ const ManagerFarmDash: React.FC = () => {
               <pre className="text-xs text-green-300 font-mono">
                 {JSON.stringify(
                   {
-                    endpoint:
-                      "https://cropeye-server-1.onrender.com/api/farms/recent-farmers/",
+                    endpoint: `${import.meta.env.VITE_API_BASE_URL || "https://cropeye-server-flyio.onrender.com/api"}/farms/recent-farmers/`,
                     method: "GET",
                     bearerToken: localStorage.getItem("token")
                       ? "✅ Present"
@@ -1126,7 +1127,7 @@ const ManagerFarmDash: React.FC = () => {
                     timestamp: new Date().toISOString(),
                   },
                   null,
-                  2
+                  2,
                 )}
               </pre>
             </div>
@@ -1309,10 +1310,10 @@ const ManagerFarmDash: React.FC = () => {
               <Calendar className="w-6 h-6 text-orange-600" />
               <div className="text-right">
                 <div className="text-2xl font-bold text-gray-800">
-                   {/* {loadingData ? (
+                  {/* {loadingData ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
                   ) : ( */}
-                    0                  {/* )} */}
+                  0 {/* )} */}
                 </div>
                 <div className="text-sm font-semibold text-orange-600">
                   Days
@@ -1349,8 +1350,8 @@ const ManagerFarmDash: React.FC = () => {
                     {loadingData
                       ? "—"
                       : metrics.brixMax !== null
-                      ? metrics.brixMax.toFixed(2)
-                      : "-"}
+                        ? metrics.brixMax.toFixed(2)
+                        : "-"}
                   </div>
                   <div className="text-[10px] text-gray-500 uppercase tracking-wide">
                     Max
@@ -1361,8 +1362,8 @@ const ManagerFarmDash: React.FC = () => {
                     {loadingData
                       ? "—"
                       : metrics.brixMin !== null
-                      ? metrics.brixMin.toFixed(2)
-                      : "-"}
+                        ? metrics.brixMin.toFixed(2)
+                        : "-"}
                   </div>
                   <div className="text-[10px] text-gray-500 uppercase tracking-wide">
                     Min
@@ -1436,7 +1437,7 @@ const ManagerFarmDash: React.FC = () => {
                   {loadingData ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
-                    metrics.irrigationEvents ?? 0
+                    (metrics.irrigationEvents ?? 0)
                   )}
                 </div>
                 <div className="text-sm font-semibold text-cyan-600">
@@ -1457,7 +1458,7 @@ const ManagerFarmDash: React.FC = () => {
                   {loadingData ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
-                    metrics.stressCount ?? 0
+                    (metrics.stressCount ?? 0)
                   )}
                 </div>
                 <div className="text-sm font-semibold text-yellow-600">
@@ -1824,7 +1825,7 @@ const ManagerFarmDash: React.FC = () => {
                   };
 
                   const visibleCount = Object.values(visibleLines).filter(
-                    (v) => v
+                    (v) => v,
                   ).length;
 
                   let goodRange: [number, number] = [0.3, 0.6];
@@ -1833,7 +1834,7 @@ const ManagerFarmDash: React.FC = () => {
 
                   if (visibleCount === 1) {
                     const selectedIndex = Object.keys(visibleLines).find(
-                      (key) => visibleLines[key as keyof VisibleLines]
+                      (key) => visibleLines[key as keyof VisibleLines],
                     );
                     if (
                       selectedIndex &&
@@ -1849,10 +1850,10 @@ const ManagerFarmDash: React.FC = () => {
                     }
                   } else if (visibleCount > 1) {
                     const allGoodRanges = Object.values(indexRanges).map(
-                      (r) => r.good
+                      (r) => r.good,
                     );
                     const allBadRanges = Object.values(indexRanges).map(
-                      (r) => r.bad
+                      (r) => r.bad,
                     );
 
                     const avgGoodMin =
