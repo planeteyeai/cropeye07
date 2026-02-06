@@ -466,10 +466,11 @@ const Map: React.FC<MapProps> = ({
   const fetchWaterUptakeData = async (plotName: string) => {
     if (!plotName) return;
 
-    // Use proxy in development to avoid CORS issues, direct URL in production
-    const baseUrl = import.meta.env.DEV 
-      ? '/api/dev-plot' 
-      : 'https://admin-cropeye.up.railway.app';
+    // Use direct backend URL in production (proxy only works in dev)
+    // const baseUrl = import.meta.env.DEV 
+    //   ? '/api/dev-plot' 
+    //   : 'https://admin-cropeye.up.railway.app';
+    const baseUrl = 'https://admin-cropeye.up.railway.app';
     const url = `${baseUrl}/wateruptake?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`;
 
     try {
@@ -537,12 +538,14 @@ const Map: React.FC<MapProps> = ({
   const fetchSoilMoistureData = async (plotName: string) => {
     if (!plotName) return;
 
-    // Use proxy in development to avoid CORS issues, direct URL in production
-    const baseUrl = import.meta.env.DEV 
-      ? '/api/dev-plot' 
-      : 'https://admin-cropeye.up.railway.app';
+    // Use direct backend URL in production (proxy only works in dev)
+    // const baseUrl = import.meta.env.DEV 
+    //   ? '/api/dev-plot' 
+    //   : 'https://admin-cropeye.up.railway.app';
+    const baseUrl = 'https://admin-cropeye.up.railway.app';
     const url = `${baseUrl}/SoilMoisture?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`;
 
+    
     try {
       
       // Try fetch with explicit CORS mode and proper headers matching curl command
@@ -610,10 +613,11 @@ const Map: React.FC<MapProps> = ({
     setError(null);
 
       const currentDate = getCurrentDate();
-    // Use proxy in development to avoid CORS issues, direct URL in production
-    const baseUrl = import.meta.env.DEV 
-      ? '/api/dev-plot' 
-      : 'https://admin-cropeye.up.railway.app';
+    // Use direct backend URL in production (proxy only works in dev)
+    // const baseUrl = import.meta.env.DEV 
+    //   ? '/api/dev-plot' 
+    //   : 'https://admin-cropeye.up.railway.app';
+    const baseUrl = 'https://admin-cropeye.up.railway.app';
     const url = `${baseUrl}/analyze_Growth?plot_name=${plotName}&end_date=${currentDate}&days_back=7`;
 
     try {
@@ -750,10 +754,11 @@ const Map: React.FC<MapProps> = ({
       return;
     }
 
-    // Use proxy in development to avoid CORS issues, direct URL in production
-    const baseUrl = import.meta.env.DEV 
-      ? '/api/dev-plot' 
-      : 'https://admin-cropeye.up.railway.app';
+    // Use direct backend URL in production (proxy only works in dev)
+    // const baseUrl = import.meta.env.DEV 
+    //   ? '/api/dev-plot' 
+    //   : 'https://admin-cropeye.up.railway.app';
+    const baseUrl = 'https://admin-cropeye.up.railway.app';
     const url = `${baseUrl}/pest-detection?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`;
 
     try {
