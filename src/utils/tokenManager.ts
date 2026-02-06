@@ -9,7 +9,9 @@ import {
 import axios from "axios";
 
 // Get API base URL from environment or use default
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://cropeye-server-1.onrender.com/api";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  "https://cropeye-server-flyio.onrender.com/api";
 
 interface DecodedToken {
   exp: number;
@@ -37,7 +39,10 @@ export const decodeToken = (token: string): DecodedToken | null => {
  * @param bufferSeconds - Number of seconds before expiration to consider token as "expiring soon" (default: 300 = 5 minutes)
  * @returns true if token is expired or expiring soon
  */
-export const isTokenExpired = (token: string | null, bufferSeconds: number = 300): boolean => {
+export const isTokenExpired = (
+  token: string | null,
+  bufferSeconds: number = 300,
+): boolean => {
   if (!token) return true;
 
   const decoded = decodeToken(token);
@@ -85,7 +90,7 @@ export const refreshAccessToken = async (): Promise<string | null> => {
         headers: {
           "Content-Type": "application/json",
         },
-      }
+      },
     );
 
     const { access, refresh: newRefreshToken } = response.data;
@@ -127,7 +132,9 @@ export const refreshAccessToken = async (): Promise<string | null> => {
  * @param bufferSeconds - Number of seconds before expiration to refresh (default: 300 = 5 minutes)
  * @returns Promise<boolean> - true if token is valid/refreshed, false if expired
  */
-export const checkAndRefreshToken = async (bufferSeconds: number = 300): Promise<boolean> => {
+export const checkAndRefreshToken = async (
+  bufferSeconds: number = 300,
+): Promise<boolean> => {
   const accessToken = getAuthToken();
 
   // No token at all
@@ -159,7 +166,7 @@ export const checkAndRefreshToken = async (bufferSeconds: number = 300): Promise
  */
 export const setupAutoTokenRefresh = (
   intervalSeconds: number = 60,
-  bufferSeconds: number = 300
+  bufferSeconds: number = 300,
 ): (() => void) => {
   const intervalId = setInterval(async () => {
     await checkAndRefreshToken(bufferSeconds);

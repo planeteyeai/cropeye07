@@ -40,8 +40,7 @@ import {
 import "leaflet/dist/leaflet.css";
 import { useMap } from "react-leaflet";
 
-const API_BASE_URL =
-  "https://cropeye-server-1.onrender.com/api/users/my-field-officers/";
+const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL || "https://cropeye-server-flyio.onrender.com/api"}/users/my-field-officers/`;
 const BASE_URL = "https://dev-events.cropeye.ai";
 
 // Chart Types
@@ -233,7 +232,7 @@ const CombinedChart: React.FC<CombinedChartProps> = ({
       const brixValues = filteredData
         .filter(
           (item) =>
-            item.Days === day && typeof item["Brix (Degree)"] === "number"
+            item.Days === day && typeof item["Brix (Degree)"] === "number",
         )
         .map((item) => item["Brix (Degree)"]);
       const avgBrix = brixValues.length
@@ -558,7 +557,7 @@ const HarvestDashboard: React.FC = () => {
                     if (!isNaN(plantationDate.getTime())) {
                       days = Math.floor(
                         (today.getTime() - plantationDate.getTime()) /
-                          (1000 * 60 * 60 * 24)
+                          (1000 * 60 * 60 * 24),
                       );
                     }
                   }
@@ -592,7 +591,7 @@ const HarvestDashboard: React.FC = () => {
                       coordinates.length > 0
                         ? coordinates.map(
                             (coord: number[]) =>
-                              [coord[1], coord[0]] as [number, number]
+                              [coord[1], coord[0]] as [number, number],
                           )
                         : undefined;
 
@@ -634,7 +633,7 @@ const HarvestDashboard: React.FC = () => {
 
           // Get unique plot IDs
           const uniquePlotIds = Array.from(
-            new Set(dataPointToPlotIdMap.values())
+            new Set(dataPointToPlotIdMap.values()),
           );
 
           // Fetch yield data and harvest status for all plots from API
@@ -649,7 +648,7 @@ const HarvestDashboard: React.FC = () => {
           if (!allPlotsYieldData) {
             try {
               const agroStatsRes = await axios.get(
-                `https://dev-events.cropeye.ai/plots/agroStats?end_date=${today}`
+                `https://dev-events.cropeye.ai/plots/agroStats?end_date=${today}`,
               );
               allPlotsYieldData = agroStatsRes.data;
               setCache(agroStatsCacheKey, allPlotsYieldData);
@@ -677,7 +676,6 @@ const HarvestDashboard: React.FC = () => {
           }
 
           if (uniquePlotIds.length > 0) {
-
             // Fetch harvest status for all plots in parallel with caching
             const harvestPromises = uniquePlotIds.map(async (plotId) => {
               // Check cache first
@@ -695,7 +693,7 @@ const HarvestDashboard: React.FC = () => {
                   {},
                   {
                     timeout: 30000, // 30 seconds timeout
-                  }
+                  },
                 );
                 const harvestData = harvestRes.data;
 
@@ -779,7 +777,7 @@ const HarvestDashboard: React.FC = () => {
                     .split(" ")
                     .map(
                       (word: string) =>
-                        word.charAt(0).toUpperCase() + word.slice(1)
+                        word.charAt(0).toUpperCase() + word.slice(1),
                     )
                     .join(" ");
                   dataPoint["Sugarcane Status"] = fallbackStatus;
@@ -839,7 +837,7 @@ const HarvestDashboard: React.FC = () => {
       filters.representative,
       debouncedSugarcaneType,
       debouncedVariety,
-    ]
+    ],
   );
 
   const FIXED_STATUS_LABELS = [
@@ -856,7 +854,7 @@ const HarvestDashboard: React.FC = () => {
         acc[status] = (acc[status] || 0) + 1;
         return acc;
       }, {}),
-    [filteredData]
+    [filteredData],
   );
 
   const statusColorMap = useMemo(() => {
@@ -874,7 +872,7 @@ const HarvestDashboard: React.FC = () => {
         value: statusCounts[label] || 0,
         color: statusColorMap[label],
       })),
-    [statusCounts, statusColorMap]
+    [statusCounts, statusColorMap],
   );
 
   const plotPoints = useMemo(() => {
@@ -922,7 +920,6 @@ const HarvestDashboard: React.FC = () => {
       return false;
     });
 
-
     const dayGroups = rangeFilteredData.reduce(
       (acc: { [key: number]: number[] }, item) => {
         if (
@@ -938,7 +935,7 @@ const HarvestDashboard: React.FC = () => {
         }
         return acc;
       },
-      {}
+      {},
     );
 
     const result = Object.entries(dayGroups)
@@ -971,7 +968,7 @@ const HarvestDashboard: React.FC = () => {
         acc[groupedStage] = (acc[groupedStage] || 0) + 1;
         return acc;
       },
-      {}
+      {},
     );
 
     const requiredStages = [
@@ -991,13 +988,13 @@ const HarvestDashboard: React.FC = () => {
   const keyMetrics = useMemo(() => {
     const totalArea = filteredData.reduce(
       (sum, item) => sum + (item["Area (Hect)"] || 0),
-      0
+      0,
     );
     const avgYield = filteredData.length
       ? (
           filteredData.reduce(
             (sum, item) => sum + (item["Prediction Yield (T/acre)"] || 0),
-            0
+            0,
           ) / filteredData.length
         ).toFixed(2)
       : "-";
@@ -1005,7 +1002,7 @@ const HarvestDashboard: React.FC = () => {
       ? (
           filteredData.reduce(
             (sum, item) => sum + (item["Recovery (Degree)"] || 0),
-            0
+            0,
           ) / filteredData.length
         ).toFixed(2)
       : "-";
@@ -1022,7 +1019,7 @@ const HarvestDashboard: React.FC = () => {
           ? (
               filteredData.reduce(
                 (sum, item) => sum + (item["Distance (km)"] || 0),
-                0
+                0,
               ) / filteredData.length
             ).toFixed(2)
           : "-",
@@ -1048,7 +1045,7 @@ const HarvestDashboard: React.FC = () => {
           item.Latitude &&
           item.Longitude &&
           item.Latitude !== 0 &&
-          item.Longitude !== 0
+          item.Longitude !== 0,
       );
       if (validData.length > 0) {
         const avgLat =
@@ -1069,7 +1066,7 @@ const HarvestDashboard: React.FC = () => {
         const status = item["Sugarcane Status"];
         return statusColorMap[status] || STATUS_COLOR_PALETTE[0];
       },
-    [statusColorMap]
+    [statusColorMap],
   );
 
   function MapAutoCenter({ center }: MapAutoCenterProps) {
