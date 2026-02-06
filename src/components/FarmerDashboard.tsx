@@ -179,9 +179,9 @@ const PieChartWithNeedle: React.FC<PieChartWithNeedleProps> = ({
   );
 };
 
-const BASE_URL = "https://dev-events.cropeye.ai";
+const BASE_URL = "https://events-cropeye.up.railway.app";
 const OPTIMAL_BIOMASS = 150;
-const SOIL_API_URL = "https://dev-soil.cropeye.ai";
+const SOIL_API_URL = "https://main-cropeye.up.railway.app";
 const SOIL_DATE = "2025-10-03";
 
 const OTHER_FARMERS_RECOVERY = {
@@ -486,7 +486,7 @@ const FarmerDashboard: React.FC = () => {
       // For harvested plots, use harvest_date; for others, use end_date
       const yieldDataDate = isHarvested && harvestDate ? harvestDate : endDate;
       const agroStatsCacheKey = `agroStats_${currentPlotId}_${yieldDataDate}_${Date.now()}`;
-      const agroStatsUrl = `https://dev-events.cropeye.ai/plots/agroStats?end_date=${yieldDataDate}`;
+      const agroStatsUrl = `https://events-cropeye.up.railway.app/plots/agroStats?end_date=${yieldDataDate}`;
 
       console.log(`[DB] 1. Fetching bulk plot data from: ${agroStatsUrl}`);
       console.log(`[DB] Using date: ${yieldDataDate} (${isHarvested ? 'harvest_date' : 'end_date'})`);

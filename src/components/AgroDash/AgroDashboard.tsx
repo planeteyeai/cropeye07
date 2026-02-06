@@ -231,7 +231,7 @@ const AgroDashboard: React.FC = () => {
       try {
         setLoading(true);
         const today = new Date().toISOString().slice(0, 10);
-        const url = `https://dev-events.cropeye.ai/plots/agroStats?end_date=${today}`;
+        const url = `https://events-cropeye.up.railway.app/plots/agroStats?end_date=${today}`;
         const response = await fetch(url);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);

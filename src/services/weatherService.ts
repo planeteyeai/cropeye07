@@ -1,5 +1,5 @@
 // Weather Service for fetching current weather data
-// API: https://dev-weather.cropeye.ai/current-weather
+// API: https://weather-cropeye.up.railway.app/current-weather
 
 export interface WeatherData {
   location: string;
@@ -22,7 +22,7 @@ export interface WeatherError {
 // Fetch current weather data for given coordinates
 export const fetchCurrentWeather = async (lat: number, lon: number): Promise<WeatherData> => {
   try {
-    const apiUrl = ` https://dev-weather.cropeye.ai/current-weather?lat=${lat}&lon=${lon}`;
+    const apiUrl = ` https://weather-cropeye.up.railway.app/current-weather?lat=${lat}&lon=${lon}`;
     
     const response = await fetch(apiUrl, {
       method: 'GET',

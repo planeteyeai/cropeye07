@@ -96,7 +96,7 @@ const EvapotranspirationCard: React.FC = () => {
       setError(null);
 
       // Use POST request with empty body as per API specification
-      const url = `https://dev-field.cropeye.ai/plots/${plotName}/compute-et/`;
+      const url = `https://sef-cropeye.up.railway.app/plots/${plotName}/compute-et/`;
       
       const response = await fetch(url, {
         method: "POST",
@@ -197,7 +197,7 @@ const EvapotranspirationCard: React.FC = () => {
         error: err,
         message: err?.message,
         name: err?.name,
-        url: `https://dev-field.cropeye.ai/plots/${plotName}/compute-et/`,
+        url: `https://sef-cropeye.up.railway.app/plots/${plotName}/compute-et/`,
         plotName: plotName
       });
       

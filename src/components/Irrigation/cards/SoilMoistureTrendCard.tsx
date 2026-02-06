@@ -83,7 +83,7 @@ const SoilMoistureTrendCard: React.FC<SoilMoistureTrendCardProps> = ({
 
   // New endpoint utilities
   const fetchSoilMoistureStack = async (plot: string): Promise<SoilMoistureStackResponse> => {
-    const base = 'https://dev-field.cropeye.ai';
+    const base = 'https://sef-cropeye.up.railway.app';
     const attempts: Array<{ url: string; init?: RequestInit; note: string }> = [
       { url: `${base}/soil-moisture/${encodeURIComponent(plot)}`, note: 'GET path param' },
       { url: `${base}/soil-moisture/${encodeURIComponent(plot)}/`, note: 'GET path param trailing slash' },

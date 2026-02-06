@@ -335,7 +335,7 @@ export async function fetchPestDetectionData(plotId?: string): Promise<PestDetec
     // Use proxy in development to avoid CORS issues, direct URL in production
     const baseUrl = import.meta.env.DEV 
       ? '/api/dev-plot' 
-      : 'https://dev-plot.cropeye.ai';
+      : 'https://admin-cropeye.up.railway.app';
     const url = `${baseUrl}/pest-detection?plot_name=${plotName}&end_date=${currentDate}&days_back=7`;
     
     // Try fetch with explicit CORS mode and proper headers matching curl command
@@ -686,7 +686,7 @@ export async function fetchCurrentWeather(plotId?: string): Promise<WeatherData>
     const lat = selectedPlot.coordinates.location.latitude;
     const lon = selectedPlot.coordinates.location.longitude;
 
-    const weatherResponse = await fetch(`https://dev-weather.cropeye.ai/current-weather?lat=${lat}&lon=${lon}`);
+    const weatherResponse = await fetch(`https://weather-cropeye.up.railway.app/current-weather?lat=${lat}&lon=${lon}`);
     
     if (!weatherResponse.ok) {
       throw new Error(`Weather API error: ${weatherResponse.status}`);

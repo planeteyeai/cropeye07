@@ -41,7 +41,7 @@ import "leaflet/dist/leaflet.css";
 import { useMap } from "react-leaflet";
 
 const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL || "https://cropeye-server-flyio.onrender.com/api"}/users/my-field-officers/`;
-const BASE_URL = "https://dev-events.cropeye.ai";
+const BASE_URL = "https://events-cropeye.up.railway.app";
 
 // Chart Types
 const CHART_TYPES = {
@@ -648,7 +648,7 @@ const HarvestDashboard: React.FC = () => {
           if (!allPlotsYieldData) {
             try {
               const agroStatsRes = await axios.get(
-                `https://dev-events.cropeye.ai/plots/agroStats?end_date=${today}`,
+                `https://events-cropeye.up.railway.app/plots/agroStats?end_date=${today}`,
               );
               allPlotsYieldData = agroStatsRes.data;
               setCache(agroStatsCacheKey, allPlotsYieldData);

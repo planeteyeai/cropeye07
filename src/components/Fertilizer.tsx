@@ -40,7 +40,7 @@ const Fertilizer: React.FC = () => {
   // Use global selectedPlotName, fallback to first plot if not available
   const PLOT_NAME = selectedPlotName || (profile?.plots && profile.plots.length > 0 ? profile.plots[0].fastapi_plot_id : "");
 
-  const API_BASE_URL = "https://dev-soil.cropeye.ai";
+  const API_BASE_URL = "https://main-cropeye.up.railway.app";
 
   const getCurrentDate = () => {
     return new Date().toLocaleDateString("en-IN", {

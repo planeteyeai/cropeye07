@@ -53,9 +53,9 @@ import api from "../api"; // Import the authenticated api instance
 import CommonSpinner from "./CommanSpinner";
 
 // Constants (same as FarmerDashboard)
-const BASE_URL = "https://dev-events.cropeye.ai";
+const BASE_URL = "https://events-cropeye.up.railway.app";
 const OPTIMAL_BIOMASS = 150;
-const SOIL_API_URL = "https://dev-events.cropeye.ai";
+const SOIL_API_URL = "https://events-cropeye.up.railway.app";
 const SOIL_DATE = "2025-10-03";
 
 const OTHER_FARMERS_RECOVERY = {
@@ -443,7 +443,7 @@ const ManagerFarmDash: React.FC = () => {
         try {
           // Fetch agroStats with shorter timeout for faster failure/recovery
           const agroStatsRes = await makeRequestWithRetry(
-            `https://dev-events.cropeye.ai/plots/agroStats?end_date=${today}`,
+            `https://events-cropeye.up.railway.app/plots/agroStats?end_date=${today}`,
             1,
             12000, // Reduced timeout for faster retrieval
           );

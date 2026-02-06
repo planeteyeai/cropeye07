@@ -397,7 +397,7 @@ const Map: React.FC<MapProps> = ({
     // Use proxy in development to avoid CORS issues, direct URL in production
     const baseUrl = import.meta.env.DEV 
       ? '/api/dev-plot' 
-      : 'https://dev-plot.cropeye.ai';
+      : 'https://admin-cropeye.up.railway.app';
     const url = `${baseUrl}/analyze_Growth?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`;
     
     try {
@@ -468,7 +468,7 @@ const Map: React.FC<MapProps> = ({
     // Use proxy in development to avoid CORS issues, direct URL in production
     const baseUrl = import.meta.env.DEV 
       ? '/api/dev-plot' 
-      : 'https://dev-plot.cropeye.ai';
+      : 'https://admin-cropeye.up.railway.app';
     const url = `${baseUrl}/wateruptake?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`;
 
     try {
@@ -539,7 +539,7 @@ const Map: React.FC<MapProps> = ({
     // Use proxy in development to avoid CORS issues, direct URL in production
     const baseUrl = import.meta.env.DEV 
       ? '/api/dev-plot' 
-      : 'https://dev-plot.cropeye.ai';
+      : 'https://admin-cropeye.up.railway.app';
     const url = `${baseUrl}/SoilMoisture?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`;
 
     try {
@@ -612,7 +612,7 @@ const Map: React.FC<MapProps> = ({
     // Use proxy in development to avoid CORS issues, direct URL in production
     const baseUrl = import.meta.env.DEV 
       ? '/api/dev-plot' 
-      : 'https://dev-plot.cropeye.ai';
+      : 'https://admin-cropeye.up.railway.app';
     const url = `${baseUrl}/analyze_Growth?plot_name=${plotName}&end_date=${currentDate}&days_back=7`;
 
     try {
@@ -691,7 +691,7 @@ const Map: React.FC<MapProps> = ({
       // console.log("Fetching field analysis for plot:", plotName);
       const currentDate = getCurrentDate();
       const resp = await fetch(
-        `https://dev-field.cropeye.ai/analyze?plot_name=${plotName}&end_date=${currentDate}&days_back=7`,
+        `https://sef-cropeye.up.railway.app/analyze?plot_name=${plotName}&end_date=${currentDate}&days_back=7`,
         {
           method: "GET",
           headers: { "Content-Type": "application/json" },
@@ -752,7 +752,7 @@ const Map: React.FC<MapProps> = ({
     // Use proxy in development to avoid CORS issues, direct URL in production
     const baseUrl = import.meta.env.DEV 
       ? '/api/dev-plot' 
-      : 'https://dev-plot.cropeye.ai';
+      : 'https://admin-cropeye.up.railway.app';
     const url = `${baseUrl}/pest-detection?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`;
 
     try {

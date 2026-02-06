@@ -1490,10 +1490,10 @@ const convertToAllInOneFormat = (formData: any, plots: any[]) => {
  */
 export const refreshApiEndpoints = async () => {
   const refreshEndpoints = [
-    "https://dev-plot.cropeye.ai/refresh-from-django",
-    "https://dev-soil.cropeye.ai/refresh-from-django",
-    "https://dev-events.cropeye.ai/refresh-from-django",
-    "https://dev-field.cropeye.ai/refresh-from-django",
+    "https://admin-cropeye.up.railway.app/refresh-from-django",
+    "https://main-cropeye.up.railway.app/refresh-from-django",
+    "https://events-cropeye.up.railway.app/refresh-from-django",
+    "https://sef-cropeye.up.railway.app/refresh-from-django",
   ];
 
   const refreshPromises = refreshEndpoints.map((endpoint) =>

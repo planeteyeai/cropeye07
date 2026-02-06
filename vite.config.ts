@@ -60,7 +60,7 @@ export default defineConfig({
     // Proxy API requests to avoid CORS issues in development
     proxy: {
       '/api/dev-plot': {
-        target: 'https://dev-plot.cropeye.ai',
+        target: 'https://admin-cropeye.up.railway.app',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/dev-plot/, ''),
         configure: (proxy, _options) => {

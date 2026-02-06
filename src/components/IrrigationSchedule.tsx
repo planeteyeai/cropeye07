@@ -240,7 +240,7 @@ const IrrigationSchedule: React.FC = () => {
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - 7);
 
-        const apiUrl = `https://dev-field.cropeye.ai/plots/${plotName}/compute-et/`;
+        const apiUrl = `https://sef-cropeye.up.railway.app/plots/${plotName}/compute-et/`;
 
         const response = await fetch(apiUrl, {
           method: "POST",
@@ -277,7 +277,7 @@ const IrrigationSchedule: React.FC = () => {
 
   const fetchCurrentRainfall = async (lat: number, lon: number) => {
     try {
-      const url = `https://dev-weather.cropeye.ai/current-weather?lat=${lat}&lon=${lon}`;
+      const url = `https://weather-cropeye.up.railway.app/current-weather?lat=${lat}&lon=${lon}`;
       const resp = await fetch(url);
       if (!resp.ok) throw new Error(`Current weather ${resp.status}`);
 
@@ -313,7 +313,7 @@ const IrrigationSchedule: React.FC = () => {
         // Define fetchCurrentRainfall inline to avoid dependency issues
         const fetchRainfall = async () => {
           try {
-            const url = `https://dev-weather.cropeye.ai/current-weather?lat=${lat}&lon=${lon}`;
+            const url = `https://weather-cropeye.up.railway.app/current-weather?lat=${lat}&lon=${lon}`;
             const resp = await fetch(url);
             if (!resp.ok) throw new Error(`Current weather ${resp.status}`);
 

@@ -1,5 +1,5 @@
 // Weather Forecast Service for fetching 7-day weather forecast data
-// API: https://dev-weather.cropeye.ai/forecast
+// API: https://weather-cropeye.up.railway.app/forecast
 
 export interface WeatherForecastData {
   source: string;
@@ -18,7 +18,7 @@ export interface WeatherForecastDay {
 // Fetch 7-day weather forecast data for given coordinates
 export const fetchWeatherForecast = async (lat: number, lon: number): Promise<WeatherForecastData> => {
   try {
-    const apiUrl = ` https://dev-weather.cropeye.ai/forecast?lat=${lat}&lon=${lon}`;
+    const apiUrl = ` https://weather-cropeye.up.railway.app/forecast?lat=${lat}&lon=${lon}`;
     
     const response = await fetch(apiUrl, {
       method: 'GET',

@@ -159,7 +159,7 @@ const SoilAnalysis: React.FC<SoilAnalysisProps> = ({
         const currentDate = new Date().toISOString().split("T")[0];
 
         // First, fetch the NEW API with soil NPK data (with timeout protection)
-        const soilNPKUrl = `https://dev-soil.cropeye.ai/required-n/${encodeURIComponent(
+        const soilNPKUrl = `https://main-cropeye.up.railway.app/required-n/${encodeURIComponent(
           currentPlotName
         )}?end_date=${currentDate}`;
 
@@ -189,7 +189,7 @@ const SoilAnalysis: React.FC<SoilAnalysisProps> = ({
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-        const apiUrl = `https://dev-soil.cropeye.ai/analyze-npk/${encodeURIComponent(
+        const apiUrl = `https://main-cropeye.up.railway.app/analyze-npk/${encodeURIComponent(
           currentPlotName
         )}?end_date=${currentDate}&days_back=7`;
 

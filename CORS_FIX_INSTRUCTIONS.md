@@ -20,7 +20,7 @@ npm run dev
 ### 2. Verify Proxy is Working
 After restarting, check the browser console. You should see requests going to:
 - ✅ `/api/dev-plot/analyze_Growth?...` (proxy URL - should work)
-- ❌ NOT `https://dev-plot.cropeye.ai/analyze_Growth?...` (direct URL - will fail)
+- ❌ NOT `https://admin-cropeye.up.railway.app/analyze_Growth?...` (direct URL - will fail)
 
 ### 3. Check Network Tab
 In the Network tab, successful requests should show:
@@ -31,11 +31,11 @@ In the Network tab, successful requests should show:
 
 ### Development Mode (`npm run dev`)
 - Requests go to: `/api/dev-plot/analyze_Growth?...`
-- Vite proxy forwards to: `https://dev-plot.cropeye.ai/analyze_Growth?...`
+- Vite proxy forwards to: `https://admin-cropeye.up.railway.app/analyze_Growth?...`
 - **No CORS issues** (browser sees same-origin request)
 
 ### Production Mode (`npm run build`)
-- Requests go directly to: `https://dev-plot.cropeye.ai/analyze_Growth?...`
+- Requests go directly to: `https://admin-cropeye.up.railway.app/analyze_Growth?...`
 - **Will fail with CORS** unless server adds CORS headers
 - For production, backend team needs to add:
   ```
@@ -53,7 +53,7 @@ In the Network tab, successful requests should show:
 
 2. **Open browser and check console:**
    - Look for "Request URL:" logs
-   - Should show `/api/dev-plot/...` not `https://dev-plot.cropeye.ai/...`
+   - Should show `/api/dev-plot/...` not `https://admin-cropeye.up.railway.app/...`
 
 3. **Check Network tab:**
    - Requests should show status 200
