@@ -207,8 +207,6 @@ const CustomTileLayer: React.FC<{
   );
 };
 
-import { safeJsonParse } from '../utils/safeJsonParse';
-
 const Map: React.FC<MapProps> = ({
   onHealthDataChange,
   onSoilDataChange,
@@ -398,8 +396,8 @@ const Map: React.FC<MapProps> = ({
 
     // Use proxy in development to avoid CORS issues, direct URL in production
     // const baseUrl = import.meta.env.DEV 
-    //   ? '/api/dev-plot' 
-    //   : 'https://admin-cropeye.up.railway.app';
+      // ? '/api/dev-plot' 
+      // : 'https://admin-cropeye.up.railway.app';
     const baseUrl='https://admin-cropeye.up.railway.app';
     const url = `${baseUrl}/analyze_Growth?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`;
     
@@ -430,7 +428,7 @@ const Map: React.FC<MapProps> = ({
         throw new Error(`Growth API failed: ${resp.status} ${resp.statusText}`);
       }
 
-      const data = await safeJsonParse(resp);
+      const data = await resp.json();
       setGrowthData(data);
       
       // Preserve plot boundary from growth data if not already set
@@ -501,7 +499,7 @@ const Map: React.FC<MapProps> = ({
         throw new Error(`Water Uptake API failed: ${resp.status} ${resp.statusText}`);
       }
 
-      const data = await safeJsonParse(resp);
+      const data = await resp.json();
       setWaterUptakeData(data);
       
       // Preserve plot boundary from water uptake data if not already set
@@ -572,7 +570,7 @@ const Map: React.FC<MapProps> = ({
         throw new Error(`Soil Moisture API failed: ${resp.status} ${resp.statusText}`);
       }
 
-      const data = await safeJsonParse(resp);
+      const data = await resp.json();
       setSoilMoistureData(data);
       
       // Preserve plot boundary from soil moisture data if not already set
@@ -645,7 +643,7 @@ const Map: React.FC<MapProps> = ({
         throw new Error(`Plot API failed: ${resp.status} ${resp.statusText}`);
       }
 
-      const data = await safeJsonParse(resp);
+      const data = await resp.json();
       setPlotData(data);
       
       // Preserve plot boundary separately so it persists across layer changes
@@ -703,7 +701,7 @@ const Map: React.FC<MapProps> = ({
 
       if (!resp.ok) throw new Error(`Field analysis API failed: ${resp.status}`);
 
-      const data = await safeJsonParse(resp);
+      const data = await resp.json();
       // console.log("Field analysis API response:", data);
 
       let fieldData: any = null;
@@ -785,7 +783,7 @@ const Map: React.FC<MapProps> = ({
         throw new Error(`Pest detection API failed: ${resp.status} ${resp.statusText}`);
       }
 
-      const data = await safeJsonParse(resp);
+      const data = await resp.json();
       setPestData(data);
       
       // Preserve plot boundary from pest data if not already set
