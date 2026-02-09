@@ -567,7 +567,7 @@ const AgroDashboard: React.FC = () => {
                   <GaugeChart
                     value={totalArea}
                     maxValue={areaGaugeMaxValue.toFixed(2)}
-                    label="Total Area (Ha)"
+                    label="Total Area (acre)"
                     color="#10b981"
                   />
                   {/* Filter indicator */}
@@ -720,7 +720,7 @@ const AgroDashboard: React.FC = () => {
                             <div className="text-gray-600">
                               Yield Forecast:{" "}
                               <span className="font-medium">
-                                {plot.yieldForecast.toFixed(1)} T/Ha
+                                {plot.yieldForecast.toFixed(1)} T/acre
                               </span>
                             </div>
                           </div>

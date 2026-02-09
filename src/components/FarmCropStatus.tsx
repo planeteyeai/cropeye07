@@ -1289,7 +1289,7 @@ const OfficerDashboard: React.FC = () => {
                     metrics.area?.toFixed(2) || "-"
                   )}
                 </div>
-                <div className="text-sm font-semibold text-green-600">Ha</div>
+                <div className="text-sm font-semibold text-green-600">acre</div>
               </div>
             </div>
             <p className="text-xs text-gray-600 font-medium">Field Area</p>
@@ -1413,7 +1413,7 @@ const OfficerDashboard: React.FC = () => {
                   )}
                 </div>
                 <div className="text-sm font-semibold text-indigo-600">
-                  T/Ha
+                  T/acre
                 </div>
               </div>
             </div>
@@ -1488,7 +1488,7 @@ const OfficerDashboard: React.FC = () => {
                     metrics.biomass?.toFixed(1) || "-"
                   )}
                 </div>
-                <div className="text-sm font-semibold text-pink-600">kg/ha</div>
+                <div className="text-sm font-semibold text-pink-600">kg/acre</div>
               </div>
             </div>
             <p className="text-xs text-gray-600 font-medium">Avg Biomass</p>
@@ -1573,10 +1573,10 @@ const OfficerDashboard: React.FC = () => {
                           <strong>Plot:</strong> {selectedPlotId}
                         </p>
                         <p>
-                          <strong>Farmer:</strong> Ramesh Patil
+                          {/* <strong>Farmer:</strong> Ramesh Patil */}
                         </p>
                         <p>
-                          <strong>Representative:</strong> Sunil Joshi
+                      {/* <strong>Representative:</strong> Sunil Joshi */}
                         </p>
                         <p>
                           <strong>Status:</strong>{" "}
@@ -1584,7 +1584,7 @@ const OfficerDashboard: React.FC = () => {
                         </p>
                         <p>
                           <strong>Area:</strong> {metrics.area ?? "Loading..."}{" "}
-                          Ha
+                          acre
                         </p>
                       </div>
                     </LeafletTooltip>

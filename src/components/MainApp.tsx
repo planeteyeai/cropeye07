@@ -108,7 +108,7 @@ const MainApp: React.FC = () => {
               <div className="mt-2 text-3xl font-bold text-blue-600">
                 {healthData.totalArea.toFixed(2)}
               </div>
-              <div className="text-sm text-gray-600">Hectares</div>
+              <div className="text-sm text-gray-600">acre</div>
             </div>
           </div>
         )}

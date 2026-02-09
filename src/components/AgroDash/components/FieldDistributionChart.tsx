@@ -78,7 +78,7 @@ const FieldDistributionChart: React.FC<FieldDistributionChartProps> = ({
               {plot.plotId}
             </p>
             <p className="text-xs text-gray-600">
-              Area: {plot.size.toFixed(2)} Ha
+              Area: {plot.size.toFixed(2)} acre
             </p>
             <p className="text-xs text-gray-600">Status: {plot.status}</p>
           </div>

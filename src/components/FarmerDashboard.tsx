@@ -969,7 +969,7 @@ const FarmerDashboard: React.FC = () => {
                   {metrics.area?.toFixed(2) || "-"}
                 </div>
                 <div className="text-sm font-semibold text-green-600">
-                  acres
+                  acre
                 </div>
               </div>
             </div>

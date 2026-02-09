@@ -1009,7 +1009,7 @@ const HarvestDashboard: React.FC = () => {
 
     return [
       {
-        label: "Total Area (Ha)",
+        label: "Total Area (acre)",
         value: totalArea ? totalArea.toFixed(2) : "-",
         icon: BarChart3,
       },

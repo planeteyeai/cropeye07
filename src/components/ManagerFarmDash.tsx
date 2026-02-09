@@ -1281,7 +1281,7 @@ const ManagerFarmDash: React.FC = () => {
                     metrics.area?.toFixed(2) || "-"
                   )}
                 </div>
-                <div className="text-sm font-semibold text-green-600">Ha</div>
+                <div className="text-sm font-semibold text-green-600">acre</div>
               </div>
             </div>
             <p className="text-xs text-gray-600 font-medium">Field Area</p>
@@ -1480,7 +1480,7 @@ const ManagerFarmDash: React.FC = () => {
                     metrics.biomass?.toFixed(1) || "-"
                   )}
                 </div>
-                <div className="text-sm font-semibold text-pink-600">kg/ha</div>
+                <div className="text-sm font-semibold text-pink-600">kg/acre</div>
               </div>
             </div>
             <p className="text-xs text-gray-600 font-medium">Avg Biomass</p>
