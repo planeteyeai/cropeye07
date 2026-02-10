@@ -1310,10 +1310,13 @@ const ManagerFarmDash: React.FC = () => {
               <Calendar className="w-6 h-6 text-orange-600" />
               <div className="text-right">
                 <div className="text-2xl font-bold text-gray-800">
-                  {/* {loadingData ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : ( */}
-                  0 {/* )} */}
+                  {loadingData ? (
+                    <Loader2 className="w-5 h-5 animate-spin text-orange-600" />
+                  ) : metrics.daysToHarvest !== null ? (
+                    metrics.daysToHarvest
+                  ) : (
+                    "-"
+                  )}
                 </div>
                 <div className="text-sm font-semibold text-orange-600">
                   Days

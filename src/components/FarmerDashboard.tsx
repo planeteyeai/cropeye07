@@ -78,13 +78,14 @@ interface Metrics {
   totalBiomass: number | null;
   stressCount: number | null;
   irrigationEvents: number | null;
-  expectedYield: number | null;
+  sugarYieldMean: number | null;
   daysToHarvest: number | null;
   growthStage: string | null;
   soilPH: number | null;
   organicCarbonDensity: number | null;
   actualYield: number | null;
   cnRatio: number | null;
+  sugarYieldMax: number | null;
 }
 
 interface VisibleLines {
@@ -219,13 +220,14 @@ const FarmerDashboard: React.FC = () => {
     totalBiomass: null,
     stressCount: null,
     irrigationEvents: null,
-    expectedYield: null,
+    sugarYieldMean: null,
     daysToHarvest: null,
     growthStage: null,
     soilPH: null,
     organicCarbonDensity: null,
     actualYield: null,
     cnRatio: null,
+    sugarYieldMax: null,
   });
 
   // Mobile layout flag for charts
@@ -473,65 +475,43 @@ const FarmerDashboard: React.FC = () => {
         isHarvested =
           harvestProperties?.has_harvest === true &&
           harvestProperties?.harvest_status === "harvested";
-
-        console.log("[DB] Harvest data extracted:", {
-          harvestStatus,
-          harvestDate,
-          isHarvested,
-          has_harvest: harvestProperties?.has_harvest,
-        });
       }
 
       // Determine which date to use for fetching yield data
       // For harvested plots, use harvest_date; for others, use end_date
       const yieldDataDate = isHarvested && harvestDate ? harvestDate : endDate;
-      const agroStatsCacheKey = `agroStats_${currentPlotId}_${yieldDataDate}_${Date.now()}`;
+      // Use versioned cache key to ensure fresh data structure
+      const agroStatsCacheKey = `agroStats_v3_${yieldDataDate}`;
       const agroStatsUrl = `https://events-cropeye.up.railway.app/plots/agroStats?end_date=${yieldDataDate}`;
 
-      console.log(`[DB] 1. Fetching bulk plot data from: ${agroStatsUrl}`);
-      console.log(`[DB] Using date: ${yieldDataDate} (${isHarvested ? 'harvest_date' : 'end_date'})`);
+      let allPlotsData = getCache(agroStatsCacheKey);
 
-      const agroStatsRes = await axios.get(agroStatsUrl);
-      const allPlotsData = agroStatsRes.data;
-      setCache(agroStatsCacheKey, allPlotsData);
+      if (!allPlotsData) {
+        try {
+          const agroStatsRes = await axios.get(agroStatsUrl);
+          allPlotsData = agroStatsRes.data;
+          setCache(agroStatsCacheKey, allPlotsData);
+        } catch (err) {
+          console.error("Error fetching agroStats:", err);
+          allPlotsData = null;
+        }
+      }
 
-      console.log("[DB] 2. Fetched fresh data from API:", allPlotsData);
-      console.log(
-        `[DB] 3. Searching for plot ID "${currentPlotId}" in the response.`
-      );
-      console.log(
-        "[DB] Available plots in API response:",
-        Object.keys(allPlotsData || {})
-      );
-
-      const currentPlotData = allPlotsData ? allPlotsData[currentPlotId] : null;
-      console.log("[DB] 4. Data for current plot:", currentPlotData);
-      console.log("[DB] Yield data source:", {
-        isHarvested,
-        harvestDate,
-        yieldDataDate,
-        usingHarvestDate: isHarvested && harvestDate,
-      });
-
-      if (currentPlotData?.brix_sugar?.brix) {
-        console.log("[DB] Brix data:", {
-          mean: currentPlotData.brix_sugar.brix.mean,
-          min: currentPlotData.brix_sugar.brix.min,
-          max: currentPlotData.brix_sugar.brix.max,
-        });
-      } else {
-        console.log("[DB] No brix data found for this plot!");
+      let currentPlotData = allPlotsData ? allPlotsData[currentPlotId] : null;
+      if (!currentPlotData && allPlotsData) {
+        const quotedPlotId = `"${currentPlotId}"`;
+        currentPlotData = allPlotsData[quotedPlotId];
       }
 
       const stats = soilData?.features?.[0]?.properties?.statistics;
-      const expectedYieldValue =
+      const sugarYieldMeanValue =
         currentPlotData?.brix_sugar?.sugar_yield?.mean ?? null;
 
       let calculatedBiomass = null;
       let totalBiomassForMetric = null;
 
-      if (expectedYieldValue !== null) {
-        const totalBiomass = expectedYieldValue * 1.27;
+      if (sugarYieldMeanValue !== null) {
+        const totalBiomass = sugarYieldMeanValue * 1.27;
         const underGroundBiomassInTons = totalBiomass * 0.12;
         calculatedBiomass = underGroundBiomassInTons;
         totalBiomassForMetric = totalBiomass;
@@ -555,31 +535,10 @@ const FarmerDashboard: React.FC = () => {
         actualYield: currentPlotData?.brix_sugar?.sugar_yield?.mean ?? null,
         stressCount: stressData?.total_events ?? 0,
         irrigationEvents: irrigationData?.total_events ?? null,
-        expectedYield: expectedYieldValue,
+        sugarYieldMean: sugarYieldMeanValue,
         cnRatio: null,
+        sugarYieldMax: currentPlotData?.brix_sugar?.sugar_yield?.max ?? null,
       };
-
-      console.log("[DB] 5. Setting new metrics state:", newMetrics);
-      console.log("[DB] Brix values being set:", {
-        brix: newMetrics.brix,
-        brixMin: newMetrics.brixMin,
-        brixMax: newMetrics.brixMax,
-        fromPlot: currentPlotId,
-      });
-
-      if (newMetrics.brix !== null) {
-        console.log(
-          `[DB] ✓ Brix Mean: ${newMetrics.brix} (should be 18.15 for the correct plot)`
-        );
-      }
-      if (newMetrics.brixMin !== null) {
-        console.log(`[DB] ✓ Brix Min: ${newMetrics.brixMin}`);
-      }
-      if (newMetrics.brixMax !== null) {
-        console.log(
-          `[DB] ✓ Brix Max: ${newMetrics.brixMax} (should be 19.84 for the correct plot)`
-        );
-      }
 
       setMetrics(newMetrics);
     } catch (err) {
@@ -995,7 +954,7 @@ const FarmerDashboard: React.FC = () => {
               <Calendar className="w-6 h-6 text-orange-600" />
               <div className="text-right">
                 <div className="text-2xl font-bold text-gray-800">
-                  0
+                  {metrics.daysToHarvest !== null ? metrics.daysToHarvest : "-"}
                 </div>
                 <div className="text-sm font-semibold text-orange-600">
                   Days
@@ -1492,8 +1451,8 @@ const FarmerDashboard: React.FC = () => {
             </div>
             <div className="flex flex-col items-center">
               <PieChartWithNeedle
-                value={metrics.expectedYield || 0}
-                max={400}
+                value={metrics.sugarYieldMean || 0}
+                max={metrics.sugarYieldMax || 400}
                 title="Sugarcane Yield Forecast"
                 unit=" T/acre"
                 width={260}
@@ -1504,21 +1463,23 @@ const FarmerDashboard: React.FC = () => {
                   <div className="flex items-center gap-1">
                     <div className="w-2 h-2 rounded bg-purple-500"></div>
                     <span className="text-purple-700 font-semibold">
-                      Projected: {(metrics.expectedYield || 0).toFixed(1)}{" "}
+                      mean: {(metrics.sugarYieldMean || 0).toFixed(1)}{" "}
                       T/acre
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
                     <div className="w-2 h-2 rounded bg-green-500"></div>
                     <span className="text-green-700 font-semibold">
-                      Optimal: 400 T/acre
+                      max: {(metrics.sugarYieldMax || 0).toFixed(1)} T/acre
                     </span>
                   </div>
                 </div>
                 <div className="mt-1 text-xs text-gray-500">
                   Performance:{" "}
-                  {(((metrics.expectedYield || 0) / 400) * 100).toFixed(1)}% of
-                  optimal yield
+                  {metrics.sugarYieldMax
+                    ? (((metrics.sugarYieldMean || 0) / metrics.sugarYieldMax) * 100).toFixed(1)
+                    : "0.0"}
+                  % of optimal yield
                 </div>
               </div>
             </div>
