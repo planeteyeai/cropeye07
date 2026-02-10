@@ -126,6 +126,7 @@ interface Metrics {
   actualYield: number | null;
   cnRatio: number | null;
   sugarYieldMax: number | null;
+  sugarYieldMin: number | null;
 }
 
 interface PieChartWithNeedleProps {
@@ -195,6 +196,7 @@ const OwnerFarmDash: React.FC = () => {
     actualYield: null,
     cnRatio: null,
     sugarYieldMax: null,
+    sugarYieldMin: null,
   });
 
   const [stressEvents, setStressEvents] = useState<StressEvent[]>([]);
@@ -583,6 +585,7 @@ const OwnerFarmDash: React.FC = () => {
               : null,
           actualYield: currentPlotData?.brix_sugar?.sugar_yield?.mean ?? null,
           sugarYieldMax: currentPlotData?.brix_sugar?.sugar_yield?.max ?? null,
+          sugarYieldMin: currentPlotData?.brix_sugar?.sugar_yield?.min ?? null,
         }));
       }
 
@@ -1775,6 +1778,12 @@ const OwnerFarmDash: React.FC = () => {
                 />
                 <div className="mt-2 text-center">
                   <div className="flex items-center justify-center gap-2 text-xs flex-wrap">
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 rounded bg-red-500"></div>
+                      <span className="text-red-700 font-semibold">
+                        min: {(metrics.sugarYieldMin || 0).toFixed(1)} T/acre
+                      </span>
+                    </div>
                     <div className="flex items-center gap-1">
                       <div className="w-2 h-2 rounded bg-purple-500"></div>
                       <span className="text-purple-700 font-semibold">

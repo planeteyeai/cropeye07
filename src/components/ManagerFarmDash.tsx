@@ -126,6 +126,9 @@ interface Metrics {
   organicCarbonDensity: number | null;
   actualYield: number | null;
   cnRatio: number | null;
+  sugarYieldMax: number | null;
+  sugarYieldMin: number | null;
+  sugarYieldMean: number | null;
 }
 
 interface PieChartWithNeedleProps {
@@ -192,6 +195,9 @@ const ManagerFarmDash: React.FC = () => {
     organicCarbonDensity: null,
     actualYield: null,
     cnRatio: null,
+    sugarYieldMean: null,
+    sugarYieldMax: null,
+    sugarYieldMin: null,
   });
 
   const [stressEvents, setStressEvents] = useState<StressEvent[]>([]);
@@ -429,55 +435,134 @@ const ManagerFarmDash: React.FC = () => {
 
     setLoadingData(true);
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      // Use timezone offset for consistent date calculation
+      const tzOffsetMs = new Date().getTimezoneOffset() * 60000;
+      const endDate = new Date(Date.now() - tzOffsetMs)
+        .toISOString()
+        .slice(0, 10);
+      const today = endDate;
 
-      // Step 1: Fetch critical data first (agroStats) with caching
-      const agroStatsCacheKey = `agroStats_${today}`;
+      // Step 1: Fetch harvest status first to determine correct date for yield data
+      const harvestCacheKey = `harvest_${selectedPlotId}_${today}`;
+      let harvestStatus = null;
+      let harvestDate = null;
+      let harvestData = getCache(harvestCacheKey);
+
+      if (!harvestData) {
+        try {
+          const harvestRes = await axios.post(
+            `${BASE_URL}/sugarcane-harvest?plot_name=${selectedPlotId}&end_date=${today}`,
+            {},
+            { timeout: 10000 },
+          );
+          harvestData = harvestRes.data;
+          setCache(harvestCacheKey, harvestData);
+        } catch (err) {
+          console.warn("Harvest status fetch failed, continuing...", err);
+        }
+      }
+
+      if (harvestData) {
+        harvestStatus =
+          harvestData.harvest_status ||
+          harvestData.harvest_summary?.harvest_status ||
+          harvestData.features?.[0]?.properties?.harvest_status;
+        harvestDate =
+          harvestData.harvest_date || harvestData.harvest_summary?.harvest_date;
+      }
+
+      // Determine date for yield data
+      let yieldDataDate = today;
+      // User requested to always use current date for agroStats
+      // const isHarvested =
+      //   harvestStatus?.toLowerCase().includes("harvested") &&
+      //   !harvestStatus?.toLowerCase().includes("partially");
+
+      // if (isHarvested && harvestDate) {
+      //   yieldDataDate = harvestDate;
+      // }
+
+      // Helper to fetch agroStats with fallback dates
+      const fetchAgroStatsWithFallback = async (dates: string[]) => {
+        for (const date of dates) {
+          try {
+            console.log(`Fetching AgroStats for date: ${date}`);
+            const res = await axios.get(
+              `https://events-cropeye.up.railway.app/plots/agroStats?end_date=${date}`
+            );
+            if (res.data) {
+              return { data: res.data, successfulDate: date };
+            }
+          } catch (err: any) {
+             console.warn(`Failed to fetch AgroStats for ${date}:`, err.message);
+             // Continue to next date if available
+          }
+        }
+        return null;
+      };
+
+      // Step 2: Fetch agroStats with fallback logic
+      // Try today, then yesterday, then 2 days ago
+      const yesterday = new Date(new Date(today).setDate(new Date(today).getDate() - 1)).toISOString().slice(0, 10);
+      const twoDaysAgo = new Date(new Date(today).setDate(new Date(today).getDate() - 2)).toISOString().slice(0, 10);
+      
+      const datesToTry = [today, yesterday, twoDaysAgo];
+      let successfulDate = yieldDataDate; // Default to today/yieldDataDate
+
+      // Check cache first for today (primary target)
+      const agroStatsCacheKey = `agroStats_v3_${yieldDataDate}`;
       let allPlotsData = getCache(agroStatsCacheKey);
-
+      
       // Also check plot-specific cache for faster retrieval
-      const plotSpecificCacheKey = `plot_${selectedPlotId}_${today}`;
+      const plotSpecificCacheKey = `plot_v3_${selectedPlotId}_${yieldDataDate}`;
       let currentPlotData = getCache(plotSpecificCacheKey);
 
       if (!allPlotsData || !currentPlotData) {
-        try {
-          // Fetch agroStats with shorter timeout for faster failure/recovery
-          const agroStatsRes = await makeRequestWithRetry(
-            `https://events-cropeye.up.railway.app/plots/agroStats?end_date=${today}`,
-            1,
-            12000, // Reduced timeout for faster retrieval
-          );
-          allPlotsData = agroStatsRes;
-          setCache(agroStatsCacheKey, allPlotsData);
+        const result = await fetchAgroStatsWithFallback(datesToTry);
+        
+        if (result) {
+           allPlotsData = result.data;
+           successfulDate = result.successfulDate;
+           
+           // Cache the result using the date that actually worked
+           const successfulCacheKey = `agroStats_v3_${successfulDate}`;
+           setCache(successfulCacheKey, allPlotsData);
 
-          // Extract and cache plot-specific data
-          const quotedPlotId = `"${selectedPlotId.replace("_", '"_"')}"`;
-          currentPlotData =
-            allPlotsData[selectedPlotId] || allPlotsData[quotedPlotId] || null;
-          if (currentPlotData) {
-            setCache(plotSpecificCacheKey, currentPlotData);
-          }
-        } catch (error: any) {
-          if (!allPlotsData) allPlotsData = null;
-          if (!currentPlotData) {
-            const quotedPlotId = `"${selectedPlotId.replace("_", '"_"')}"`;
-            currentPlotData = allPlotsData
-              ? allPlotsData[selectedPlotId] || allPlotsData[quotedPlotId]
-              : null;
-          }
+           // Extract and cache plot-specific data
+           const cleanId = selectedPlotId.replace(/"/g, "");
+           const quotedId = `"${cleanId}"`;
+           
+           currentPlotData =
+             allPlotsData[cleanId] || allPlotsData[quotedId] || null;
+
+           if (currentPlotData) {
+             const successfulPlotKey = `plot_v3_${selectedPlotId}_${successfulDate}`;
+             setCache(successfulPlotKey, currentPlotData);
+           } else {
+             console.warn(`Plot data not found for ID: ${selectedPlotId} in AgroStats response (${successfulDate})`);
+           }
+        } else {
+           console.error("All AgroStats fetch attempts failed.");
+           allPlotsData = null;
         }
       } else {
-        // Use cached plot data
-        const quotedPlotId = `"${selectedPlotId.replace("_", '"_"')}"`;
-        currentPlotData =
-          allPlotsData[selectedPlotId] ||
-          allPlotsData[quotedPlotId] ||
-          currentPlotData;
+        // Use cached plot data if available
+        const cleanId = selectedPlotId.replace(/"/g, "");
+        const quotedId = `"${cleanId}"`;
+        
+        if (!currentPlotData && allPlotsData) {
+           currentPlotData =
+            allPlotsData[cleanId] ||
+            allPlotsData[quotedId] ||
+            null;
+        }
       }
 
-      // Step 2: Calculate biomass from expectedYield (matching FarmerDashboard)
+      // Step 3: Calculate biomass from expectedYield (matching FarmerDashboard)
       const expectedYieldValue =
-        currentPlotData?.brix_sugar?.sugar_yield?.mean ?? null;
+        currentPlotData?.brix_sugar?.sugar_yield?.mean ??
+        currentPlotData?.brix_sugar?.sugar_yield?.min ??
+        null;
 
       let calculatedBiomass = null;
       let totalBiomassForMetric = null;
@@ -487,29 +572,12 @@ const ManagerFarmDash: React.FC = () => {
         const underGroundBiomassInTons = totalBiomass * 0.12;
         calculatedBiomass = underGroundBiomassInTons;
         totalBiomassForMetric = totalBiomass;
-      }
-
-      // Fetch harvest status from sugarcane-harvest endpoint
-      const harvestCacheKey = `harvest_${selectedPlotId}_${today}`;
-      let harvestStatus = null;
-      let harvestData = getCache(harvestCacheKey);
-
-      if (!harvestData) {
-        try {
-          const harvestRes = await axios.post(
-            `${BASE_URL}/sugarcane-harvest?plot_name=${selectedPlotId}&end_date=${today}`,
-          );
-          harvestData = harvestRes.data;
-          setCache(harvestCacheKey, harvestData);
-        } catch (harvestErr) {}
-      }
-
-      // Extract harvest_status from response
-      if (harvestData) {
-        harvestStatus =
-          harvestData?.harvest_summary?.harvest_status ||
-          harvestData?.features?.[0]?.properties?.harvest_status ||
-          null;
+      } else if (currentPlotData?.biomass?.mean) {
+        // Fallback to API biomass if calculated value is not available
+        const totalBiomass = currentPlotData.biomass.mean;
+        const underGroundBiomassInTons = totalBiomass * 0.12;
+        calculatedBiomass = underGroundBiomassInTons;
+        totalBiomassForMetric = totalBiomass;
       }
 
       // Step 3: Update metrics immediately with available data for faster UI response
@@ -535,7 +603,13 @@ const ManagerFarmDash: React.FC = () => {
             currentPlotData?.soil?.organic_carbon_stock != null
               ? parseFloat(currentPlotData.soil.organic_carbon_stock.toFixed(2))
               : null,
-          actualYield: currentPlotData?.brix_sugar?.sugar_yield?.min ?? null,
+          actualYield:
+            currentPlotData?.brix_sugar?.sugar_yield?.mean ??
+            currentPlotData?.brix_sugar?.sugar_yield?.min ??
+            null,
+          sugarYieldMean: expectedYieldValue,
+          sugarYieldMax: currentPlotData?.brix_sugar?.sugar_yield?.max ?? null,
+          sugarYieldMin: currentPlotData?.brix_sugar?.sugar_yield?.min ?? null,
         }));
       }
 
@@ -1591,30 +1665,54 @@ const ManagerFarmDash: React.FC = () => {
 
           {/* Performance Gauges */}
           <div className="space-y-4">
-            <div className="bg-white rounded-xl shadow-lg p-4">
-              <div className="flex items-center gap-2 mb-4">
-                <Target className="w-5 h-5 text-purple-600" />
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Sugar Yield Projection
-                </h3>
-              </div>
-              <PieChartWithNeedle
-                value={metrics.expectedYield || 0}
-                max={400}
-                title="Expected Yield"
-                unit="T/acre"
-                width={220}
-                height={140}
-              />
-              <div className="mt-4 text-center">
-                <div className="text-sm text-gray-600">
-                  Performance:{" "}
-                  <span className="font-semibold text-purple-600">
-                    {(((metrics.expectedYield || 0) / 400) * 100).toFixed(1)}%
-                  </span>{" "}
-                  of optimal
-                </div>
-              </div>
+            <div className="space-y-4">
+                        <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-4">
+                          <div className="flex items-center gap-3 mb-6">
+                            <Target className="w-5 h-7 text-purple-600" />
+                            <h3 className="text-sm font-semibold text-gray-800">
+                              Sugarcane Yield Projection
+                            </h3>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <PieChartWithNeedle
+                              value={metrics.sugarYieldMean || 0}
+                              max={metrics.sugarYieldMax || 400}
+                              title="Sugarcane Yield Forecast"
+                              unit=" T/acre"
+                              width={260}
+                              height={130}
+                            />
+                            <div className="mt-2 text-center">
+                              <div className="flex items-center justify-center gap-2 text-xs flex-wrap">
+                                <div className="flex items-center gap-1">
+                                  <div className="w-2 h-2 rounded bg-red-500"></div>
+                                  <span className="text-red-700 font-semibold">
+                                    min: {(metrics.sugarYieldMin || 0).toFixed(1)} T/acre
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <div className="w-2 h-2 rounded bg-purple-500"></div>
+                                  <span className="text-purple-700 font-semibold">
+                                    mean: {(metrics.sugarYieldMean || 0).toFixed(1)}{" "}
+                                    T/acre
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <div className="w-2 h-2 rounded bg-green-500"></div>
+                                  <span className="text-green-700 font-semibold">
+                                    max: {(metrics.sugarYieldMax || 0).toFixed(1)} T/acre
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="mt-1 text-xs text-gray-500">
+                                Performance:{" "}
+                                {metrics.sugarYieldMax
+                                  ? (((metrics.sugarYieldMean || 0) / metrics.sugarYieldMax) * 100).toFixed(1)
+                                  : "0.0"}% of optimal yield
+                              </div>
+                            </div>
+                          </div>
+                        </div>
             </div>
 
             {/* Biomass Performance */}
