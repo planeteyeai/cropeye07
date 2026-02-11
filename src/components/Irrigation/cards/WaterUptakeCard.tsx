@@ -43,9 +43,10 @@ const WaterUptakeCard: React.FC = () => {
         const currentEndDate = new Date().toISOString().split('T')[0];
         
         // Use proxy in development to avoid CORS issues, direct URL in production
-        const baseUrl = import.meta.env.DEV 
-          ? '/api/dev-plot' 
-          : 'https://admin-cropeye.up.railway.app';
+        // const baseUrl = import.meta.env.DEV 
+          // ? '/api/dev-plot' 
+          // : 'https://admin-cropeye.up.railway.app';
+        const baseUrl = 'https://admin-cropeye.up.railway.app';
         const url = `${baseUrl}/wateruptake?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`;
         
         // Fetch with explicit CORS mode and proper headers matching other API calls
