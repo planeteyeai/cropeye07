@@ -1123,7 +1123,7 @@ const HarvestDashboard: React.FC = () => {
     <div className="min-h-screen bg-gray-50 p-4 lg:p-6">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
-          <div className="flex flex-wrap items-center gap-4 mb-6">
+          {/* <div className="flex flex-wrap items-center gap-4 mb-6">
             <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg border shadow-sm">
               <Calendar className="w-4 h-4 text-blue-500" />
               <input
@@ -1135,7 +1135,7 @@ const HarvestDashboard: React.FC = () => {
                 className="border-none outline-none text-sm"
               />
             </div>
-          </div>
+          </div> */}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 mb-8">
             {keyMetrics.map((metric, index) => {
