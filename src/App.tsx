@@ -143,6 +143,86 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
     }
   }, [userRole]);
 
+  // Handle URL-based routing on page load/refresh
+  useEffect(() => {
+    // Check for view parameter in URL search params or hash
+    const urlParams = new URLSearchParams(window.location.search);
+    const viewParam = urlParams.get('view');
+    const hash = window.location.hash.replace('#', '').replace('#/', '');
+    
+    // Priority: URL param > hash > default to Home
+    if (viewParam) {
+      handleRouteFromURL(viewParam);
+    } else if (hash) {
+      handleRouteFromURL(hash);
+    }
+    
+    // Listen for hash changes (for hash-based routing)
+    const handleHashChange = () => {
+      const newHash = window.location.hash.replace('#/', '').replace('#', '');
+      if (newHash) {
+        handleRouteFromURL(newHash);
+      }
+    };
+    
+    // Listen for popstate (browser back/forward)
+    const handlePopState = () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const viewParam = urlParams.get('view');
+      if (viewParam) {
+        handleRouteFromURL(viewParam);
+      }
+    };
+    
+    window.addEventListener('hashchange', handleHashChange);
+    window.addEventListener('popstate', handlePopState);
+    
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
+
+  // Map URL routes to View enum
+  const handleRouteFromURL = (route: string) => {
+    const routeMap: Record<string, View> = {
+      'agroclimatic': View.AgroDashboard,
+      'agro-dashboard': View.AgroDashboard,
+      'agrodashboard': View.AgroDashboard,
+      'farm-crop-status': View.FarmCropStatus,
+      'farmcropstatus': View.FarmCropStatus,
+      'harvest-dashboard': View.HarvestDashboard,
+      'harvestdashboard': View.HarvestDashboard,
+      'manager-farm-dash': View.ManagerFarmDash,
+      'managerfarmdash': View.ManagerFarmDash,
+      'owner-farm-dash': View.OwnerFarmDash,
+      'ownerfarmdash': View.OwnerFarmDash,
+      'owner-harvest-dash': View.OwnerHarvestDash,
+      'ownerharvestdash': View.OwnerHarvestDash,
+      'farmer-dashboard': View.FarmerDashboard,
+      'farmerdashboard': View.FarmerDashboard,
+      'map': View.Map,
+      'fertilizer': View.Fertilizer,
+      'irrigation': View.Irrigation,
+      'pest-disease': View.PestDisease,
+      'pestdisease': View.PestDisease,
+      'add-farm': View.AddFarm,
+      'addfarm': View.AddFarm,
+      'calendar': View.Calendar,
+      'task-calendar': View.TaskCalendar,
+      'taskcalendar': View.TaskCalendar,
+      'tasklist': View.Tasklist,
+      'farmlist': View.FarmList,
+      'userlist': View.userList,
+      'addusers': View.AddUsers,
+    };
+
+    const view = routeMap[route.toLowerCase()];
+    if (view) {
+      setCurrentView(view);
+    }
+  };
+
   const handleMenuSelect = (menu: string) => {
     setActiveSubmenu(null);
 
@@ -270,6 +350,50 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
 
     setCurrentView(nextView);
     setIsSidebarOpen(false);
+    
+    // Update URL for refresh support
+    const viewMap: Partial<Record<View, string>> = {
+      [View.Home]: 'home',
+      [View.AgroDashboard]: 'agrodashboard',
+      [View.FarmCropStatus]: 'farmcropstatus',
+      [View.HarvestDashboard]: 'harvestdashboard',
+      [View.ManagerFarmDash]: 'managerfarmdash',
+      [View.OwnerFarmDash]: 'ownerfarmdash',
+      [View.OwnerHarvestDash]: 'ownerharvestdash',
+      [View.FarmerDashboard]: 'farmerdashboard',
+      [View.Map]: 'map',
+      [View.Fertilizer]: 'fertilizer',
+      [View.Irrigation]: 'irrigation',
+      [View.PestDisease]: 'pestdisease',
+      [View.AddFarm]: 'addfarm',
+      [View.Calendar]: 'calendar',
+      [View.TaskCalendar]: 'taskcalendar',
+      [View.Tasklist]: 'tasklist',
+      [View.FarmList]: 'farmlist',
+      [View.userList]: 'userlist',
+      [View.AddUsers]: 'addusers',
+      [View.Dashboard]: 'dashboard',
+      [View.ManagerHomeGrid]: 'managerhomegrid',
+      [View.Addvendor]: 'addvendor',
+      [View.VendorList]: 'vendorlist',
+      [View.Addorder]: 'addorder',
+      [View.orderlist]: 'orderlist',
+      [View.Addstock]: 'addstock',
+      [View.stocklist]: 'stocklist',
+      [View.AddBooking]: 'addbooking',
+      [View.Bookinglist]: 'bookinglist',
+      [View.CalendarView]: 'calendarview',
+      [View.MyList]: 'mylist',
+      [View.TeamList]: 'teamlist',
+      [View.ViewList]: 'viewlist',
+      [View.BlogCard]: 'blogcard',
+      [View.AgricultureData]: 'agriculturedata',
+      [View.Contactuser]: 'contactuser',
+    };
+    
+    const urlName = viewMap[nextView] || 'home';
+    const newURL = `${window.location.pathname}?view=${urlName}`;
+    window.history.pushState({ view: urlName }, '', newURL);
   };
 
   const handleHomeClick = () => {
