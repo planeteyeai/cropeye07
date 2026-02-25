@@ -11,7 +11,11 @@ interface DashboardStats {
   bookings?: number;
 }
 
-export const DashboardNo: React.FC = () => {
+interface DashboardNoProps {
+  layout?: 'row' | 'column';
+}
+
+export const DashboardNo: React.FC<DashboardNoProps> = ({ layout = 'row' }) => {
   const [stats, setStats] = useState<DashboardStats>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -88,8 +92,10 @@ export const DashboardNo: React.FC = () => {
     },
   ];
 
+  const isColumn = layout === 'column';
+
   return (
-    <div className="flex flex-row gap-4 overflow-x-auto py-2">
+    <div className={`flex gap-4 py-2 ${isColumn ? 'flex-col' : 'flex-row overflow-x-auto'}`}>
       {loading ? (
         <div className="flex items-center justify-center w-full py-8">
           <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
@@ -105,7 +111,7 @@ export const DashboardNo: React.FC = () => {
           return (
             <div
               key={stat.title}
-              className="flex-shrink-0 bg-white rounded-lg shadow-md p-4 w-48 flex flex-col justify-between"
+              className={`flex flex-col justify-between bg-white rounded-lg shadow-md p-4 ${isColumn ? 'w-full' : 'flex-shrink-0 w-48'}`}
             >
               <div>
                 <p className="text-gray-500 text-sm">{stat.title}</p>

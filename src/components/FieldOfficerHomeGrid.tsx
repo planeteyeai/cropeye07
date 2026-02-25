@@ -1,6 +1,6 @@
 // src/FieldOfficerHomeGrid.tsx
 import React, { useState, useEffect } from 'react';
-import { Calendar, Book, Users, LandPlot, Truck, CheckCircle, Clock } from 'lucide-react';
+import { Calendar, CalendarDays, Book, Users, LandPlot, Truck, CheckCircle, Clock } from 'lucide-react';
 import { getFarmersByFieldOfficer, getTasksForUser, getCurrentUser, getFarmsWithFarmerDetails, getRecentFarmers } from '../api';
 import { jwtDecode } from 'jwt-decode';
 import { getAuthToken } from '../utils/auth';
@@ -404,6 +404,12 @@ const FieldOfficerHomeGrid: React.FC<FieldOfficerHomeGridProps> = ({ onMenuClick
       icon: <Book size={32} className="text-yellow-600" />,
       bgColor: 'bg-yellow-300',
       hoverColor: 'hover:bg-yellow-300'
+    },
+    {
+      title: 'Calendar / Schedule',
+      icon: <CalendarDays size={32} className="text-teal-600" />,
+      bgColor: 'bg-teal-300',
+      hoverColor: 'hover:bg-teal-400'
     }
   ];
 
@@ -451,62 +457,17 @@ const FieldOfficerHomeGrid: React.FC<FieldOfficerHomeGridProps> = ({ onMenuClick
   ];
   
   return (
-    <div className="flex flex-col gap-4 sm:gap-8 mt-4 mx-4">
-      {/* Main Action Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-6">
-        {items.map((item) => (
-          <button
-            key={item.title}
-            onClick={() => {
-              // Handle different navigation based on card type
-              if (item.title === 'User Desk') {
-                // Open sidebar and expand User Desk menu
-                onOpenSidebarWithMenu('User Desk');
-              } else if (item.title === 'MyTask') {
-                // Open sidebar and expand MyTask menu
-                onOpenSidebarWithMenu('MyTask');
-              } else if (item.title === 'Plan & Book') {
-                // Open sidebar and expand Plan & Book menu
-                console.log('🔧 FieldOfficerHomeGrid: Plan & Book clicked, calling onOpenSidebarWithMenu');
-                onOpenSidebarWithMenu('Plan & Book');
-              } else if (item.title === 'Resources Planning') {
-                // Open sidebar and expand Resources Planning menu
-                // Note: Using "Resoucres Planning" to match Sidebar menu item spelling
-                onOpenSidebarWithMenu('Resoucres Planning');
-              } else {
-                // Use regular menu click for other cards
-                onMenuClick(item.title);
-              }
-            }}
-            className={`${item.bgColor} ${item.hoverColor} p-4 sm:p-6 lg:p-8 rounded-xl shadow-sm transition-all duration-300 transform hover:scale-105 min-h-[120px] sm:min-h-[140px] lg:min-h-[160px]`}
-          >
-            <div className="flex flex-col items-center justify-center space-y-2 sm:space-y-4 h-full">
-              <div className="flex-shrink-0">
-                <div className="w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8 flex items-center justify-center">
-                  {React.cloneElement(item.icon, { 
-                    size: undefined,
-                    className: item.icon.props.className + " w-full h-full" 
-                  })}
-                </div>
-              </div>
-              <span className="text-sm sm:text-base lg:text-lg font-semibold text-gray-800 text-center leading-tight break-words px-1">
-                {item.title === 'ViewFarmerPlot' ? 'View Farmer Plot' : item.title}
-              </span>
-            </div>
-          </button>
-        ))}
-      </div>
-
-      {/* Statistics Cards */}
-      <div className="mt-6">
+    <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 mt-4 mx-4">
+      {/* Dashboard Statistics: 5 rows, 1 column (left) */}
+      <div className="lg:min-w-[280px] xl:min-w-[320px]">
         <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 px-2">Dashboard Statistics</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6">
+        <div className="flex flex-col gap-3 sm:gap-4">
           {statCards.map((card) => (
             <div
               key={card.title}
-              className={`${card.bgColor} border-2 ${card.borderColor} rounded-lg p-4 sm:p-6 shadow-sm hover:shadow-md transition-all duration-300`}
+              className={`${card.bgColor} border-2 ${card.borderColor} rounded-lg p-4 sm:p-5 shadow-sm hover:shadow-md transition-all duration-300`}
             >
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-2">
                 <div className={`${card.textColor} font-semibold text-sm sm:text-base`}>
                   {card.title}
                 </div>
@@ -524,6 +485,48 @@ const FieldOfficerHomeGrid: React.FC<FieldOfficerHomeGridProps> = ({ onMenuClick
                 </div>
               )}
             </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Action Cards: 3 rows, 2 columns (right) */}
+      <div className="flex-1">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 px-2">Quick Actions</h2>
+        <div className="grid grid-cols-2 grid-rows-3 gap-3 sm:gap-4 lg:gap-6">
+          {items.map((item) => (
+            <button
+              key={item.title}
+              onClick={() => {
+                if (item.title === 'User Desk') {
+                  onOpenSidebarWithMenu('User Desk');
+                } else if (item.title === 'MyTask') {
+                  onOpenSidebarWithMenu('MyTask');
+                } else if (item.title === 'Plan & Book') {
+                  onOpenSidebarWithMenu('Plan & Book');
+                } else if (item.title === 'Resources Planning') {
+                  onOpenSidebarWithMenu('Resoucres Planning');
+                } else if (item.title === 'Calendar / Schedule') {
+                  onMenuClick('CalendarView');
+                } else {
+                  onMenuClick(item.title);
+                }
+              }}
+              className={`${item.bgColor} ${item.hoverColor} p-4 sm:p-6 rounded-xl shadow-sm transition-all duration-300 transform hover:scale-[1.02] min-h-[100px] sm:min-h-[120px] lg:min-h-[140px]`}
+            >
+              <div className="flex flex-col items-center justify-center space-y-2 sm:space-y-3 h-full">
+                <div className="flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center">
+                  {React.cloneElement(item.icon, {
+                    size: undefined,
+                    className: item.icon.props.className + " w-full h-full",
+                  })}
+                </div>
+                <span className="text-sm sm:text-base font-semibold text-gray-800 text-center leading-tight break-words px-1">
+                  {item.title === 'ViewFarmerPlot'
+                    ? 'View Farmer Plot'
+                    : item.title}
+                </span>
+              </div>
+            </button>
           ))}
         </div>
       </div>
