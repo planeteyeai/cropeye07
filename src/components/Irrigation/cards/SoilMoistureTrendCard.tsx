@@ -246,8 +246,8 @@ const SoilMoistureTrendCard: React.FC<SoilMoistureTrendCardProps> = ({
     <div className="soil-moisture-trend-card flex flex-col min-h-0 sm:min-h-[390px] md:min-h-[450px]">
       <div className="trend-card-header pb-0">
         <AreaChart className="w-4 h-4 sm:w-5 sm:h-5" size={20} color="#8B4513" />
-        <h3 className="text-sm sm:text-base">Soil Moisture Trend (weekly)</h3>
-        <div className="optimal-range text-xs sm:text-sm">
+        <h3 className="text-2xl sm:text-xl font-bold">Soil Moisture Trend (weekly)</h3>
+        <div className="optimal-range text-lg font-boldsm:text-sm">
           Optimal: {optimalMin}-{optimalMax}%
         </div>
         <div className="flex flex-col items-center mt-0 mb-0">

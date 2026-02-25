@@ -203,7 +203,7 @@ const InfoTooltip: React.FC<{ text: string }> = ({ text }) => {
 
 const CropHealthAnalysis: React.FC = () => {
   const { selectedPlotName } = useAppContext();
-  const [activeTab, setActiveTab] = useState<'pests' | 'diseases' | 'weeds'>('pests');
+  const [activeTab, setActiveTab] = useState<'weeds' | 'pests' | 'diseases'>('weeds');
   const [riskAssessment, setRiskAssessment] = useState<RiskAssessmentResult | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -417,6 +417,7 @@ const CropHealthAnalysis: React.FC = () => {
             className="flex items-center gap-2 bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 text-sm w-full md:w-auto justify-center"
           >
             <Download className="w-4 h-4" />
+            Download
           </button>
         )}
         {activeTab === 'diseases' && (
@@ -431,7 +432,7 @@ const CropHealthAnalysis: React.FC = () => {
       </div>
 
       <div className="flex border-b mt-2 overflow-x-auto">
-        {(['pests', 'diseases', 'weeds'] as const).map(tab => (
+        {(['weeds', 'pests', 'diseases'] as const).map(tab => (
           <div
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -447,6 +448,58 @@ const CropHealthAnalysis: React.FC = () => {
       </div>
 
       <div className="p-2 md:p-4 flex-1 overflow-hidden">
+        {activeTab === 'weeds' && (
+          <div className="overflow-x-auto w-full">
+            <table className="min-w-full table-auto border border-gray-200 rounded-lg text-xs md:text-sm">
+              <thead className="bg-green-100">
+                <tr>
+                  <th className="px-1 md:px-2 py-1 md:py-2 border text-left font-bold">Weed</th>
+                  <th className="px-1 md:px-2 py-1 md:py-2 border text-left font-bold">Probability</th>
+                  <th className="px-1 md:px-2 py-1 md:py-2 border text-left font-bold">Chemical Control</th>
+                </tr>
+              </thead>
+              <tbody>
+                {weedsData.map((weed, idx) => {
+                  // Get risk level from month-based categorization map
+                  // This uses the same logic as Pest & Disease component:
+                  // - Weeds matching current month → "High" risk
+                  // - First remaining weed → "Moderate" risk  
+                  // - All other weeds → "Low" risk
+                  const riskLevel = weedRiskMap.get(weed.name) || 'Low';
+                  const chemicalText = Array.isArray(weed.chemical) ? weed.chemical[0] : '';
+                  // Extract chemical name and dosage from the string (format: "Chemical - Dosage")
+                  const chemicalParts = chemicalText.split(' - ');
+                  const chemicalName = chemicalParts[0] || chemicalText;
+                  const dosage = chemicalParts[1] || '';
+                  
+                  return (
+                    <tr key={idx} className="border-b hover:bg-green-50">
+                      <td className="px-1 md:px-2 py-1 md:py-2 border font-bold">
+                        {weed.name.includes('(') ? weed.name.split('(')[0].trim() : weed.name}
+                      </td>
+                      <td className="px-1 md:px-2 py-1 md:py-2 border">
+                        <span className={`font-bold ${
+                          riskLevel === 'High' ? 'text-red-600' : 
+                          riskLevel === 'Moderate' ? 'text-orange-600' : 
+                          'text-yellow-600'
+                        }`}>
+                          {riskLevel}
+                        </span>
+                      </td>
+                      <td className="px-1 md:px-2 py-1 md:py-2 border">
+                        <span className="inline-flex items-center">
+                          {chemicalName}
+                          {dosage && <InfoTooltip text={dosage} />}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
         {activeTab === 'pests' && (
           <div className="overflow-x-auto w-full scroll-hide pest-tab-scroll">
             {pestControls.length === 0 ? (
@@ -534,58 +587,6 @@ const CropHealthAnalysis: React.FC = () => {
                 </table>
               </>
             )}
-          </div>
-        )}
-
-        {activeTab === 'weeds' && (
-          <div className="overflow-x-auto w-full">
-            <table className="min-w-full table-auto border border-gray-200 rounded-lg text-xs md:text-sm">
-              <thead className="bg-green-100">
-                <tr>
-                  <th className="px-1 md:px-2 py-1 md:py-2 border text-left font-bold">Weed</th>
-                  <th className="px-1 md:px-2 py-1 md:py-2 border text-left font-bold">Probability</th>
-                  <th className="px-1 md:px-2 py-1 md:py-2 border text-left font-bold">Chemical Control</th>
-                </tr>
-              </thead>
-              <tbody>
-                {weedsData.map((weed, idx) => {
-                  // Get risk level from month-based categorization map
-                  // This uses the same logic as Pest & Disease component:
-                  // - Weeds matching current month → "High" risk
-                  // - First remaining weed → "Moderate" risk  
-                  // - All other weeds → "Low" risk
-                  const riskLevel = weedRiskMap.get(weed.name) || 'Low';
-                  const chemicalText = Array.isArray(weed.chemical) ? weed.chemical[0] : '';
-                  // Extract chemical name and dosage from the string (format: "Chemical - Dosage")
-                  const chemicalParts = chemicalText.split(' - ');
-                  const chemicalName = chemicalParts[0] || chemicalText;
-                  const dosage = chemicalParts[1] || '';
-                  
-                  return (
-                    <tr key={idx} className="border-b hover:bg-green-50">
-                      <td className="px-1 md:px-2 py-1 md:py-2 border font-bold">
-                        {weed.name.includes('(') ? weed.name.split('(')[0].trim() : weed.name}
-                      </td>
-                      <td className="px-1 md:px-2 py-1 md:py-2 border">
-                        <span className={`font-bold ${
-                          riskLevel === 'High' ? 'text-red-600' : 
-                          riskLevel === 'Moderate' ? 'text-orange-600' : 
-                          'text-yellow-600'
-                        }`}>
-                          {riskLevel}
-                        </span>
-                      </td>
-                      <td className="px-1 md:px-2 py-1 md:py-2 border">
-                        <span className="inline-flex items-center">
-                          {chemicalName}
-                          {dosage && <InfoTooltip text={dosage} />}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
           </div>
         )}
       </div>
