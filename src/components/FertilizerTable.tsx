@@ -41,7 +41,7 @@ const FertilizerTable: React.FC = () => {
     loading: profileLoading,
     error: profileError,
   } = useFarmerProfile();
-  const { selectedPlotName } = useAppContext();
+  const { selectedPlotName, setAppState } = useAppContext();
 
   // Helper function to calculate months since plantation
   const calculateMonthsSincePlantation = (plantationDate: string): number => {
@@ -433,6 +433,7 @@ const FertilizerTable: React.FC = () => {
           monthsSincePlantation >= requiredMonths
         ) {
           setNoFertilizerRequired(true);
+          setAppState((prev: any) => ({ ...prev, noFertilizerRequired: true }));
           setData([]);
           setLocalError(null); // Clear any previous errors
           console.log(
@@ -448,6 +449,7 @@ const FertilizerTable: React.FC = () => {
           return; // Exit early - don't check planting method or generate fertilizer data
         } else {
           setNoFertilizerRequired(false);
+          setAppState((prev: any) => ({ ...prev, noFertilizerRequired: false }));
           console.log("❌ FertilizerTable: Fertilizer still required", {
             monthsSincePlantation: monthsSincePlantation,
             requiredMonths: requiredMonths,
@@ -456,6 +458,7 @@ const FertilizerTable: React.FC = () => {
         }
       } else {
         setNoFertilizerRequired(false);
+        setAppState((prev: any) => ({ ...prev, noFertilizerRequired: false }));
         console.log("⚠️ FertilizerTable: No plantation type found");
       }
 

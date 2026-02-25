@@ -54,6 +54,7 @@ const Fertilizer: React.FC = () => {
   const { appState, setAppState, getCached, setCached } = useAppContext();
   const data = appState.fertilizerData || [];
   const npkData = appState.npkData || {};
+  const noFertilizerRequired = appState.noFertilizerRequired || false;
 
   const [isLoading, setIsLoading] = useState(true);
   const [npkLoading, setNpkLoading] = useState(false);
@@ -193,7 +194,8 @@ const Fertilizer: React.FC = () => {
         ? Number(npkData.N).toFixed(2)
         : "No Data",
       desc:
-        npkData.plantanalysis_n !== undefined
+        // Only show desc if fertilizer is required (not "No Fertilizer required")
+        !noFertilizerRequired && npkData.plantanalysis_n !== undefined
           ? npkData.plantanalysis_n < 0
             ? `Excess: ${Math.abs(npkData.plantanalysis_n).toFixed(2)} kg/acre`
             : `Fertilizer Required: ${npkData.plantanalysis_n.toFixed(2)} kg/acre`
@@ -210,7 +212,8 @@ const Fertilizer: React.FC = () => {
         ? Number(npkData.P).toFixed(2)
         : "No Data",
       desc:
-        npkData.plantanalysis_p !== undefined
+        // Only show desc if fertilizer is required (not "No Fertilizer required")
+        !noFertilizerRequired && npkData.plantanalysis_p !== undefined
           ? npkData.plantanalysis_p < 0
             ? `Excess: ${Math.abs(npkData.plantanalysis_p).toFixed(2)} kg/acre`
             : `Fertilizer Required: ${npkData.plantanalysis_p.toFixed(2)} kg/acre`
@@ -227,7 +230,8 @@ const Fertilizer: React.FC = () => {
         ? Number(npkData.K).toFixed(2)
         : "No Data",
       desc:
-        npkData.plantanalysis_k !== undefined
+        // Only show desc if fertilizer is required (not "No Fertilizer required")
+        !noFertilizerRequired && npkData.plantanalysis_k !== undefined
           ? npkData.plantanalysis_k < 0
             ? `Excess: ${Math.abs(npkData.plantanalysis_k).toFixed(2)} kg/acre`
             : `Fertilizer Required: ${npkData.plantanalysis_k.toFixed(2)} kg/acre`
@@ -357,7 +361,6 @@ const Fertilizer: React.FC = () => {
                 <span className="text-4xl font-bold text-white">
                   {card.short}
                 </span>
-                <span className="text-xs text-white mt-1">{card.long}</span>
               </div>
               <div className={`text-4xl font-extrabold ${card.textColor} mb-2`}>
                 {card.value}

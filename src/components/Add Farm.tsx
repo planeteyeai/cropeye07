@@ -172,6 +172,55 @@ function RecenterMap({ latlng }: { latlng: [number, number] }) {
   return null;
 }
 
+// Component to handle map editing setup - enables editing programmatically
+function MapEditHandler({ 
+  featureGroup, 
+  editingPlotId, 
+  plots,
+  onEditStop 
+}: { 
+  featureGroup: React.RefObject<L.FeatureGroup>;
+  editingPlotId: string | null;
+  plots: Plot[];
+  onEditStop: () => void;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!editingPlotId || !featureGroup.current) return;
+
+    // Find the plot being edited
+    const plot = plots.find(p => p.id === editingPlotId);
+    if (!plot || !featureGroup.current.hasLayer(plot.layer)) return;
+
+    // Wait a bit for the EditControl to be ready, then click the edit button
+    const enableEditing = () => {
+      // Try to click the edit button programmatically
+      const editButton = document.querySelector('.leaflet-draw-edit-edit') as HTMLElement;
+      if (editButton && !editButton.classList.contains('leaflet-disabled')) {
+        editButton.click();
+      }
+    };
+
+    // Delay to ensure EditControl is ready
+    const timeoutId = setTimeout(enableEditing, 300);
+
+    // Listen for edit stop events
+    const handleEditStop = () => {
+      onEditStop();
+    };
+
+    map.on('draw:editstop', handleEditStop);
+
+    return () => {
+      clearTimeout(timeoutId);
+      map.off('draw:editstop', handleEditStop);
+    };
+  }, [map, featureGroup, editingPlotId, plots, onEditStop]);
+
+  return null;
+}
+
 function parseLatLngFromLink(link: string): [number, number] | null {
   // Google Maps: .../@lat,lng,... or .../place/lat,lng or ...?q=lat,lng
   const regex = /@(-?\d+\.\d+),(-?\d+\.\d+)/;
@@ -251,6 +300,7 @@ function AddFarm() {
   // Multiple plots state
   const [plots, setPlots] = useState<Plot[]>([]);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
+  const [editingPlotId, setEditingPlotId] = useState<string | null>(null);
   const [showPlotSavedMessage, setShowPlotSavedMessage] = useState<string | null>(null);
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
@@ -344,6 +394,17 @@ function AddFarm() {
 
     fetchCropTypes();
   }, []);
+
+  // Ensure all plot layers are in the FeatureGroup for editing
+  useEffect(() => {
+    if (featureGroupRef.current) {
+      plots.forEach((plot) => {
+        if (plot.layer && !featureGroupRef.current?.hasLayer(plot.layer)) {
+          featureGroupRef.current.addLayer(plot.layer);
+        }
+      });
+    }
+  }, [plots]);
 
   // Update filtered districts and talukas when state or district changes
   useEffect(() => {
@@ -677,6 +738,11 @@ function AddFarm() {
       setPlots((prev) => [...prev, newPlot]);
       setIsDrawingMode(false);
 
+      // Ensure layer is in feature group for potential editing
+      if (featureGroupRef.current && !featureGroupRef.current.hasLayer(layer)) {
+        featureGroupRef.current.addLayer(layer);
+      }
+
       // Add a label to the plot
       const bounds = layer.getBounds();
       const center = bounds.getCenter();
@@ -698,6 +764,145 @@ function AddFarm() {
         featureGroupRef.current.addLayer(plotMarker);
       }
     }
+  };
+
+  // Handle polygon edit events
+  const handleDrawEdited = (e: any) => {
+    const layers = e.layers;
+    layers.eachLayer((layer: L.Layer) => {
+      const geoJson = (layer as any).toGeoJSON();
+      
+      if (geoJson.geometry.type === "Polygon") {
+        const points = geoJson.geometry.coordinates[0].length - 1;
+        if (points < 3) {
+          alert("A polygon must have at least 3 points.");
+          return;
+        }
+
+        // Calculate updated area
+        const areaMetrics = calculateAreaMetricsFromGeometry(geoJson.geometry);
+
+        if (!areaMetrics) {
+          setAreaError("Unable to calculate area for this polygon.");
+          return;
+        }
+
+        setAreaError(null);
+
+        // Find and update the plot
+        setPlots((prev) =>
+          prev.map((plot) => {
+            if (plot.layer === layer) {
+              // Update plot geometry and area
+              const updatedPlot = {
+                ...plot,
+                geometry: geoJson.geometry,
+                area: {
+                  sqm: areaMetrics.sqm,
+                  ha: areaMetrics.ha,
+                  acres: areaMetrics.acres,
+                },
+                layer: layer,
+              };
+
+              // Update marker label
+              if (featureGroupRef.current) {
+                // Remove old markers
+                featureGroupRef.current.eachLayer((l) => {
+                  if (l instanceof L.Marker) {
+                    featureGroupRef.current?.removeLayer(l);
+                  }
+                });
+
+                // Re-add markers for all plots with updated numbers
+                prev.forEach((p, index) => {
+                  const plotToUse = p.id === plot.id ? updatedPlot : p;
+                  const bounds = (plotToUse.layer as any).getBounds();
+                  const center = bounds.getCenter();
+                  const plotNumber = index + 1;
+
+                  const plotMarker = L.marker(center, {
+                    icon: L.divIcon({
+                      className: "plot-label",
+                      html: `<div style="background: white; border: 2px solid #059669; border-radius: 4px; padding: 4px 8px; font-weight: bold; font-size: 12px; color: #059669;">Plot ${plotNumber}<br/>${plotToUse.area.acres.toFixed(
+                        2
+                      )} acres</div>`,
+                      iconSize: [80, 40],
+                      iconAnchor: [40, 20],
+                    }),
+                  });
+
+                  if (featureGroupRef.current) {
+                    featureGroupRef.current.addLayer(plotMarker);
+                  }
+                });
+              }
+
+              return updatedPlot;
+            }
+            return plot;
+          })
+        );
+      }
+    });
+  };
+
+  // Handle when editing is cancelled or finished
+  const handleDrawEditStop = () => {
+    if (editingPlotId) {
+      const plot = plots.find((p) => p.id === editingPlotId);
+      if (plot) {
+        const layer = plot.layer as any;
+        if (layer && layer.editing) {
+          layer.editing.disable();
+        }
+      }
+    }
+    setEditingPlotId(null);
+  };
+
+  // Handle fine-tune button click
+  const handleFineTunePlot = (plotId: string) => {
+    const plot = plots.find((p) => p.id === plotId);
+    if (!plot || !featureGroupRef.current) return;
+
+    // Set editing mode
+    setEditingPlotId(plotId);
+    setIsDrawingMode(false);
+
+    // Ensure the layer is in the feature group for editing
+    if (!featureGroupRef.current.hasLayer(plot.layer)) {
+      featureGroupRef.current.addLayer(plot.layer);
+    }
+
+    // Programmatically click the edit button in the toolbar after a short delay
+    // This ensures the EditControl is ready
+    setTimeout(() => {
+      const editButton = document.querySelector('.leaflet-draw-edit-edit') as HTMLElement;
+      if (editButton && !editButton.classList.contains('leaflet-disabled')) {
+        editButton.click();
+      } else {
+        // If button not found, try alternative selector
+        const altButton = document.querySelector('a[title*="Edit" i], a[title*="edit" i]') as HTMLElement;
+        if (altButton) {
+          altButton.click();
+        }
+      }
+    }, 300);
+  };
+
+  // Cancel fine-tune mode
+  const handleCancelFineTune = () => {
+    if (editingPlotId) {
+      const plot = plots.find((p) => p.id === editingPlotId);
+      if (plot) {
+        const layer = plot.layer as any;
+        if (layer && layer.editing) {
+          layer.editing.disable();
+        }
+      }
+    }
+    setEditingPlotId(null);
   };
 
   // Resolve crop_type_id from crop types API when plantation_Type is selected (fixes backend "get() returned more than one CropType" error)
@@ -767,9 +972,15 @@ function AddFarm() {
   };
 
   const handleDeletePlot = (plotId: string) => {
+    // Cancel editing if deleting the plot being edited
+    if (editingPlotId === plotId) {
+      setEditingPlotId(null);
+    }
+
     setPlots((prev) => {
       const plotToDelete = prev.find((p) => p.id === plotId);
       if (plotToDelete && featureGroupRef.current) {
+        // Remove the polygon layer
         featureGroupRef.current.removeLayer(plotToDelete.layer);
 
         // Also remove associated markers
@@ -2020,7 +2231,9 @@ The farmer can now login with Email credentials to access the dashboard and moni
                       <div
                         key={plot.id}
                         className={`bg-white p-3 sm:p-6 rounded border-2 ${
-                          plot.isSaved 
+                          editingPlotId === plot.id
+                            ? 'border-purple-500 bg-purple-50 ring-2 ring-purple-300'
+                            : plot.isSaved 
                             ? 'border-green-500 bg-green-50' 
                             : 'border-orange-400 bg-orange-50'
                         }`}
@@ -2035,7 +2248,11 @@ The farmer can now login with Email credentials to access the dashboard and moni
                                 {plot.area.acres.toFixed(2)} acres
                               </div>
                             </div>
-                            {plot.isSaved ? (
+                            {editingPlotId === plot.id ? (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                ✏️ Editing
+                              </span>
+                            ) : plot.isSaved ? (
                               <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                 ✓ Saved
                               </span>
@@ -2046,22 +2263,43 @@ The farmer can now login with Email credentials to access the dashboard and moni
                             )}
                           </div>
                           <div className="flex items-center gap-2">
-                            {!plot.isSaved && (
+                            {editingPlotId === plot.id ? (
                               <button
                                 type="button"
-                                onClick={() => handleSavePlot(plot.id)}
-                                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs sm:text-sm font-medium"
+                                onClick={handleCancelFineTune}
+                                className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs sm:text-sm font-medium"
                               >
-                                💾 Save Plot
+                                ✕ Cancel Edit
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleFineTunePlot(plot.id)}
+                                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs sm:text-sm font-medium"
+                                >
+                                  ✏️ Fine Tune
+                                </button>
+                                {!plot.isSaved && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSavePlot(plot.id)}
+                                    className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs sm:text-sm font-medium"
+                                  >
+                                    💾 Save Plot
+                                  </button>
+                                )}
+                              </>
+                            )}
+                            {editingPlotId !== plot.id && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePlot(plot.id)}
+                                className="text-red-600 hover:text-red-800 p-1"
+                              >
+                                <Trash2 size={14} className="sm:w-4 sm:h-4" />
                               </button>
                             )}
-                            <button
-                              type="button"
-                              onClick={() => handleDeletePlot(plot.id)}
-                              className="text-red-600 hover:text-red-800 p-1"
-                            >
-                              <Trash2 size={14} className="sm:w-4 sm:h-4" />
-                            </button>
                           </div>
                         </div>
 
@@ -2193,6 +2431,15 @@ The farmer can now login with Email credentials to access the dashboard and moni
                 </div>
               )}
 
+              {editingPlotId && (
+                <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-purple-50 border border-purple-200 rounded">
+                  <span className="text-xs sm:text-sm text-purple-700">
+                    <b>✏️ Edit Mode Active:</b> The edit mode has been activated. You can now <strong>click and drag the vertices (corners)</strong> of the highlighted polygon to adjust its shape. 
+                    The area will be automatically recalculated when you finish editing. Click the <strong>"Save" button</strong> in the map toolbar when you're done, or click "Cancel Edit" below to exit edit mode.
+                  </span>
+                </div>
+              )}
+
               {/* Location Link Input */}
               <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
                 <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 items-stretch sm:items-center">
@@ -2313,6 +2560,14 @@ The farmer can now login with Email credentials to access the dashboard and moni
                     zoomOffset={0}
                   />
                   <RecenterMap latlng={center} />
+                  
+                  {/* Map Edit Handler */}
+                  <MapEditHandler 
+                    featureGroup={featureGroupRef}
+                    editingPlotId={editingPlotId}
+                    plots={plots}
+                    onEditStop={handleDrawEditStop}
+                  />
 
                   {/* Location Pin Marker */}
                   {locationPin && (
@@ -2338,12 +2593,15 @@ The farmer can now login with Email credentials to access the dashboard and moni
                   )}
 
                   <FeatureGroup ref={featureGroupRef}>
-                    {isDrawingMode && (
+                    {(isDrawingMode || plots.length > 0) && (
                       <EditControl
                         position="topright"
                         onCreated={handleDrawCreated}
+                        onEdited={handleDrawEdited}
+                        onEditStop={handleDrawEditStop}
+                        onDrawStop={() => setIsDrawingMode(false)}
                         draw={{
-                          polygon: true,
+                          polygon: isDrawingMode,
                           rectangle: false,
                           polyline: false,
                           circle: false,
@@ -2351,8 +2609,8 @@ The farmer can now login with Email credentials to access the dashboard and moni
                           circlemarker: false,
                         }}
                         edit={{
-                          edit: false,
-                          remove: true,
+                          edit: plots.length > 0 ? {} : false, // Show edit button when there are plots (object, not boolean)
+                          remove: !editingPlotId && !isDrawingMode ? {} : false,
                         }}
                       />
                     )}
