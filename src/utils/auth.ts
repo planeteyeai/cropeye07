@@ -81,11 +81,14 @@ export const clearAuthData = (): void => {
   localStorage.removeItem(IS_AUTHENTICATED_KEY);
 };
 
-// Clear ALL localStorage data (used on logout)
+// Clear ALL localStorage and sessionStorage (used on logout - no local cache remains)
 export const clearAllLocalStorage = (): void => {
-  // Clear all localStorage data
-  localStorage.clear();
-  console.log('✅ All localStorage data cleared on logout');
+  try {
+    localStorage.clear();
+    sessionStorage.clear();
+  } catch (e) {
+    // Ignore if storage is disabled (e.g. private mode)
+  }
 };
 
 // Set all authentication data after successful login

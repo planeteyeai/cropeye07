@@ -6,6 +6,7 @@ import {
   getRefreshToken,
   setRefreshToken,
   clearAuthData,
+  clearAllLocalStorage,
 } from "./utils/auth";
 import { checkAndRefreshToken, isTokenExpired } from "./utils/tokenManager";
 
@@ -148,10 +149,10 @@ api.interceptors.response.use(
               return api(originalRequest);
             }
           } catch (refreshError: any) {
-            // Refresh failed - clear auth and redirect to login
+            // Refresh failed - clear all storage and redirect to login
             processQueue(refreshError, null);
             isRefreshing = false;
-            clearAuthData();
+            clearAllLocalStorage();
 
             // Redirect to login page
             if (window.location.pathname !== "/login") {
@@ -161,10 +162,10 @@ api.interceptors.response.use(
             return Promise.reject(refreshError);
           }
         } else {
-          // No refresh token - clear auth and redirect
+          // No refresh token - clear all storage and redirect
           processQueue(error, null);
           isRefreshing = false;
-          clearAuthData();
+          clearAllLocalStorage();
 
           if (window.location.pathname !== "/login") {
             window.location.href = "/login";
