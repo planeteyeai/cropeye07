@@ -1224,14 +1224,13 @@ const convertToBulkFormat = (formData: any, plots: any[]) => {
           : {
               crop_type_name:
                 plot.crop_Type || plot.crop_type_name || "Sugarcane",
-              plantation_type:
-                plot.plantation_Type || plot.plantation_type || "adsali",
+              plantation_type: toApiPlantationType(plot.plantation_Type),
             }),
         ...(plot.crop_variety && plot.crop_variety.trim()
           ? { crop_variety: plot.crop_variety.trim() }
           : {}),
         plantation_date: plot.plantation_Date || "2024-01-15",
-        planting_method: plot.plantation_Method || "3_bud",
+        planting_method: toApiPlantingMethod(plot.plantation_Method),
       },
       irrigation: {
         irrigation_type_name:
@@ -1348,6 +1347,26 @@ export const registerFarmerAllInOneOnly = async (
   }
 };
 
+// Normalize form display values to backend API format (avoids "other" when backend expects e.g. 3_bud)
+const toApiPlantationType = (display: string | undefined): string => {
+  if (!display || typeof display !== "string") return "adsali";
+  const v = display.trim().toLowerCase();
+  if (["adsali", "suru", "ratoon"].includes(v)) return v;
+  if (v === "pre-seasonal" || v === "preseasonal") return "pre-seasonal";
+  return v.replace(/\s+/g, "_");
+};
+
+const toApiPlantingMethod = (display: string | undefined): string => {
+  if (!display || typeof display !== "string") return "3_bud";
+  const v = display.trim().toLowerCase();
+  if (v === "3 bud" || v === "3_bud" || v === "3-bud") return "3_bud";
+  if (v === "2 bud" || v === "2_bud" || v === "2-bud") return "2_bud";
+  if (v === "1 bud (stip method)" || v.includes("stip")) return "1_bud_stip";
+  if (v === "1 bud" || v === "1_bud" || v === "1-bud") return "1_bud";
+  // Fallback: replace spaces with underscore for any other display value
+  return v.replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+};
+
 // Helper function to convert a single plot to all-in-one API format
 const convertSinglePlotToAllInOneFormat = (formData: any, plot: any) => {
   // Calculate center coordinates for location
@@ -1413,12 +1432,12 @@ const convertSinglePlotToAllInOneFormat = (formData: any, plot: any) => {
         ? { crop_type_id: plot.crop_type_id }
         : {
             crop_type_name: "Sugarcane",
-            plantation_type: plot.plantation_Type || "adsali",
+            plantation_type: toApiPlantationType(plot.plantation_Type),
           }),
       ...(plot.crop_variety && plot.crop_variety.trim()
         ? { crop_variety: plot.crop_variety.trim() }
         : {}),
-      planting_method: plot.plantation_Method || "3_bud",
+      planting_method: toApiPlantingMethod(plot.plantation_Method),
     },
     irrigation: {
       irrigation_type_name: plot.irrigation_Type || "drip",
