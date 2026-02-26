@@ -118,8 +118,19 @@ const getTalukasByDistrict = (state: string, district: string): string[] => {
   return locationData[state][district] || [];
 };
 
-const plantationTypes = ["Adsali", "Suru", "Pre-seasonal", "Ratoon"];
-const plantationMethods = ["3 bud", "2 bud", "1 bud", "1 bud (Stip Method)"];
+// Canonical display labels (one per type, no repeated pre-seasonal — only pre_seasonal)
+const PLANTATION_TYPE_DISPLAY: Record<string, string> = {
+  adsali: "Adsali",
+  suru: "Suru",
+  ratoon: "Ratoon",
+  "pre-seasonal": "pre_seasonal",
+  pre_seasonal: "pre_seasonal",
+  preseasonal: "pre_seasonal",
+};
+const PLANTATION_TYPE_ORDER = ["Adsali", "Suru", "pre_seasonal", "Ratoon"];
+
+// Only underscore (API) format for method - no "1 bud" / "1_bud" duplicates
+const PLANTATION_METHOD_OPTIONS = ["3_bud", "2_bud", "1_bud", "1_bud_stip"];
 
 const SQUARE_METERS_PER_ACRE = 4046.8564224;
 
@@ -341,23 +352,51 @@ function AddFarm() {
   // Email validation pattern
   const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
-  // Safe dropdown options: strip placeholder-like values from API and merge with fallback so lists are always complete
-  const isPlaceholderLike = (s: string) => !s || typeof s !== "string" || String(s).trim().toLowerCase().startsWith("select");
+  // Normalize plantation type to canonical key for deduplication (Adsali/adsali -> one option)
+  const toPlantationTypeKey = (s: string) =>
+    String(s)
+      .trim()
+      .toLowerCase()
+      .replace(/_/g, "-")
+      .replace(/-+/g, "-");
   const getPlantationTypeOptions = (): string[] => {
-    const fromApi =
-      cropTypes.length > 0
-        ? cropTypes.map((c) => c.plantation_type).filter((v): v is string => v != null && v !== "" && !isPlaceholderLike(v))
-        : [];
-    const merged = [...new Set([...plantationTypes, ...fromApi.map((s) => String(s).trim())])];
-    return merged.filter((s) => s.length > 0).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    const seen = new Set<string>();
+    const result: string[] = [];
+    const add = (raw: string) => {
+      const key = toPlantationTypeKey(raw);
+      const display = PLANTATION_TYPE_DISPLAY[key] || raw.trim() || null;
+      if (display && !seen.has(key)) {
+        seen.add(key);
+        result.push(display);
+      }
+    };
+    PLANTATION_TYPE_ORDER.forEach(add);
+    if (cropTypes.length > 0) {
+      cropTypes.forEach((c) => {
+        const v = c.plantation_type;
+        if (v != null && String(v).trim() && !String(v).trim().toLowerCase().startsWith("select")) add(v);
+      });
+    }
+    const ordered = PLANTATION_TYPE_ORDER.filter((l) => result.includes(l));
+    const rest = [...new Set(result)].filter((l) => !PLANTATION_TYPE_ORDER.includes(l)).sort();
+    return [...ordered, ...rest];
   };
+  // Only underscore (API) options - no "1 bud" / "1_bud" duplicates
   const getPlantationMethodOptions = (): string[] => {
     const fromApi =
       cropTypes.length > 0
-        ? cropTypes.map((c) => c.planting_method).filter((v): v is string => v != null && v !== "" && !isPlaceholderLike(v))
+        ? cropTypes
+            .map((c) => c.planting_method)
+            .filter(
+              (v): v is string =>
+                v != null &&
+                String(v).trim() !== "" &&
+                !String(v).trim().toLowerCase().startsWith("select") &&
+                String(v).includes("_")
+            )
         : [];
-    const merged = [...new Set([...plantationMethods, ...fromApi.map((s) => String(s).trim())])];
-    return merged.filter((s) => s.length > 0).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    const combined = [...new Set([...PLANTATION_METHOD_OPTIONS, ...fromApi.map((s) => String(s).trim())])];
+    return combined.filter((s) => s.length > 0 && s !== "other").sort((a, b) => a.localeCompare(b));
   };
 
   const mapRef = useRef(null);

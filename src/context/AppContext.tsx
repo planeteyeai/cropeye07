@@ -24,6 +24,8 @@ interface AppContextType {
   setCached: (key: string, data: any) => void;
   selectedPlotName: string | null;
   setSelectedPlotName: (plotName: string | null) => void;
+  /** Clear all app state and cache (call on logout so next user sees no previous data) */
+  clearAppStateOnLogout: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -62,6 +64,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  // Clear all in-memory state and cache (used on logout so Soil Analysis, Fertilizer, etc. don't show previous user's data)
+  const clearAppStateOnLogout = () => {
+    setAppState({ selectedPlotName: null });
+    setGlobalCache({});
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -73,6 +81,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         setCached,
         selectedPlotName: appState.selectedPlotName || null,
         setSelectedPlotName,
+        clearAppStateOnLogout,
       }}
     >
       {children}

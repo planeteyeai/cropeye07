@@ -19,6 +19,7 @@ import {
 } from "../utils/auth";
 import { getCurrentUser } from "../api";
 import { initializeTokenRefresh } from "../utils/tokenManager";
+import { useAppContext } from "../context/AppContext";
 
 export type UserRole =
   | "manager"
@@ -29,6 +30,7 @@ export type UserRole =
 
 const AppRoutesContent: React.FC = () => {
   const navigate = useNavigate();
+  const { clearAppStateOnLogout } = useAppContext();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -180,14 +182,13 @@ const AppRoutesContent: React.FC = () => {
   };
 
   const handleLogout = () => {
-    // Clear ALL localStorage data (auth, cache, app state, etc.)
+    // Clear in-memory app state (Soil Analysis, Fertilizer, selected plot, etc.) so next user doesn't see previous data
+    clearAppStateOnLogout();
+    // Clear ALL localStorage data (auth, cache, etc.)
     clearAllLocalStorage();
 
-    // Reset state
     setUserRole(null);
     setIsAuthenticated(false);
-    
-    // Redirect to login page
     navigate("/login");
   };
 
