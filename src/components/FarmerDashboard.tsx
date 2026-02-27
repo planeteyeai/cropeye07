@@ -957,7 +957,13 @@ const FarmerDashboard: React.FC = () => {
               <Calendar className="w-6 h-6 text-orange-600" />
               <div className="text-right">
                 <div className="text-2xl font-bold text-gray-800">
-                  {metrics.daysToHarvest !== null ? metrics.daysToHarvest : "-"}
+                  {metrics.growthStage?.toLowerCase().includes("harvested") ? (
+                    0
+                  ) : metrics.daysToHarvest !== null ? (
+                    metrics.daysToHarvest
+                  ) : (
+                    "-"
+                  )}
                 </div>
                 <div className="text-sm font-semibold text-orange-600">
                   Days
@@ -1444,24 +1450,30 @@ const FarmerDashboard: React.FC = () => {
 
         {/* Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Expected Yield Comparison */}
-          <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Target className="w-5 h-5 text-purple-600" />
-              <h3 className="text-sm font-semibold text-gray-800">
-                Sugarcane Yield Projection
-              </h3>
-            </div>
-            <div className="flex flex-col items-center">
-              <PieChartWithNeedle
-                value={metrics.sugarYieldMean || 0}
-                max={metrics.sugarYieldMax || 400}
-                title="Sugarcane Yield Forecast"
-                unit=" T/acre"
-                width={260}
-                height={130}
-              />
-              <div className="mt-2 text-center">
+          {/* First Row: Yield and Biomass Cards - Horizontally Aligned */}
+          <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Expected Yield Comparison */}
+            <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-4 flex flex-col">
+              <div className="flex items-center gap-2 mb-3">
+                <Target className="w-5 h-5 text-purple-600" />
+                <h3 className="text-sm font-semibold text-gray-800">
+                  Sugarcane Yield Projection
+                </h3>
+              </div>
+              <div className="h-48 sm:h-56 md:h-64 flex flex-col items-center justify-center relative flex-grow">
+                <PieChartWithNeedle
+                  value={metrics.sugarYieldMean || 0}
+                  max={metrics.sugarYieldMax || 400}
+                  title="Sugarcane Yield Forecast"
+                  unit=" T/acre"
+                  width={260}
+                  height={130}
+                />
+              </div>
+              <p className="text-sm text-gray-700 font-medium text-center mb-2 mt-2">
+                Sugarcane Yield Forecast
+              </p>
+              <div className="text-center">
                 <div className="flex items-center justify-center gap-2 text-xs flex-wrap">
                   <div className="flex items-center gap-1">
                     <div className="w-2 h-2 rounded bg-red-500"></div>
@@ -1492,86 +1504,84 @@ const FarmerDashboard: React.FC = () => {
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Biomass Performance */}
-          <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-5 sm:p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Activity className="w-6 h-6 sm:w-7 sm:h-7 text-green-600" />
-              <h3 className="text-base sm:text-lg font-semibold text-gray-800">
-                Biomass Performance
-              </h3>
-            </div>
-            <div className="h-48 sm:h-56 md:h-64 flex flex-col items-center justify-center relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={biomassData}
-                    cx="50%"
-                    cy="80%"
-                    startAngle={180}
-                    endAngle={0}
-                    outerRadius={110}
-                    innerRadius={70}
-                    dataKey="value"
-                    labelLine={false}
-                  >
-                    {biomassData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <text
-                    x="50%"
-                    y="70%"
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    className="text-base sm:text-lg font-semibold fill-blue-600"
-                  >
-                    {totalBiomass.toFixed(1)} T/acre
-                  </text>
-                  <Tooltip
-                    wrapperStyle={{ zIndex: 50 }}
-                    contentStyle={{ fontSize: "12px" }}
-                    formatter={(value: number, name: string) => [
-                      `${value.toFixed(1)} T/acre`,
-                      name,
-                    ]}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <p className="text-sm sm:text-base text-gray-700 font-medium text-center mb-3">
-              Biomass Distribution Chart
-            </p>
-            <div className="text-center">
-              <div className="flex items-center justify-center gap-3 text-sm sm:text-base flex-wrap">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded bg-blue-500"></div>
-                  <span className="text-blue-700 font-semibold">
-                    Total: {totalBiomass.toFixed(1)} T/acre
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded bg-green-500"></div>
-                  <span className="text-green-700 font-semibold">
-                    Underground: {currentBiomass.toFixed(1)} T/acre
-                  </span>
+            {/* Biomass Performance */}
+            <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-4 flex flex-col">
+              <div className="flex items-center gap-2 mb-3">
+                <Activity className="w-5 h-5 text-green-600" />
+                <h3 className="text-sm font-semibold text-gray-800">
+                  Biomass Performance
+                </h3>
+              </div>
+              <div className="h-48 sm:h-56 md:h-64 flex flex-col items-center justify-center relative flex-grow">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={biomassData}
+                      cx="50%"
+                      cy="80%"
+                      startAngle={180}
+                      endAngle={0}
+                      outerRadius={110}
+                      innerRadius={70}
+                      dataKey="value"
+                      labelLine={false}
+                    >
+                      {biomassData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <text
+                      x="50%"
+                      y="70%"
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      className="text-base sm:text-lg font-semibold fill-blue-600"
+                    >
+                      {totalBiomass.toFixed(1)} T/acre
+                    </text>
+                    <Tooltip
+                      wrapperStyle={{ zIndex: 50 }}
+                      contentStyle={{ fontSize: "12px" }}
+                      formatter={(value: number, name: string) => [
+                        `${value.toFixed(1)} T/acre`,
+                        name,
+                      ]}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <p className="text-sm text-gray-700 font-medium text-center mb-2 mt-2">
+                Biomass Distribution Chart
+              </p>
+              <div className="text-center">
+                <div className="flex items-center justify-center gap-3 text-xs flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded bg-blue-500"></div>
+                    <span className="text-blue-700 font-semibold">
+                      Total: {totalBiomass.toFixed(1)} T/acre
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded bg-green-500"></div>
+                    <span className="text-green-700 font-semibold">
+                      Underground: {currentBiomass.toFixed(1)} T/acre
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Recovery Rate Comparison */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-4">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-3">
-              <div className="flex items-center gap-2 mb-2 lg:mb-0">
-                <Users className="w-5 h-5 text-blue-600" />
-                <h3 className="text-sm font-semibold text-gray-800">
-                  Recovery Rate Comparison
-                </h3>
-              </div>
+          <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-4 flex flex-col">
+            <div className="flex items-center gap-2 mb-3">
+              <Users className="w-5 h-5 text-blue-600" />
+              <h3 className="text-sm font-semibold text-gray-800">
+                Recovery Rate Comparison
+              </h3>
             </div>
-            <div className="h-36 flex items-center justify-center">
+            <div className="h-48 sm:h-56 md:h-64 flex flex-col items-center justify-center relative flex-grow">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={recoveryComparisonData}
@@ -1594,15 +1604,25 @@ const FarmerDashboard: React.FC = () => {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <div className="mt-2 text-center text-xs text-gray-600">
-              <span className="font-semibold text-green-700">
-                Your Farm: {(metrics.recovery || 0).toFixed(1)}%
-              </span>
-              {" vs "}
-              <span className="font-semibold text-blue-700">
-                Regional Avg:{" "}
-                {OTHER_FARMERS_RECOVERY.regional_average.toFixed(1)}%
-              </span>
+            <p className="text-sm text-gray-700 font-medium text-center mb-2 mt-2">
+              Recovery Rate Comparison
+            </p>
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-3 text-xs flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded bg-green-500"></div>
+                  <span className="text-green-700 font-semibold">
+                    Your Farm: {(metrics.recovery || 0).toFixed(1)}%
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded bg-blue-500"></div>
+                  <span className="text-blue-700 font-semibold">
+                    Regional Avg:{" "}
+                    {OTHER_FARMERS_RECOVERY.regional_average.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>

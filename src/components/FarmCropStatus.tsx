@@ -1347,6 +1347,8 @@ const OfficerDashboard: React.FC = () => {
                 <div className="text-2xl font-bold text-gray-800">
                   {loadingData ? (
                     <Loader2 className="w-5 h-5 animate-spin text-orange-600" />
+                  ) : metrics.growthStage?.toLowerCase().includes("harvested") ? (
+                    0
                   ) : metrics.daysToHarvest !== null ? (
                     metrics.daysToHarvest
                   ) : (
