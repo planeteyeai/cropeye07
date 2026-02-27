@@ -1,14 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { AddStock } from './AddStock'; // Assuming AddStock is in the same folder
+import React, { useState, useEffect } from "react";
+import { AddStock } from "./AddStock"; // Assuming AddStock is in the same folder
 
 interface InventoryItem {
   id?: number;
   itemName: string;
   Make: string;
-  itemType: 'Logistic' | 'Transport' | 'Equipment' | 'Office Purpose' | 'Storage' | 'Processing';
+  itemType:
+    | "Logistic"
+    | "Transport"
+    | "Equipment"
+    | "Office Purpose"
+    | "Storage"
+    | "Processing";
   yearMake: string;
   estimateCost: string;
-  status: 'Not working' | 'Working' | 'underRepair';
+  status: "Not working" | "Working" | "underRepair";
   remark: string;
 }
 
@@ -18,10 +24,10 @@ const ParentComponent: React.FC = () => {
 
   // Fetch initial stocks from the API (you can modify this if your API supports it)
   useEffect(() => {
-    fetch('http://localhost:5000/Stocklist')
-      .then(response => response.json())
-      .then(data => setStocks(data))
-      .catch(error => console.error('Error fetching stock data:', error));
+    fetch("https://cropeye-server-flyio.onrender.com/api/Stocklist")
+      .then((response) => response.json())
+      .then((data) => setStocks(data))
+      .catch((error) => console.error("Error fetching stock data:", error));
   }, []);
 
   return (
@@ -36,8 +42,10 @@ const ParentComponent: React.FC = () => {
       <div>
         <h3>Stocks:</h3>
         <ul>
-          {stocks.map(stock => (
-            <li key={stock.id}>{stock.itemName} - {stock.status}</li>
+          {stocks.map((stock) => (
+            <li key={stock.id}>
+              {stock.itemName} - {stock.status}
+            </li>
           ))}
         </ul>
       </div>

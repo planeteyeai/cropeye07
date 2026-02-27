@@ -5,6 +5,7 @@ import {
   setAuthToken,
   setRefreshToken,
   clearAuthData,
+  clearAllLocalStorage,
 } from "./auth";
 import axios from "axios";
 
@@ -112,10 +113,10 @@ export const refreshAccessToken = async (): Promise<string | null> => {
   } catch (error: any) {
     console.error("❌ Token refresh failed:", error);
 
-    // If refresh token is invalid/expired, clear all auth data
+    // If refresh token is invalid/expired, clear all storage (no cache left)
     if (error.response?.status === 401 || error.response?.status === 403) {
-      console.warn("Refresh token is invalid, clearing auth data");
-      clearAuthData();
+      console.warn("Refresh token is invalid, clearing all storage");
+      clearAllLocalStorage();
 
       // Redirect to login if not already there
       if (window.location.pathname !== "/login") {

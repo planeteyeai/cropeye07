@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   format,
   startOfMonth,
@@ -8,11 +8,16 @@ import {
   isToday,
   addMonths,
   subMonths,
-} from 'date-fns';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { getContactDetails } from '../api';
+  parseISO,
+  isSameDay,
+} from "date-fns";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { getContactDetails } from "../api";
 
-const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://cropeye-server-flyio.onrender.com/api";
+const FIELD_OFFICER_TASKS_URL = `${API_BASE.replace(/\/$/, "")}/fieldofficertasks`;
+
+const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 interface Task {
   id: string;
@@ -33,7 +38,11 @@ interface FieldOfficer {
   phone: string;
 }
 
-const CalendarView: React.FC = () => {
+interface CalendarViewProps {
+  currentUser?: { id: number; role: string; name: string } | null;
+}
+
+const CalendarView: React.FC<CalendarViewProps> = ({ currentUser }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -42,25 +51,36 @@ const CalendarView: React.FC = () => {
   const [fieldOfficers, setFieldOfficers] = useState<FieldOfficer[]>([]);
   const [loadingFieldOfficers, setLoadingFieldOfficers] = useState(false);
 
-  const [task, setTask] = useState<Omit<Task, 'id'>>({
-    itemName: '',
-    description: '',
-    fieldOfficer: '',
-    team: '',
-    selectedDate: '',
-    message: '',
+  const [task, setTask] = useState<Omit<Task, "id">>({
+    itemName: "",
+    description: "",
+    fieldOfficer: "",
+    team: "",
+    selectedDate: "",
+    message: "",
   });
 
   useEffect(() => {
-    // Fetch tasks from backend API
-    fetch('http://localhost:5000/fieldofficertasks')
+    fetch(FIELD_OFFICER_TASKS_URL)
       .then((res) => res.json())
       .then((data) => {
-        // Only show tasks not assigned by the manager (or filter as needed)
-        setTasks(data.filter((t: any) => t.assignedBy !== 'manger@124'));
+        const raw = Array.isArray(data) ? data : [];
+        // Field officer: show only tasks assigned to this user (by username)
+        if (currentUser?.role === "fieldofficer" && currentUser?.name) {
+          setTasks(
+            raw.filter(
+              (t: any) =>
+                (t.fieldOfficer && String(t.fieldOfficer).trim() === String(currentUser.name).trim()) ||
+                (t.assigned_to_username && String(t.assigned_to_username).trim() === String(currentUser.name).trim())
+            )
+          );
+        } else {
+          // Manager or no user: show all tasks (excluding legacy test filter if needed)
+          setTasks(raw.filter((t: any) => t.assignedBy !== "manger@124"));
+        }
       })
       .catch(() => setTasks([]));
-  }, []);
+  }, [currentUser?.id, currentUser?.role, currentUser?.name]);
 
   // Fetch field officers for the dropdown
   useEffect(() => {
@@ -69,31 +89,40 @@ const CalendarView: React.FC = () => {
         setLoadingFieldOfficers(true);
         const response = await getContactDetails();
         let fieldOfficersData: FieldOfficer[] = [];
-        
+
         if (response.data && response.data.contacts) {
           // Extract field officers from the contacts object
-          if (response.data.contacts.field_officers && Array.isArray(response.data.contacts.field_officers)) {
-            fieldOfficersData = response.data.contacts.field_officers.map((officer: any) => ({
-              id: officer.id,
-              name: officer.name || `${officer.first_name || ''} ${officer.last_name || ''}`.trim() || officer.username || 'Unknown',
-              username: officer.username || 'unknown',
-              email: officer.email || 'N/A',
-              phone: officer.phone || officer.phone_number || 'N/A'
-            }));
+          if (
+            response.data.contacts.field_officers &&
+            Array.isArray(response.data.contacts.field_officers)
+          ) {
+            fieldOfficersData = response.data.contacts.field_officers.map(
+              (officer: any) => ({
+                id: officer.id,
+                name:
+                  officer.name ||
+                  `${officer.first_name || ""} ${officer.last_name || ""}`.trim() ||
+                  officer.username ||
+                  "Unknown",
+                username: officer.username || "unknown",
+                email: officer.email || "N/A",
+                phone: officer.phone || officer.phone_number || "N/A",
+              }),
+            );
           }
         }
-        
+
         setFieldOfficers(fieldOfficersData);
       } catch (error) {
         // Fallback to sample data if API fails
         const sampleFieldOfficers: FieldOfficer[] = [
           {
             id: 1,
-            name: 'John Doe',
-            username: 'filed@crops',
-            email: 'john.doe@example.com',
-            phone: '+1234567890'
-          }
+            name: "John Doe",
+            username: "filed@crops",
+            email: "john.doe@example.com",
+            phone: "+1234567890",
+          },
         ];
         setFieldOfficers(sampleFieldOfficers);
       } finally {
@@ -108,19 +137,19 @@ const CalendarView: React.FC = () => {
   const start = startOfMonth(currentDate);
   const end = endOfMonth(currentDate);
   const monthDays = eachDayOfInterval({ start, end });
-  
+
   // Create days array with empty boxes for proper calendar grid
   const days: (Date | null)[] = [];
   const firstDayOfWeek = start.getDay();
-  
+
   // Add empty boxes for days before the first day of the month
   for (let i = 0; i < firstDayOfWeek; i++) {
     days.push(null);
   }
-  
+
   // Add all days of the current month
-  monthDays.forEach(day => days.push(day));
-  
+  monthDays.forEach((day) => days.push(day));
+
   // Add empty boxes to complete the last week if needed
   const totalDaysInGrid = days.length;
   const remainingDaysInLastWeek = 7 - (totalDaysInGrid % 7);
@@ -137,13 +166,13 @@ const CalendarView: React.FC = () => {
   };
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >,
   ) => {
     setTask({ ...task, [e.target.name]: e.target.value });
   };
 
-
-  
   const handleAssignTask = () => {
     setIsSubmitting(true);
     const now = new Date().toISOString();
@@ -152,28 +181,28 @@ const CalendarView: React.FC = () => {
       ...task,
       assignedTime: (task as any).assignedTime || now,
     };
-    fetch('http://localhost:5000/fieldofficertasks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    fetch(FIELD_OFFICER_TASKS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(newTask),
     })
       .then((res) => res.json())
       .then((createdTask) => {
         setTasks((prev) => [...prev, createdTask]);
-        alert('Task Assigned!');
+        alert("Task Assigned!");
         setShowForm(false);
         setSelectedDate(null);
         setTask({
-          itemName: '',
-          description: '',
-          fieldOfficer: '',
-          team: '',
-          selectedDate: '',
-          message: '',
+          itemName: "",
+          description: "",
+          fieldOfficer: "",
+          team: "",
+          selectedDate: "",
+          message: "",
         });
       })
       .catch(() => {
-        alert('Error assigning task!');
+        alert("Error assigning task!");
       })
       .finally(() => setIsSubmitting(false));
   };
@@ -195,7 +224,7 @@ const CalendarView: React.FC = () => {
             <ChevronLeft className="w-5 h-5" />
           </button>
           <h2 className="text-xl font-semibold text-gray-800">
-            {format(currentDate, 'MMMM yyyy')}
+            {format(currentDate, "MMMM yyyy")}
           </h2>
           <button
             onClick={() => setCurrentDate(addMonths(currentDate, 1))}
@@ -208,7 +237,10 @@ const CalendarView: React.FC = () => {
         {/* Weekday Headers */}
         <div className="grid grid-cols-7 gap-0 mb-4">
           {weekDays.map((day) => (
-            <div key={day} className="text-center font-medium text-gray-600 py-3 text-sm border-b border-gray-200">
+            <div
+              key={day}
+              className="text-center font-medium text-gray-600 py-3 text-sm border-b border-gray-200"
+            >
               {day}
             </div>
           ))}
@@ -228,24 +260,54 @@ const CalendarView: React.FC = () => {
                 </div>
               );
             }
-            
+
             const isTodayDate = isToday(day);
             const isCurrentMonth = isSameMonth(day, currentDate);
-            
+            const dayTasks = tasks.filter((t) => {
+              if (!t.selectedDate) return false;
+              try {
+                const d = typeof t.selectedDate === "string" && t.selectedDate.includes("T")
+                  ? parseISO(t.selectedDate)
+                  : new Date(t.selectedDate);
+                return isSameDay(day, d);
+              } catch {
+                return false;
+              }
+            });
+
             return (
               <button
                 key={day.toString()}
                 onClick={() => handleDateClick(day)}
-                className={`h-16 sm:h-20 lg:h-24 border-r border-b border-gray-200 last:border-r-0 flex items-center justify-center transition-colors cursor-pointer
-                  ${isTodayDate ? 'bg-blue-100 text-blue-600 font-semibold' : 
-                    'hover:bg-gray-50 bg-white text-gray-700'}
-                  ${!isCurrentMonth ? 'text-gray-400' : ''}
+                className={`h-16 sm:h-20 lg:h-24 border-r border-b border-gray-200 last:border-r-0 flex flex-col items-center justify-center transition-colors cursor-pointer
+                  ${
+                    isTodayDate
+                      ? "bg-blue-100 text-blue-600 font-semibold"
+                      : "hover:bg-gray-50 bg-white text-gray-700"
+                  }
+                  ${!isCurrentMonth ? "text-gray-400" : ""}
                 `}
               >
-                <span className={`text-sm sm:text-base
-                  ${isTodayDate ? 'font-bold' : 'font-medium'}`}>
-                  {format(day, 'd')}
+                <span
+                  className={`text-sm sm:text-base
+                  ${isTodayDate ? "font-bold" : "font-medium"}`}
+                >
+                  {format(day, "d")}
                 </span>
+                {dayTasks.length > 0 && (
+                  <span className="mt-0.5 flex gap-0.5 flex-wrap justify-center max-w-full">
+                    {dayTasks.slice(0, 3).map((t) => (
+                      <span
+                        key={t.id}
+                        className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0"
+                        title={t.itemName || t.description}
+                      />
+                    ))}
+                    {dayTasks.length > 3 && (
+                      <span className="text-[10px] text-gray-500">+{dayTasks.length - 3}</span>
+                    )}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -293,7 +355,7 @@ const CalendarView: React.FC = () => {
               className="w-full mb-4 p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Select Field Officer</option>
-              {fieldOfficers.map(officer => (
+              {fieldOfficers.map((officer) => (
                 <option key={officer.id} value={officer.username}>
                   {officer.name} ({officer.username})
                 </option>
@@ -322,7 +384,7 @@ const CalendarView: React.FC = () => {
           <label className="block mb-2 font-medium">Selected Date</label>
           <input
             type="text"
-            value={selectedDate ? selectedDate.toDateString() : ''}
+            value={selectedDate ? selectedDate.toDateString() : ""}
             disabled
             className="w-full mb-4 p-2 border border-gray-300 rounded bg-gray-100"
           />
@@ -341,10 +403,10 @@ const CalendarView: React.FC = () => {
               onClick={handleAssignTask}
               disabled={isSubmitting}
               className={`w-1/2 ${
-                isSubmitting ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'
+                isSubmitting ? "bg-gray-400" : "bg-green-600 hover:bg-green-700"
               } text-white font-semibold py-2 px-4 rounded`}
             >
-              {isSubmitting ? 'Assigning...' : 'Assign Task'}
+              {isSubmitting ? "Assigning..." : "Assign Task"}
             </button>
             <button
               onClick={handleCancel}
@@ -360,4 +422,3 @@ const CalendarView: React.FC = () => {
 };
 
 export default CalendarView;
-
