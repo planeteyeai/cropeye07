@@ -10,6 +10,7 @@ import WeatherForecast from './WeatherForecast';
 import Map from './Map';
 import Fertilizer from './Fertilizer';
 import Irrigation from './Irrigation/Irrigation';
+import SoilMoistureCard from './Irrigation/cards/SoilMoistureCard';
 
 function FarmerHomeGrid() {
   const [healthData, setHealthData] = useState<{
@@ -119,13 +120,17 @@ function FarmerHomeGrid() {
             <IrrigationSchedule />
           </div>
           <div className="lg:col-span-3 w-full">
-            <FertilizerTable />
+            <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-2 sm:gap-4 items-stretch">
+              <div className="w-full min-h-[420px]">
+                <FertilizerTable />
+              </div>
+              <div className="w-full">
+                <SoilMoistureCard optimalRange={[40, 60]} />
+              </div>
+            </div>
           </div>
           <div className="lg:col-span-3 w-full">
             <WeatherForecast />
-          </div>
-          <div className="lg:col-span-3 w-full">
-            {/* <Irrigation moistGroundPercent={moistGroundPercent} /> */}
           </div>
         </div>
       </main>

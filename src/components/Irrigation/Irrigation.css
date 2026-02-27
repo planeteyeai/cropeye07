@@ -582,3 +582,10 @@
     font-size: 0.7rem;
   }
 }
+
+/* 7-Day Irrigation Schedule table – line height for same display as design */
+.irrigation-schedule-table,
+.irrigation-schedule-table th,
+.irrigation-schedule-table td {
+  line-height: 4.25;
+}

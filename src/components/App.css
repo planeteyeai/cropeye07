@@ -101,3 +101,15 @@ body {
     min-width: 100%;
   }
 }
+
+/* Fertilizer Schedule table – fill card height so table expands into red area */
+.fertilizer-schedule-table {
+  height: 100%;
+  table-layout: fixed;
+}
+.fertilizer-schedule-table tbody {
+  height: 100%;
+}
+.fertilizer-schedule-table tbody tr {
+  height: 33.333%;
+}

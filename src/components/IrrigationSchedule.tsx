@@ -503,14 +503,14 @@ const IrrigationSchedule: React.FC = () => {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-xs h-full">
+        <table className="irrigation-schedule-table w-full text-xs h-full border-collapse">
           <thead className="bg-green-100">
             <tr>
-              <th className="px-2 py-2 text-left text-xs font-medium">Date</th>
-              <th className="px-2 py-2 text-left text-xs font-medium">ETO</th>
-              <th className="px-2 py-2 text-left text-xs font-medium">Rainfall(mm)</th>
-              <th className="px-2 py-2 text-left text-xs font-medium">Water req.(L)</th>
-              <th className="px-2 py-2 text-left text-xs font-medium">{irrigationType} Time</th>
+              <th className="px-2 py-1 text-left text-xs font-medium">Date</th>
+              <th className="px-2 py-1 text-left text-xs font-medium">ETO</th>
+              <th className="px-2 py-1 text-left text-xs font-medium">Rainfall(mm)</th>
+              <th className="px-2 py-1 text-left text-xs font-medium">Water req.(L)</th>
+              <th className="px-2 py-1 text-left text-xs font-medium">{irrigationType} Time</th>
             </tr>
           </thead>
           <tbody>
@@ -521,7 +521,7 @@ const IrrigationSchedule: React.FC = () => {
                   day.isToday ? 'ring-2 ring-blue-300' : ''
                 }`}
               >
-                <td className="px-2 py-2 font-medium">
+                <td className="px-2 py-1 font-medium">
                   <div className="flex gap-1 items-center flex-wrap">
                     <span className="text-xs">{day.date}</span>
                     {day.isToday && (
@@ -532,26 +532,26 @@ const IrrigationSchedule: React.FC = () => {
                     <Sun className="h-3 w-3 text-orange-500" />
                   </div>
                 </td>
-                <td className="px-2 py-2">
+                <td className="px-2 py-1">
                   {loading ? (
                     <div className="loading-spinner-small" />
                   ) : (
                     <span
-                      className={`px-2 py-1 rounded-md font-semibold text-xs ${getETRangeColor(day.etRange)}`}
+                      className={`px-2 py-0.5 rounded-md font-semibold text-xs ${getETRangeColor(day.etRange)}`}
                     >
                       {day.etRange}
                     </span>
                   )}
                 </td>
-                <td className="px-2 py-2">
+                <td className="px-2 py-1">
                   <span className="font-medium text-xs text-gray-500">
                     {Number(day.rainfall).toFixed(1)}
                   </span>
                 </td>
-                <td className="px-2 py-2 text-blue-600 font-semibold text-xs">
+                <td className="px-2 py-1 text-blue-600 font-semibold text-xs">
                   {day.waterRequired.toLocaleString()}
                 </td>
-                <td className="px-2 py-2 text-gray-800 text-xs">
+                <td className="px-2 py-1 text-gray-800 text-xs">
                   <strong>{day.time}</strong>
                 </td>
               </tr>
