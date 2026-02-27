@@ -498,8 +498,8 @@ const IrrigationSchedule: React.FC = () => {
 
   return (
     <div className="bg-white rounded-lg overflow-hidden shadow h-full">
-      <div className="bg-green-600 text-white p-2 flex items-center gap-2">
-        <h2 className="text-sm font-semibold">7-Day Irrigation Schedule</h2>
+      <div className="bg-green-600 text-white p-2 flex items-center justify-center">
+        <h2 className="text-lg font-semibold text-center">7-Day Irrigation Schedule /acre</h2>
       </div>
 
       <div className="overflow-x-auto">
