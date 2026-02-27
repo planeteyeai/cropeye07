@@ -28,7 +28,9 @@ import {
   Users,
   MapPin,
   Beaker,
+  MessageCircle,
 } from "lucide-react";
+import Chatbot from "./Chatbot";
 import axios from "axios";
 import { getCache, setCache } from "../utils/cache";
 import { useFarmerProfile } from "../hooks/useFarmerProfile";
@@ -250,6 +252,7 @@ const FarmerDashboard: React.FC = () => {
   );
   const [timePeriod, setTimePeriod] = useState<TimePeriod>("weekly");
   const [aggregatedData, setAggregatedData] = useState<LineChartData[]>([]);
+  const [isChatbotOpen, setIsChatbotOpen] = useState(false);
 
   const lineStyles: LineStyles = {
     growth: { color: "#22c55e", label: "Growth Index" },
@@ -844,7 +847,21 @@ const FarmerDashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-3">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-3 relative">
+      {/* Chatbot Floating Button */}
+      {!isChatbotOpen && (
+        <button
+          onClick={() => setIsChatbotOpen(true)}
+          className="fixed bottom-6 right-6 z-[99998] bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4 rounded-full shadow-2xl hover:shadow-green-500/50 transition-all duration-300 hover:scale-110 animate-pulse"
+          aria-label="Open Chatbot"
+          title="Open CropEye Assistant"
+        >
+          <MessageCircle className="w-6 h-6" />
+        </button>
+      )}
+
+      {/* Chatbot Component */}
+      <Chatbot isOpen={isChatbotOpen} onClose={() => setIsChatbotOpen(false)} />
       <div className="max-w-7xl mx-auto space-y-4">
         {/* Plot Selector - Top Left */}
         {profile && !profileLoading && (

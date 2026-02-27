@@ -57,6 +57,12 @@ export default defineConfig({
     sourcemapIgnoreList: () => {
       return true; // Ignore all source maps in dev too
     },
+    // Add headers to prevent caching in development
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    },
     // Proxy API requests to avoid CORS issues in development
     proxy: {
       '/api/dev-plot': {

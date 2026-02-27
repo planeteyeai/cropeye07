@@ -1629,7 +1629,7 @@ const OfficerDashboard: React.FC = () => {
           {/* Performance Gauges */}
           <div className="space-y-4">
             <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-6">
                 <Target className="w-5 h-5 text-purple-600" />
                 <h3 className="text-sm font-semibold text-gray-800">
                   Sugarcane Yield Projection
@@ -1677,14 +1677,14 @@ const OfficerDashboard: React.FC = () => {
             </div>
 
             {/* Biomass Performance */}
-            <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-5 sm:p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Activity className="w-6 h-6 sm:w-7 sm:h-7 text-green-600" />
-                <h3 className="text-base sm:text-lg font-semibold text-gray-800">
+            <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-4 sm:p-5">
+              <div className="flex items-center gap-2 mb-2">
+                <Activity className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
+                <h3 className="text-sm sm:text-base font-semibold text-gray-800">
                   Biomass Performance
                 </h3>
               </div>
-              <div className="h-48 sm:h-56 md:h-64 flex flex-col items-center justify-center relative">
+              <div className="h-32 sm:h-36 md:h-40 flex flex-col items-center justify-start relative pt-1">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -1693,8 +1693,8 @@ const OfficerDashboard: React.FC = () => {
                       cy="80%"
                       startAngle={180}
                       endAngle={0}
-                      outerRadius={110}
-                      innerRadius={70}
+                      outerRadius={80}
+                      innerRadius={50}
                       dataKey="value"
                       labelLine={false}
                     >
@@ -1707,7 +1707,7 @@ const OfficerDashboard: React.FC = () => {
                       y="70%"
                       textAnchor="middle"
                       dominantBaseline="middle"
-                      className="text-base sm:text-lg font-semibold fill-blue-600"
+                      className="text-sm sm:text-base font-semibold fill-blue-600"
                     >
                       {totalBiomass.toFixed(1)} T/acre
                     </text>
@@ -1722,19 +1722,19 @@ const OfficerDashboard: React.FC = () => {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <p className="text-sm sm:text-base text-gray-700 font-medium text-center mb-3">
+              <p className="text-xs sm:text-sm text-gray-700 font-medium text-center mb-2">
                 Biomass Distribution Chart
               </p>
               <div className="text-center">
-                <div className="flex items-center justify-center gap-3 text-sm sm:text-base flex-wrap">
+                <div className="flex items-center justify-center gap-3 text-xs sm:text-sm flex-wrap">
                   <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded bg-blue-500"></div>
+                    <div className="w-2.5 h-2.5 rounded bg-blue-500"></div>
                     <span className="text-blue-700 font-semibold">
                       Total: {totalBiomass.toFixed(1)} T/acre
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded bg-green-500"></div>
+                    <div className="w-2.5 h-2.5 rounded bg-green-500"></div>
                     <span className="text-green-700 font-semibold">
                       Underground: {currentBiomass.toFixed(1)} T/acre
                     </span>

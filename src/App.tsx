@@ -41,6 +41,8 @@ import OfficerDashboard from "./components/FarmCropStatus";
 import AgroDashboard from "./components/AgroDash/AgroDashboard";
 import ManagerFarmDash from "./components/ManagerFarmDash";
 import HarvestDashboard from "./components/HarvestDashboard";
+import Chatbot from "./components/Chatbot";
+import { MessageCircle } from "lucide-react";
 
 enum View {
   Home = "home",
@@ -103,6 +105,7 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
     nitrogenValue: null as number | null,
     fertilityStatus: "Moderate",
   });
+  const [isChatbotOpen, setIsChatbotOpen] = useState(false);
 
   // NEW: Add currentUser state
   const [currentUser, setCurrentUser] = useState<{
@@ -638,6 +641,25 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
           </div>
         </main>
       </div>
+
+      {/* Global Chatbot Component - Single Frame Design */}
+      <Chatbot 
+        isOpen={isChatbotOpen} 
+        onClose={() => setIsChatbotOpen(false)}
+        userRole={userRole}
+      />
+
+      {/* Floating Button - Only show when chatbot is closed */}
+      {!isChatbotOpen && (
+        <button
+          onClick={() => setIsChatbotOpen(true)}
+          className="fixed bottom-6 right-6 z-[99998] bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4 rounded-full shadow-2xl hover:shadow-green-500/50 transition-all duration-300 hover:scale-110 active:scale-95 animate-bounce"
+          aria-label="Open Chatbot"
+          title="Open CropEye Assistant"
+        >
+          <MessageCircle className="w-6 h-6" />
+        </button>
+      )}
     </div>
   );
 };
