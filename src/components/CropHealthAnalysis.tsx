@@ -220,10 +220,11 @@ const InfoTooltip: React.FC<{ text: string }> = ({ text }) => {
   );
 };
 
+
 const CropHealthAnalysis: React.FC = () => {
   const { selectedPlotName } = useAppContext();
   const [activeTab, setActiveTab] = useState<"pests" | "diseases" | "weeds">(
-    "pests",
+    "weeds",
   );
   const [riskAssessment, setRiskAssessment] =
     useState<RiskAssessmentResult | null>(null);
