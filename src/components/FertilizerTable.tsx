@@ -829,10 +829,10 @@ const FertilizerTable: React.FC = () => {
                       Nutrients(kg/acre)
                     </th>
                     <th className="px-2 py-1.5 text-left text-lg font-semibold text-gray-800 border-b border-gray-300">
-                      Chemical Inputs
+                      Chemical Inputs(kg/acre)
                     </th>
                     <th className="px-2 py-1.5 text-left text-lg font-semibold text-gray-800 border-b border-gray-300">
-                      Organic Inputs
+                      Organic Inputs(kg/acre)
                     </th>
                   </tr>
                 </thead>
