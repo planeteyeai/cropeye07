@@ -141,6 +141,42 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userRole }) => {
     lastBotMessageRef.current = "";
   };
 
+  // Clean text for TTS - Remove markdown formatting and symbols
+  const cleanTextForTTS = (text: string): string => {
+    if (!text) return "";
+    
+    let cleaned = text;
+    
+    // Remove markdown bold: **text** → text
+    cleaned = cleaned.replace(/\*\*([^*]+)\*\*/g, '$1');
+    
+    // Remove markdown italic: *text* → text (but not if it's part of **)
+    cleaned = cleaned.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '$1');
+    
+    // Remove markdown headers: # ## ### → empty
+    cleaned = cleaned.replace(/^#{1,6}\s+/gm, '');
+    
+    // Remove markdown list markers: • - * → empty (keep the text)
+    cleaned = cleaned.replace(/^[\s]*[•\-\*]\s+/gm, '');
+    
+    // Remove emojis (they might be read as text by TTS)
+    cleaned = cleaned.replace(/[\u{1F300}-\u{1F9FF}]/gu, '');
+    cleaned = cleaned.replace(/[\u{2600}-\u{26FF}]/gu, '');
+    cleaned = cleaned.replace(/[\u{2700}-\u{27BF}]/gu, '');
+    
+    // Remove extra whitespace and newlines (replace multiple newlines with single space)
+    cleaned = cleaned.replace(/\n{2,}/g, ' ');
+    cleaned = cleaned.replace(/\n/g, ' ');
+    
+    // Remove multiple spaces
+    cleaned = cleaned.replace(/\s{2,}/g, ' ');
+    
+    // Trim
+    cleaned = cleaned.trim();
+    
+    return cleaned;
+  };
+
   // Text-to-Speech - Always use Marathi (Indian)
   const speakText = async (text: string): Promise<void> => {
     if (!text || !text.trim()) return;
@@ -150,11 +186,19 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userRole }) => {
       return;
     }
 
+    // Clean text for TTS - remove markdown formatting
+    const cleanedText = cleanTextForTTS(text);
+
+    if (!cleanedText || !cleanedText.trim()) {
+      console.warn("Text is empty after cleaning");
+      return;
+    }
+
     return new Promise<void>((resolve) => {
       window.speechSynthesis.cancel();
       setIsAudioPaused(false);
       
-      // Store the text for replay
+      // Store the original text for replay (with formatting for display)
       lastBotMessageRef.current = text.trim();
       
       // Use available voices from state or load them
@@ -162,7 +206,8 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userRole }) => {
         ? availableVoices 
         : window.speechSynthesis.getVoices();
       
-      const utterance = new SpeechSynthesisUtterance(text.trim());
+      // Use cleaned text for TTS
+      const utterance = new SpeechSynthesisUtterance(cleanedText.trim());
       
       // Try to find Marathi voice first
       let selectedVoice = voices.find(voice => 
