@@ -1298,11 +1298,6 @@ const Map: React.FC<MapProps> = ({
   const handleLegendClick = (label: string, percentage: number) => {
     if (percentage === 0) return;
 
-    if (percentage >= 99) {
-      setSelectedLegendClass(null);
-      return;
-    }
-
     setSelectedLegendClass((prev) => (prev === label ? null : label));
   };
 
@@ -1489,7 +1484,7 @@ const Map: React.FC<MapProps> = ({
             <div key={index} className="enhanced-tooltip-line">
               <span className="layer-name">{layerData.layer}:</span>
               <span className="layer-description">
-                {layerData.label} - {layerData.description} - {layerData.percentage}%
+                {layerData.label} - {layerData.description}
               </span>
             </div>
           ))}
@@ -1621,15 +1616,12 @@ const Map: React.FC<MapProps> = ({
                   key={index}
                   className={`legend-item-bottom ${
                     selectedLegendClass === item.label ? "active" : ""
-                  } ${item.percentage === 0 ? "zero-percent" : ""} ${
-                    item.percentage >= 99 ? "full-coverage" : ""
-                  }`}
+                  } ${item.percentage === 0 ? "zero-percent" : ""}`}
                   onClick={() => handleLegendClick(item.label, item.percentage)}
                   style={{
                     pointerEvents: item.percentage === 0 ? 'none' : 'auto',
-                    cursor: item.percentage >= 99 ? 'not-allowed' : 'pointer'
+                    cursor: 'pointer'
                   }}
-                  title={item.percentage >= 99 ? 'High coverage (99%+) - no individual pixels to show' : ''}
                 >
                   <div
                     className="legend-circle-bottom cursor-pointer transition-all duration-150"
