@@ -808,30 +808,30 @@ const FertilizerTable: React.FC = () => {
           }
 
           return (
-            <div ref={tableRef} className="overflow-x-auto flex-1 min-h-[280px] flex flex-col">
+            <div ref={tableRef} className="overflow-x-auto flex-1 min-h-[350px] flex flex-col">
               <div className="mb-3 flex-shrink-0">
                 <h3 className="text-lg font-semibold text-gray-700 mb-2">
                   Next 7 Days Fertilizer Schedule
                 </h3>
                 {/* <p className="text-sm text-gray-600">Showing first and last day (same values for all 7 days)</p> */}
               </div>
-              <div className="flex-1 min-h-0 flex flex-col">
+              <div className="flex-1 flex flex-col">
                 <table className="fertilizer-schedule-table min-w-full h-full bg-green-400 border border-gray-200 border-collapse table-fixed">
                 <thead className="bg-green-200">
                   <tr>
-                    <th className="px-2 py-1.5 text-left text-lg font-semibold text-gray-800 border-b border-gray-300">
+                    <th className="px-4 py-4 text-left text-lg font-semibold text-gray-800 border-b border-gray-300">
                       Date
                     </th>
-                    <th className="px-2 py-1.5 text-left text-lg font-semibold text-gray-800 border-b border-gray-300">
+                    <th className="px-4 py-4 text-left text-lg font-semibold text-gray-800 border-b border-gray-300">
                       Stage
                     </th>
-                    <th className="px-2 py-1.5 text-left text-lg font-semibold text-gray-800 border-b border-gray-300">
+                    <th className="px-4 py-4 text-left text-lg font-semibold text-gray-800 border-b border-gray-300">
                       Nutrients(kg/acre)
                     </th>
-                    <th className="px-2 py-1.5 text-left text-lg font-semibold text-gray-800 border-b border-gray-300">
+                    <th className="px-4 py-4 text-left text-lg font-semibold text-gray-800 border-b border-gray-300">
                       Chemical Inputs(kg/acre)
                     </th>
-                    <th className="px-2 py-1.5 text-left text-lg font-semibold text-gray-800 border-b border-gray-300">
+                    <th className="px-4 py-4 text-left text-lg font-semibold text-gray-800 border-b border-gray-300">
                       Organic Inputs(kg/acre)
                     </th>
                   </tr>
@@ -840,16 +840,16 @@ const FertilizerTable: React.FC = () => {
                   {/* First row - show actual data */}
                   {data.length > 0 && (
                     <tr className="bg-white">
-                      <td className="px-2 py-2 whitespace-nowrap text-lg font-normal text-gray-900 border-b">
+                      <td className="px-4 py-6 whitespace-nowrap text-lg font-normal text-gray-900 border-b align-top">
                         {data[0].date}
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap text-lg font-normal text-gray-900 border-b">
+                      <td className="px-4 py-6 whitespace-nowrap text-lg font-normal text-gray-900 border-b align-top">
                         {/* {data[0].stage} */}
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap text-lg font-normal text-gray-900 border-b">
+                      <td className="px-4 py-6 whitespace-nowrap text-lg font-normal text-gray-900 border-b align-top">
                         N : {data[0].N_kg_acre}
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap text-lg font-normal text-gray-900 border-b">
+                      <td className="px-4 py-6 whitespace-nowrap text-lg font-normal text-gray-900 border-b align-top">
                         {data[0].fertilizers && (
                           <div className="text-lg font-normal">
                             <div>
@@ -858,7 +858,7 @@ const FertilizerTable: React.FC = () => {
                           </div>
                         )}
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap text-lg font-normal text-gray-900 border-b">
+                      <td className="px-4 py-6 whitespace-nowrap text-lg font-normal text-gray-900 border-b align-top">
                         {data[0].organic_inputs && (
                           <div className="text-lg font-normal">
                             {data[0].organic_inputs?.map((input, index) => (
@@ -873,22 +873,22 @@ const FertilizerTable: React.FC = () => {
                   {/* Middle rows - show dots if there are more than 2 days */}
                   {data.length > 2 && (
                     <tr className="bg-gray-50">
-                      <td className="px-2 py-2 whitespace-nowrap text-lg font-normal text-gray-900 border-b">
+                      <td className="px-4 py-6 whitespace-nowrap text-lg font-normal text-gray-900 border-b align-top">
                         To
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap text-lg font-normal text-gray-900 border-b">
+                      <td className="px-4 py-6 whitespace-nowrap text-lg font-normal text-gray-900 border-b align-top">
                         {data[0].stage}
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap text-lg font-normal text-gray-900 border-b">
+                      <td className="px-4 py-6 whitespace-nowrap text-lg font-normal text-gray-900 border-b align-top">
                         P : {data[0].P_kg_acre}
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap text-lg font-normal text-gray-900 border-b">
+                      <td className="px-4 py-6 whitespace-nowrap text-lg font-normal text-gray-900 border-b align-top">
                         <div className="text-lg font-normal">
                           SuperPhosphate:{" "}
                           {data[0].fertilizers?.SuperPhosphate_P_kg_per_acre} kg
                         </div>
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap text-lg font-normal text-gray-900 border-b">
+                      <td className="px-4 py-6 whitespace-nowrap text-lg font-normal text-gray-900 border-b align-top">
                         {data[0].organic_inputs && (
                           <div className="text-lg font-normal">
                             {data[0].organic_inputs?.map((input, index) => (
@@ -903,16 +903,16 @@ const FertilizerTable: React.FC = () => {
                   {/* Last row - show actual data if there are more than 1 day */}
                   {data.length > 1 && (
                     <tr className="bg-white">
-                      <td className="px-2 py-2 whitespace-nowrap text-lg font-normal text-gray-900 border-b">
+                      <td className="px-4 py-6 whitespace-nowrap text-lg font-normal text-gray-900 border-b align-top">
                         {data[data.length - 1].date}
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap text-lg font-normal text-gray-900 border-b">
+                      <td className="px-4 py-6 whitespace-nowrap text-lg font-normal text-gray-900 border-b align-top">
                         {/* {data[data.length - 1].stage} */}
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap text-lg font-normal text-gray-900 border-b">
+                      <td className="px-4 py-6 whitespace-nowrap text-lg font-normal text-gray-900 border-b align-top">
                         K : {data[0].K_kg_acre}
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap text-lg font-normal text-gray-900 border-b">
+                      <td className="px-4 py-6 whitespace-nowrap text-lg font-normal text-gray-900 border-b align-top">
                         {data[data.length - 1].fertilizers && (
                           <div className="text-lg font-normal">
                             <div>
@@ -926,7 +926,7 @@ const FertilizerTable: React.FC = () => {
                           </div>
                         )}
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap text-lg font-normal text-gray-900 border-b">
+                      <td className="px-4 py-6 whitespace-nowrap text-lg font-normal text-gray-900 border-b align-top">
                         {data[0].organic_inputs && (
                           <div className="text-lg font-normal">
                             {data[0].organic_inputs?.map((input, index) => (

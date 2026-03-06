@@ -128,8 +128,9 @@ export function calculateDaysSincePlantation(plantationDate: string): number {
 
 /**
  * Assess pest risk based on API percentage, stage (days), and month
- * Only shows HIGH if: API percentage > 0 AND stage matches AND month matches
- * Otherwise returns null (no display)
+ * High: API percentage > 0 AND stage matches AND month matches
+ * Moderate: Stage matches AND month matches (regardless of API)
+ * Low: Stage matches (regardless of month or API)
  */
 function assessPestRisk(
   pest: any,
@@ -151,76 +152,50 @@ function assessPestRisk(
     }
   }
   
-  // Log if pest category is missing (this could be why it's not showing)
-  if (!pest.category) {
-    console.warn(`⚠️ Pest "${pest.name}" is missing category field! This pest will not match any API data.`);
-  }
-  
-  // If no API percentage detected, don't display
-  if (apiPercentage === 0) {
-    // Only log if this pest has a category but API shows 0 (helps debug category mismatches)
-    if (pest.category && pestDetectionData) {
-      const allPercentages = {
-        chewing: pestDetectionData.chewing_affected_pixel_percentage || 0,
-        sucking: pestDetectionData.sucking_affected_pixel_percentage || 0,
-        soil_borne: pestDetectionData.SoilBorn_affected_pixel_percentage || 0
-      };
-      console.log(`ℹ️ Pest "${pest.name}" (category: ${pest.category}) has API percentage = 0. Available percentages:`, allPercentages);
-    }
-    return null;
-  }
-  
   // Check if stage matches (days since plantation)
   let stageMatch = true; // Default to true if no stage info
   if (pest.stage) {
     stageMatch = daysSincePlantation >= pest.stage.minDays && daysSincePlantation <= pest.stage.maxDays;
   }
   
-  // Check if month matches (case-insensitive comparison)
-  const currentMonthNormalized = currentMonth.trim().toLowerCase();
-  const pestMonthsNormalized = pest.months.map((m: string) => m.trim().toLowerCase());
-  const monthMatch = pestMonthsNormalized.includes(currentMonthNormalized);
-  
-  // Only show HIGH if: API percentage > 0 AND stage matches AND month matches
-  // If month doesn't match, don't display at all
-  const willDisplay = apiPercentage > 0 && stageMatch && monthMatch;
-  
-  // Debug logging for ALL pests with API percentage > 0
-  // This helps identify why a pest isn't showing even when conditions seem to match
-  if (apiPercentage > 0) {
-    console.log(`🔍 Pest Assessment: ${pest.name}`, {
-      'Category': pest.category,
-      'API Percentage': apiPercentage,
-      'Days Since Plantation': daysSincePlantation,
-      'Stage Range': pest.stage ? `${pest.stage.minDays}-${pest.stage.maxDays} days` : 'Any',
-      'Stage Match': stageMatch,
-      'Current Month (original)': currentMonth,
-      'Current Month (normalized)': currentMonthNormalized,
-      'Active Months (original)': pest.months.join(', '),
-      'Active Months (normalized)': pestMonthsNormalized.join(', '),
-      'Month Match': monthMatch,
-      '✅ Will Display': willDisplay ? 'YES (HIGH)' : 'NO',
-      'Reason': !willDisplay ? (
-        apiPercentage === 0 ? 'API percentage is 0' :
-        !stageMatch ? `Stage does not match (need ${pest.stage?.minDays}-${pest.stage?.maxDays} days, got ${daysSincePlantation})` : 
-        !monthMatch ? `Month does not match (need one of: ${pest.months.join(', ')}, got: ${currentMonth})` : 
-        'Unknown reason'
-      ) : 'All conditions match ✓'
-    });
+  // If stage doesn't match, don't display at all
+  if (!stageMatch) {
+    return null;
   }
   
-  if (willDisplay) {
+  // Check if month matches (case-insensitive comparison)
+  const currentMonthNormalized = currentMonth?.trim().toLowerCase() || '';
+  const pestMonths = Array.isArray(pest.months) ? pest.months : [];
+  const pestMonthsNormalized = pestMonths.map((m: string) => String(m).trim().toLowerCase());
+  const monthMatch = pestMonthsNormalized.includes(currentMonthNormalized);
+  
+  // High: API percentage > 0 AND stage matches AND month matches
+  if (apiPercentage > 0 && stageMatch && monthMatch) {
+    console.log(`🔍 Pest Assessment: ${pest.name} -> HIGH (API: ${apiPercentage}%, Stage: ✓, Month: ✓)`);
     return 'High';
   }
   
-  // Don't display if any condition doesn't match
+  // Moderate: Stage matches AND month matches (regardless of API)
+  if (stageMatch && monthMatch) {
+    console.log(`🔍 Pest Assessment: ${pest.name} -> MODERATE (Stage: ✓, Month: ✓)`);
+    return 'Moderate';
+  }
+  
+  // Low: Stage matches (regardless of month or API)
+  if (stageMatch) {
+    console.log(`🔍 Pest Assessment: ${pest.name} -> LOW (Stage: ✓)`);
+    return 'Low';
+  }
+  
+  // Don't display if stage doesn't match
   return null;
 }
 
 /**
  * Assess disease risk based on API percentage (fungi), stage (days), and month
- * Only shows HIGH if: API fungi percentage > 0 AND stage matches AND month matches
- * Otherwise returns null (no display)
+ * High: API fungi percentage > 0 AND stage matches AND month matches (for fungal diseases only)
+ * Moderate: Stage matches AND month matches (for all diseases, regardless of API)
+ * Low: Stage matches (for all diseases, regardless of month or API)
  */
 function assessDiseaseRisk(
   disease: any,
@@ -233,55 +208,45 @@ function assessDiseaseRisk(
   // Check if API detected fungi (legend circle shows fungi percentage)
   const fungiPercentage = pestDetectionData?.fungi_affected_pixel_percentage || 0;
   
-  // Only fungal diseases (Red Rot, Rust) are shown based on fungi percentage
-  const isFungalDisease = disease.name === 'Red Rot' || disease.name === 'Rust';
-  
-  // If no fungi percentage detected, don't display
-  if (fungiPercentage === 0 || !isFungalDisease) {
-    return null;
-  }
-  
   // Check if stage matches (days since plantation)
   let stageMatch = true; // Default to true if no stage info
   if (disease.stage) {
     stageMatch = daysSincePlantation >= disease.stage.minDays && daysSincePlantation <= disease.stage.maxDays;
   }
   
-  // Check if month matches (case-insensitive comparison)
-  const currentMonthNormalized = currentMonth.trim().toLowerCase();
-  const diseaseMonthsNormalized = disease.months.map((m: string) => m.trim().toLowerCase());
-  const monthMatch = diseaseMonthsNormalized.includes(currentMonthNormalized);
-  
-  // Only show HIGH if: API fungi percentage > 0 AND stage matches AND month matches
-  // If month doesn't match, don't display at all
-  const willDisplay = fungiPercentage > 0 && stageMatch && monthMatch;
-  
-  // Debug logging for all diseases with fungi percentage > 0
-  if (fungiPercentage > 0 && isFungalDisease) {
-    console.log(`🔍 Disease Assessment: ${disease.name}`, {
-      'Fungi Percentage': fungiPercentage,
-      'Days Since Plantation': daysSincePlantation,
-      'Stage Range': disease.stage ? `${disease.stage.minDays}-${disease.stage.maxDays} days` : 'Any',
-      'Stage Match': stageMatch,
-      'Current Month (original)': currentMonth,
-      'Current Month (normalized)': currentMonthNormalized,
-      'Active Months (original)': disease.months.join(', '),
-      'Active Months (normalized)': diseaseMonthsNormalized.join(', '),
-      'Month Match': monthMatch,
-      '✅ Will Display': willDisplay ? 'YES (HIGH)' : 'NO',
-      'Reason': !willDisplay ? (
-        !stageMatch ? `Stage does not match (need ${disease.stage?.minDays}-${disease.stage?.maxDays} days, got ${daysSincePlantation})` : 
-        !monthMatch ? `Month does not match (need one of: ${disease.months.join(', ')}, got: ${currentMonth})` : 
-        'Fungi percentage is 0'
-      ) : 'All conditions match ✓'
-    });
+  // If stage doesn't match, don't display at all
+  if (!stageMatch) {
+    return null;
   }
   
-  if (willDisplay) {
+  // Check if month matches (case-insensitive comparison)
+  const currentMonthNormalized = currentMonth?.trim().toLowerCase() || '';
+  const diseaseMonths = Array.isArray(disease.months) ? disease.months : [];
+  const diseaseMonthsNormalized = diseaseMonths.map((m: string) => String(m).trim().toLowerCase());
+  const monthMatch = diseaseMonthsNormalized.includes(currentMonthNormalized);
+  
+  // For fungal diseases (Red Rot, Rust, Smut, Wilt, Downy Mildew), check API percentage
+  const isFungalDisease = ['Red Rot', 'Rust', 'Smut', 'Wilt', 'Downy Mildew'].includes(disease.name);
+  
+  // High: API fungi percentage > 0 AND stage matches AND month matches (for fungal diseases only)
+  if (isFungalDisease && fungiPercentage > 0 && stageMatch && monthMatch) {
+    console.log(`🔍 Disease Assessment: ${disease.name} -> HIGH (Fungi: ${fungiPercentage}%, Stage: ✓, Month: ✓)`);
     return 'High';
   }
   
-  // Don't display if any condition doesn't match
+  // Moderate: Stage matches AND month matches (for all diseases, regardless of API)
+  if (stageMatch && monthMatch) {
+    console.log(`🔍 Disease Assessment: ${disease.name} -> MODERATE (Stage: ✓, Month: ✓)`);
+    return 'Moderate';
+  }
+  
+  // Low: Stage matches (for all diseases, regardless of month or API)
+  if (stageMatch) {
+    console.log(`🔍 Disease Assessment: ${disease.name} -> LOW (Stage: ✓)`);
+    return 'Low';
+  }
+  
+  // Don't display if stage doesn't match
   return null;
 }
 
@@ -338,36 +303,67 @@ export async function fetchPestDetectionData(plotId?: string): Promise<PestDetec
       : 'https://admin-cropeye.up.railway.app';
     const url = `${baseUrl}/pest-detection?plot_name=${plotName}&end_date=${currentDate}&days_back=7`;
     
-    // Try fetch with explicit CORS mode and proper headers matching curl command
-    const postResponse = await fetch(url, {
-      method: "POST",
-      mode: "cors",
-      cache: "no-cache",
-      credentials: "omit",
-      headers: { 
-        "Accept": "application/json"
-      },
-    });
+    // Add timeout to prevent hanging on 503 errors
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
     
-    if (postResponse.ok) {
-      const pestData = await postResponse.json();
-      const pixelSummary = pestData.pixel_summary || {};
+    try {
+      // Try fetch with explicit CORS mode and proper headers matching curl command
+      const postResponse = await fetch(url, {
+        method: "POST",
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "omit",
+        headers: { 
+          "Accept": "application/json"
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (postResponse.ok) {
+        const pestData = await postResponse.json();
+        const pixelSummary = pestData.pixel_summary || {};
+        return {
+          fungi_affected_pixel_percentage: pixelSummary.fungi_affected_pixel_percentage || 0,
+          chewing_affected_pixel_percentage: pixelSummary.chewing_affected_pixel_percentage || 0,
+          sucking_affected_pixel_percentage: pixelSummary.sucking_affected_pixel_percentage || 0,
+          SoilBorn_affected_pixel_percentage: pixelSummary.SoilBorn_affected_pixel_percentage || 0,
+        };
+      }
+      
+      // Handle 503 Service Unavailable and other errors gracefully
+      if (postResponse.status === 503) {
+        console.warn(`⚠️ Pest detection API is temporarily unavailable (503). Using default values.`);
+      } else {
+        console.warn(`⚠️ Pest detection API error: ${postResponse.status}`);
+      }
+      
+      // Return default values on any error
       return {
-        fungi_affected_pixel_percentage: pixelSummary.fungi_affected_pixel_percentage || 0,
-        chewing_affected_pixel_percentage: pixelSummary.chewing_affected_pixel_percentage || 0,
-        sucking_affected_pixel_percentage: pixelSummary.sucking_affected_pixel_percentage || 0,
-        SoilBorn_affected_pixel_percentage: pixelSummary.SoilBorn_affected_pixel_percentage || 0,
+        fungi_affected_pixel_percentage: 0,
+        chewing_affected_pixel_percentage: 0,
+        sucking_affected_pixel_percentage: 0,
+        SoilBorn_affected_pixel_percentage: 0,
+      };
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      
+      // Handle timeout or network errors
+      if (fetchError.name === 'AbortError') {
+        console.warn('⚠️ Pest detection API request timed out. Using default values.');
+      } else {
+        console.warn('⚠️ Error fetching pest detection data:', fetchError?.message || fetchError);
+      }
+      
+      return {
+        fungi_affected_pixel_percentage: 0,
+        chewing_affected_pixel_percentage: 0,
+        sucking_affected_pixel_percentage: 0,
+        SoilBorn_affected_pixel_percentage: 0,
       };
     }
-    
-    // If request fails, return default
-    console.warn(`Pest detection API error: ${postResponse.status}`);
-    return {
-      fungi_affected_pixel_percentage: 0,
-      chewing_affected_pixel_percentage: 0,
-      sucking_affected_pixel_percentage: 0,
-      SoilBorn_affected_pixel_percentage: 0,
-    };
     
   } catch (error: any) {
     console.warn('Error fetching pest detection data:', error?.message || error);
@@ -386,7 +382,8 @@ export async function fetchPestDetectionData(plotId?: string): Promise<PestDetec
 export async function generateRiskAssessment(
   plantationDate: string,
   weatherData: WeatherData,
-  plotId?: string
+  plotId?: string,
+  pestDetectionDataOverride?: PestDetectionData
 ): Promise<RiskAssessmentResult> {
   try {
     // Calculate days since plantation
@@ -410,19 +407,24 @@ export async function generateRiskAssessment(
       'Plot ID': plotId
     });
     
-    // Fetch API pest detection data
+    // Use provided pest detection data or fetch it if not provided
     let pestDetectionData: PestDetectionData | undefined;
-    try {
-      pestDetectionData = await fetchPestDetectionData(plotId);
-      console.log('📊 Pest detection API data:', pestDetectionData);
-    } catch (error) {
-      console.warn('⚠️ Error fetching pest detection data:', error);
-      pestDetectionData = {
-        fungi_affected_pixel_percentage: 0,
-        chewing_affected_pixel_percentage: 0,
-        sucking_affected_pixel_percentage: 0,
-        SoilBorn_affected_pixel_percentage: 0,
-      };
+    if (pestDetectionDataOverride) {
+      pestDetectionData = pestDetectionDataOverride;
+      console.log('📊 Using provided pest detection API data:', pestDetectionData);
+    } else {
+      try {
+        pestDetectionData = await fetchPestDetectionData(plotId);
+        console.log('📊 Pest detection API data:', pestDetectionData);
+      } catch (error) {
+        console.warn('⚠️ Error fetching pest detection data:', error);
+        pestDetectionData = {
+          fungi_affected_pixel_percentage: 0,
+          chewing_affected_pixel_percentage: 0,
+          sucking_affected_pixel_percentage: 0,
+          SoilBorn_affected_pixel_percentage: 0,
+        };
+      }
     }
     
     // Initialize result
@@ -459,39 +461,47 @@ export async function generateRiskAssessment(
       }
     }
     
-    console.log('📋 Active Pest Categories (with percentage > 0):', activeCategories.length > 0 ? activeCategories.join(', ') : 'NONE - No pests will be displayed');
+    console.log('📋 Active Pest Categories (with percentage > 0):', activeCategories.length > 0 ? activeCategories.join(', ') : 'NONE');
     
-    // Assess pest risks: Only show HIGH if API percentage > 0 AND stage matches AND month matches
-    // Only process pests from categories that have percentage > 0
+    // Assess pest risks: Process ALL pests to determine High, Moderate, or Low risk
+    // High: API percentage > 0 AND stage matches AND month matches
+    // Moderate: Stage matches AND month matches (regardless of API)
+    // Low: Stage matches (regardless of month or API)
     for (const pest of pestsData) {
-      // Skip pests that don't have a category or whose category has 0% in API
-      if (!pest.category || !activeCategories.includes(pest.category)) {
-        continue; // Skip this pest - its category has no percentage
-      }
-      
-      const riskLevel = assessPestRisk(
-        pest,
-        daysSincePlantation,
-        currentMonth,
-        currentTemp,
-        currentHumidity,
-        pestDetectionData
-      );
-      
-      // Only add to HIGH, no LOW or MODERATE
-      if (riskLevel === 'High') {
-        result.pests.High.push(pest.name);
+      try {
+        const riskLevel = assessPestRisk(
+          pest,
+          daysSincePlantation,
+          currentMonth,
+          currentTemp,
+          currentHumidity,
+          pestDetectionData
+        );
+        
+        // Add to appropriate risk level array
+        if (riskLevel === 'High') {
+          result.pests.High.push(pest.name);
+        } else if (riskLevel === 'Moderate') {
+          result.pests.Moderate.push(pest.name);
+        } else if (riskLevel === 'Low') {
+          result.pests.Low.push(pest.name);
+        }
+      } catch (error) {
+        console.warn(`⚠️ Error assessing risk for pest "${pest?.name || 'unknown'}":`, error);
+        // Continue processing other pests
       }
     }
     
     // Check if fungi percentage > 0 (legend circle shows fungi percentage)
     const hasFungi = pestDetectionData?.fungi_affected_pixel_percentage > 0;
-    console.log('🍄 Fungal Diseases Active:', hasFungi ? `YES (${pestDetectionData?.fungi_affected_pixel_percentage}%)` : 'NO - No diseases will be displayed');
+    console.log('🍄 Fungal Diseases Active:', hasFungi ? `YES (${pestDetectionData?.fungi_affected_pixel_percentage}%)` : 'NO');
     
-    // Assess disease risks: Only show HIGH if API fungi percentage > 0 AND stage matches AND month matches
-    // Only process diseases if fungi percentage > 0
-    if (hasFungi) {
-      for (const disease of diseasesData) {
+    // Assess disease risks: Process ALL diseases to determine High, Moderate, or Low risk
+    // High: API fungi percentage > 0 AND stage matches AND month matches (for fungal diseases only)
+    // Moderate: Stage matches AND month matches (for all diseases, regardless of API)
+    // Low: Stage matches (for all diseases, regardless of month or API)
+    for (const disease of diseasesData) {
+      try {
         const riskLevel = assessDiseaseRisk(
           disease,
           daysSincePlantation,
@@ -501,13 +511,18 @@ export async function generateRiskAssessment(
           pestDetectionData
         );
         
-        // Only add to HIGH, no LOW or MODERATE
+        // Add to appropriate risk level array
         if (riskLevel === 'High') {
           result.diseases.High.push(disease.name);
+        } else if (riskLevel === 'Moderate') {
+          result.diseases.Moderate.push(disease.name);
+        } else if (riskLevel === 'Low') {
+          result.diseases.Low.push(disease.name);
         }
+      } catch (error) {
+        console.warn(`⚠️ Error assessing risk for disease "${disease?.name || 'unknown'}":`, error);
+        // Continue processing other diseases
       }
-    } else {
-      console.log('ℹ️ Skipping all diseases - fungi_affected_pixel_percentage is 0');
     }
     
     console.log('📊 Risk assessment result:', {
@@ -542,28 +557,32 @@ export async function generateRiskAssessment(
         'Soil Born percentage': pestDetectionData.SoilBorn_affected_pixel_percentage,
         'Fungi percentage': pestDetectionData.fungi_affected_pixel_percentage,
         'Active Categories': activeCategories.length > 0 ? activeCategories.join(', ') : 'NONE',
-        'High Risk Pests Found': result.pests.High.length,
-        'High Risk Diseases Found': result.diseases.High.length,
-        'Pests Displayed': result.pests.High,
-        'Diseases Displayed': result.diseases.High
+        'Pests': {
+          'High': result.pests.High.length,
+          'Moderate': result.pests.Moderate.length,
+          'Low': result.pests.Low.length
+        },
+        'Diseases': {
+          'High': result.diseases.High.length,
+          'Moderate': result.diseases.Moderate.length,
+          'Low': result.diseases.Low.length
+        },
+        'High Risk Pests': result.pests.High,
+        'Moderate Risk Pests': result.pests.Moderate,
+        'Low Risk Pests': result.pests.Low,
+        'High Risk Diseases': result.diseases.High,
+        'Moderate Risk Diseases': result.diseases.Moderate,
+        'Low Risk Diseases': result.diseases.Low
       });
       
-      // If API shows percentage but no pests/diseases in High, log why
-      if ((hasChewing || hasSucking || hasSoilBorn) && result.pests.High.length === 0) {
-        console.warn('⚠️ API detected pests (legend circle shows percentage) but none matched stage/month criteria!');
-        console.warn('   This means: API percentage > 0, but either stage or month does not match.');
-        console.warn('   Check console logs above for each pest to see why they were filtered out.');
-      }
-      if (hasFungi && result.diseases.High.length === 0) {
-        console.warn('⚠️ API detected fungi (legend circle shows percentage) but no diseases matched stage/month criteria!');
-        console.warn('   This means: Fungi percentage > 0, but either stage or month does not match.');
-        console.warn('   Check console logs above for each disease to see why they were filtered out.');
-      }
-      
-      // If all percentages are 0, confirm nothing will show
-      if (!hasChewing && !hasSucking && !hasSoilBorn && !hasFungi) {
-        console.log('ℹ️ All API percentages are 0 - No pests or diseases will be displayed (as expected)');
-      }
+      // Log summary of risk distribution
+      const totalPests = result.pests.High.length + result.pests.Moderate.length + result.pests.Low.length;
+      const totalDiseases = result.diseases.High.length + result.diseases.Moderate.length + result.diseases.Low.length;
+      console.log('📊 Risk Distribution Summary:', {
+        'Total Pests': totalPests,
+        'Total Diseases': totalDiseases,
+        'Note': 'High = API detected + stage + month match, Moderate = stage + month match, Low = stage match only'
+      });
     }
     
     return result;

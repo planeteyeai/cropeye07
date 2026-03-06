@@ -54,22 +54,26 @@ export const PestDisease: React.FC = () => {
     try {
       setIsLoading(true);
 
-      // Fetch plantation date, weather data, and pest detection data
+      // Fetch plantation date and weather data
       const plantationDate = await fetchPlantationDate(
         selectedPlotName || undefined,
       );
       const weatherData = await fetchCurrentWeather(
         selectedPlotName || undefined,
       );
+
+      // Fetch pest detection data once (will be used by both generateRiskAssessment and component state)
+      // This prevents duplicate API calls
       const pestData = await fetchPestDetectionData(
         selectedPlotName || undefined,
       );
 
-      // Generate risk assessment with plotId (API data, stage, and month matching already integrated)
+      // Generate risk assessment with plotId (pass pestData to avoid duplicate fetch)
       const assessment = await generateRiskAssessment(
         plantationDate,
         weatherData,
         selectedPlotName || undefined,
+        pestData // Pass the already-fetched data
       );
 
       // Assessment already has correct logic: only HIGH if API percentage > 0 AND stage matches AND month matches
@@ -94,6 +98,25 @@ export const PestDisease: React.FC = () => {
       }
     } catch (error) {
       console.error("Failed to load risk assessment:", error);
+      // Set a default empty assessment to prevent infinite loading
+      setRiskAssessment({
+        stage: "Unknown",
+        current_conditions: {
+          month: "Unknown",
+          temperature: "N/A",
+          humidity: "N/A"
+        },
+        pests: {
+          High: [],
+          Moderate: [],
+          Low: []
+        },
+        diseases: {
+          High: [],
+          Moderate: [],
+          Low: []
+        }
+      });
     } finally {
       setIsLoading(false);
     }
