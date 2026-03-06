@@ -216,6 +216,7 @@ const Map: React.FC<MapProps> = ({
 }) => {
   const { profile, loading: profileLoading } = useFarmerProfile();
   const mapWrapperRef = useRef<HTMLDivElement>(null);
+  const initialFetchDoneRef = useRef<boolean>(false); // Track if initial fetch is done
 
   const [plotData, setPlotData] = useState<any>(null);
   const [plotBoundary, setPlotBoundary] = useState<any>(null); // Separate state for plot boundary that persists
@@ -324,13 +325,38 @@ const Map: React.FC<MapProps> = ({
       localStorage.setItem('selectedPlot', defaultPlot);
       // Clear previous plot boundary when selecting a new plot
       setPlotBoundary(null);
-      // Only fetch non-date-dependent layers here
-      // Date-dependent layers (Growth, Water Uptake, Soil Moisture) will be fetched by the useEffect that watches currentEndDate
-      fetchPestData(defaultPlot);
-      fetchPlotData(defaultPlot);
-      fetchFieldAnalysis(defaultPlot);
     }
   }, [profile, profileLoading]);
+
+  // Separate useEffect to fetch all 4 APIs on initial plot selection (after functions are defined)
+  // This runs once when selectedPlotName is first set (on login)
+  useEffect(() => {
+    if (!selectedPlotName || initialFetchDoneRef.current || profileLoading) {
+      return;
+    }
+
+    // Mark that we're doing the initial fetch to prevent duplicate calls
+    initialFetchDoneRef.current = true;
+    
+    // Fetch ALL 4 APIs in parallel on login to preload data for faster button switching
+    // This ensures all data is loaded when farmer logs in, making button switching instant
+    console.log('🔄 Map: Fetching all 4 layer APIs (Growth, Water Uptake, Soil Moisture, Pest) on login for plot:', selectedPlotName);
+    
+    // Fetch all APIs in parallel - this preloads data so button clicks are instant
+    Promise.all([
+      fetchGrowthData(selectedPlotName),
+      fetchWaterUptakeData(selectedPlotName),
+      fetchSoilMoistureData(selectedPlotName),
+      fetchPestData(selectedPlotName),
+      fetchPlotData(selectedPlotName),
+      fetchFieldAnalysis(selectedPlotName)
+    ]).then(() => {
+      console.log('✅ Map: All 4 layer APIs (Growth, Water Uptake, Soil Moisture, Pest) fetched successfully on login');
+    }).catch((err) => {
+      console.error('❌ Map: Some APIs failed to fetch:', err);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPlotName, profileLoading]);
 
   // Removed fetchAllLayerData - date-dependent layers are now fetched by useEffect
 
@@ -1424,11 +1450,23 @@ const Map: React.FC<MapProps> = ({
                 localStorage.setItem('selectedPlot', newPlot);
                 // Clear previous plot boundary when selecting a new plot
                 setPlotBoundary(null);
-                // Only fetch non-date-dependent layers here
-                // Date-dependent layers (Growth, Water Uptake, Soil Moisture) will be fetched by the useEffect that watches currentEndDate
-                fetchPestData(newPlot);
-                fetchPlotData(newPlot);
-                fetchFieldAnalysis(newPlot);
+                // Reset initial fetch flag so all APIs are fetched for the new plot
+                initialFetchDoneRef.current = false;
+                // Fetch ALL 4 APIs when plot changes to ensure all data is available
+                console.log('🔄 Map: Fetching all 4 layer APIs for new plot:', newPlot);
+                Promise.all([
+                  fetchGrowthData(newPlot),
+                  fetchWaterUptakeData(newPlot),
+                  fetchSoilMoistureData(newPlot),
+                  fetchPestData(newPlot),
+                  fetchPlotData(newPlot),
+                  fetchFieldAnalysis(newPlot)
+                ]).then(() => {
+                  console.log('✅ Map: All 4 layer APIs fetched for new plot');
+                  initialFetchDoneRef.current = true;
+                }).catch((err) => {
+                  console.error('❌ Map: Some APIs failed to fetch for new plot:', err);
+                });
               }}
               disabled={loading}
             >
