@@ -128,9 +128,9 @@ export function calculateDaysSincePlantation(plantationDate: string): number {
 
 /**
  * Assess pest risk based on API percentage, stage (days), and month
- * High: API percentage > 0 AND stage matches AND month matches
- * Moderate: Stage matches AND month matches (regardless of API)
- * Low: Stage matches (regardless of month or API)
+ * High: API percentage > 0 (legend circle) AND stage matches AND month matches
+ * Moderate: Stage matches AND month matches
+ * Low: Month matches only
  */
 function assessPestRisk(
   pest: any,
@@ -158,44 +158,39 @@ function assessPestRisk(
     stageMatch = daysSincePlantation >= pest.stage.minDays && daysSincePlantation <= pest.stage.maxDays;
   }
   
-  // If stage doesn't match, don't display at all
-  if (!stageMatch) {
-    return null;
-  }
-  
   // Check if month matches (case-insensitive comparison)
   const currentMonthNormalized = currentMonth?.trim().toLowerCase() || '';
   const pestMonths = Array.isArray(pest.months) ? pest.months : [];
   const pestMonthsNormalized = pestMonths.map((m: string) => String(m).trim().toLowerCase());
   const monthMatch = pestMonthsNormalized.includes(currentMonthNormalized);
   
-  // High: API percentage > 0 AND stage matches AND month matches
+  // High: API percentage > 0 (legend circle) AND stage matches AND month matches
   if (apiPercentage > 0 && stageMatch && monthMatch) {
     console.log(`🔍 Pest Assessment: ${pest.name} -> HIGH (API: ${apiPercentage}%, Stage: ✓, Month: ✓)`);
     return 'High';
   }
   
-  // Moderate: Stage matches AND month matches (regardless of API)
+  // Moderate: Stage matches AND month matches
   if (stageMatch && monthMatch) {
     console.log(`🔍 Pest Assessment: ${pest.name} -> MODERATE (Stage: ✓, Month: ✓)`);
     return 'Moderate';
   }
   
-  // Low: Stage matches (regardless of month or API)
-  if (stageMatch) {
-    console.log(`🔍 Pest Assessment: ${pest.name} -> LOW (Stage: ✓)`);
+  // Low: Month matches only
+  if (monthMatch) {
+    console.log(`🔍 Pest Assessment: ${pest.name} -> LOW (Month: ✓)`);
     return 'Low';
   }
   
-  // Don't display if stage doesn't match
+  // Don't display if month doesn't match
   return null;
 }
 
 /**
  * Assess disease risk based on API percentage (fungi), stage (days), and month
- * High: API fungi percentage > 0 AND stage matches AND month matches (for fungal diseases only)
- * Moderate: Stage matches AND month matches (for all diseases, regardless of API)
- * Low: Stage matches (for all diseases, regardless of month or API)
+ * High: API fungi percentage > 0 (legend circle) AND stage matches AND month matches (for fungal diseases only)
+ * Moderate: Stage matches AND month matches
+ * Low: Month matches only
  */
 function assessDiseaseRisk(
   disease: any,
@@ -214,11 +209,6 @@ function assessDiseaseRisk(
     stageMatch = daysSincePlantation >= disease.stage.minDays && daysSincePlantation <= disease.stage.maxDays;
   }
   
-  // If stage doesn't match, don't display at all
-  if (!stageMatch) {
-    return null;
-  }
-  
   // Check if month matches (case-insensitive comparison)
   const currentMonthNormalized = currentMonth?.trim().toLowerCase() || '';
   const diseaseMonths = Array.isArray(disease.months) ? disease.months : [];
@@ -228,25 +218,25 @@ function assessDiseaseRisk(
   // For fungal diseases (Red Rot, Rust, Smut, Wilt, Downy Mildew), check API percentage
   const isFungalDisease = ['Red Rot', 'Rust', 'Smut', 'Wilt', 'Downy Mildew'].includes(disease.name);
   
-  // High: API fungi percentage > 0 AND stage matches AND month matches (for fungal diseases only)
+  // High: API fungi percentage > 0 (legend circle) AND stage matches AND month matches (for fungal diseases only)
   if (isFungalDisease && fungiPercentage > 0 && stageMatch && monthMatch) {
     console.log(`🔍 Disease Assessment: ${disease.name} -> HIGH (Fungi: ${fungiPercentage}%, Stage: ✓, Month: ✓)`);
     return 'High';
   }
   
-  // Moderate: Stage matches AND month matches (for all diseases, regardless of API)
+  // Moderate: Stage matches AND month matches
   if (stageMatch && monthMatch) {
     console.log(`🔍 Disease Assessment: ${disease.name} -> MODERATE (Stage: ✓, Month: ✓)`);
     return 'Moderate';
   }
   
-  // Low: Stage matches (for all diseases, regardless of month or API)
-  if (stageMatch) {
-    console.log(`🔍 Disease Assessment: ${disease.name} -> LOW (Stage: ✓)`);
+  // Low: Month matches only
+  if (monthMatch) {
+    console.log(`🔍 Disease Assessment: ${disease.name} -> LOW (Month: ✓)`);
     return 'Low';
   }
   
-  // Don't display if stage doesn't match
+  // Don't display if month doesn't match
   return null;
 }
 
@@ -464,9 +454,9 @@ export async function generateRiskAssessment(
     console.log('📋 Active Pest Categories (with percentage > 0):', activeCategories.length > 0 ? activeCategories.join(', ') : 'NONE');
     
     // Assess pest risks: Process ALL pests to determine High, Moderate, or Low risk
-    // High: API percentage > 0 AND stage matches AND month matches
-    // Moderate: Stage matches AND month matches (regardless of API)
-    // Low: Stage matches (regardless of month or API)
+    // High: API percentage > 0 (legend circle) AND stage matches AND month matches
+    // Moderate: Stage matches AND month matches
+    // Low: Month matches only
     for (const pest of pestsData) {
       try {
         const riskLevel = assessPestRisk(
@@ -497,9 +487,9 @@ export async function generateRiskAssessment(
     console.log('🍄 Fungal Diseases Active:', hasFungi ? `YES (${pestDetectionData?.fungi_affected_pixel_percentage}%)` : 'NO');
     
     // Assess disease risks: Process ALL diseases to determine High, Moderate, or Low risk
-    // High: API fungi percentage > 0 AND stage matches AND month matches (for fungal diseases only)
-    // Moderate: Stage matches AND month matches (for all diseases, regardless of API)
-    // Low: Stage matches (for all diseases, regardless of month or API)
+    // High: API fungi percentage > 0 (legend circle) AND stage matches AND month matches (for fungal diseases only)
+    // Moderate: Stage matches AND month matches
+    // Low: Month matches only
     for (const disease of diseasesData) {
       try {
         const riskLevel = assessDiseaseRisk(
@@ -581,7 +571,7 @@ export async function generateRiskAssessment(
       console.log('📊 Risk Distribution Summary:', {
         'Total Pests': totalPests,
         'Total Diseases': totalDiseases,
-        'Note': 'High = API detected + stage + month match, Moderate = stage + month match, Low = stage match only'
+        'Note': 'High = API detected (legend circle) + stage + month match, Moderate = stage + month match, Low = month match only'
       });
     }
     
