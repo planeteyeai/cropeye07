@@ -5,6 +5,7 @@ import RainfallCard from "./cards/RainfallCard";
 import SoilMoistureCard from "./cards/SoilMoistureCard";
 import WaterUptakeCard from "./cards/WaterUptakeCard";
 import EvapotranspirationCard from "./cards/EvapotranspirationCard";
+import EvapotranspirationGraph from "./cards/EvapotranspirationGraph";
 import TemperatureCard from "./cards/TemperatureCard";
 import HumidityCard from "./cards/HumidityCard";
 import SoilMoistureTrendCard from "./cards/SoilMoistureTrendCard";
@@ -207,6 +208,11 @@ const Irrigation: React.FC<IrrigationProps> = ({
           moistGroundPercent={moistGroundPercent}
         />
         <WaterUptakeCard />
+      </div>
+
+      {/* Evapotranspiration Graph */}
+      <div style={{ marginTop: '20px', marginBottom: '20px' }}>
+        <EvapotranspirationGraph />
       </div>
 
       <div className="trend-card-row">
