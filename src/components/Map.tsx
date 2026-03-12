@@ -4,8 +4,9 @@ import { LatLngTuple, LeafletMouseEvent } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./Map.css";
 import { useFarmerProfile } from "../hooks/useFarmerProfile";
+import { useAppContext } from "../context/AppContext";
 import { FaExpand } from 'react-icons/fa';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 
 // Add custom styles for the enhanced tooltip
 const tooltipStyles = `
@@ -215,12 +216,14 @@ const Map: React.FC<MapProps> = ({
   onPestDataChange,
 }) => {
   const { profile, loading: profileLoading } = useFarmerProfile();
+  const { getCached, setCached } = useAppContext();
   const mapWrapperRef = useRef<HTMLDivElement>(null);
   const initialFetchDoneRef = useRef<boolean>(false); // Track if initial fetch is done
 
   const [plotData, setPlotData] = useState<any>(null);
   const [plotBoundary, setPlotBoundary] = useState<any>(null); // Separate state for plot boundary that persists
   const [loading, setLoading] = useState(false);
+  const [dateNavigationLoading, setDateNavigationLoading] = useState(false); // Loading state for date navigation
   const [error, setError] = useState<string | null>(null);
   const [mapCenter] = useState<LatLngTuple>([17.842832246588202, 74.91558702408217]);
   const [selectedPlotName, setSelectedPlotName] = useState("");
@@ -248,19 +251,12 @@ const Map: React.FC<MapProps> = ({
   });
   const [showDatePopup, setShowDatePopup] = useState(false);
   const [popupSide, setPopupSide] = useState<'left' | 'right' | null>(null);
-  const DAYS_STEP = 15;
+  const DAYS_STEP = 5;
 
   useEffect(() => {
     setLayerChangeKey(prev => prev + 1);
-    // Reset to current date when switching layers (for Growth, Water Uptake, Soil Moisture, and PEST)
-    if (activeLayer === "Growth" || activeLayer === "Water Uptake" || activeLayer === "Soil Moisture" || activeLayer === "PEST") {
-      const today = new Date();
-      const year = today.getFullYear();
-      const month = String(today.getMonth() + 1).padStart(2, '0');
-      const day = String(today.getDate()).padStart(2, '0');
-      const todayStr = `${year}-${month}-${day}`;
-      setCurrentEndDate(todayStr);
-    }
+    // Don't reset date when switching layers - keep the same date across all 4 layers
+    // This ensures Growth, Water Uptake, Soil Moisture, and Pest all use the same synchronized date
     
     // Ensure plotBoundary is preserved when switching layers
     // Try to extract from current layer data if plotBoundary is missing
@@ -281,21 +277,32 @@ const Map: React.FC<MapProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLayer, selectedPlotName]);
 
-  // Fetch data when currentEndDate changes for Growth, Water Uptake, Soil Moisture, and PEST layers
+  // Fetch data when currentEndDate changes for ALL 4 layers (Growth, Water Uptake, Soil Moisture, and PEST)
+  // This ensures all layers are updated when date navigation buttons are clicked, keeping dates synchronized
+  // Works regardless of which layer is currently active - all 4 layers always use the same date
   useEffect(() => {
-    if (selectedPlotName && (activeLayer === "Growth" || activeLayer === "Water Uptake" || activeLayer === "Soil Moisture" || activeLayer === "PEST")) {
-      if (activeLayer === "Growth") {
-        fetchGrowthData(selectedPlotName);
-      } else if (activeLayer === "Water Uptake") {
-        fetchWaterUptakeData(selectedPlotName);
-      } else if (activeLayer === "Soil Moisture") {
-        fetchSoilMoistureData(selectedPlotName);
-      } else if (activeLayer === "PEST") {
-        fetchPestData(selectedPlotName);
-      }
+    if (selectedPlotName) {
+      setDateNavigationLoading(true);
+      const fetchAllLayerData = async () => {
+        try {
+          // Fetch all 4 layers simultaneously in parallel to keep dates synchronized
+          await Promise.all([
+            fetchGrowthData(selectedPlotName),
+            fetchWaterUptakeData(selectedPlotName),
+            fetchSoilMoistureData(selectedPlotName),
+            fetchPestData(selectedPlotName)
+          ]);
+          console.log('✅ Map: All 4 layer APIs (Growth, Water Uptake, Soil Moisture, Pest) fetched successfully for date:', currentEndDate);
+        } catch (err) {
+          console.error('❌ Map: Some layer APIs failed to fetch for date:', currentEndDate, err);
+        } finally {
+          setDateNavigationLoading(false);
+        }
+      };
+      fetchAllLayerData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentEndDate, activeLayer, selectedPlotName]);
+  }, [currentEndDate, selectedPlotName]);
 
   const getCurrentDate = () => {
     const today = new Date();
@@ -360,7 +367,7 @@ const Map: React.FC<MapProps> = ({
 
   // Removed fetchAllLayerData - date-dependent layers are now fetched by useEffect
 
-  // Adjust date by ±15 days
+  // Adjust date by ±5 days
   const isAtOrAfterCurrentDate = (dateStr: string) => {
     const date = new Date(dateStr);
     const today = new Date();
@@ -420,6 +427,21 @@ const Map: React.FC<MapProps> = ({
   const fetchGrowthData = async (plotName: string) => {
     if (!plotName) return;
 
+    // Check cache first (only for today's date to ensure freshness)
+    const today = new Date().toISOString().split('T')[0];
+    if (currentEndDate === today) {
+      const cachedData = getCached(`growthData_${plotName}`);
+      if (cachedData) {
+        console.log('✅ Using cached growth data');
+        setGrowthData(cachedData);
+        // Preserve plot boundary from growth data if not already set
+        if (!plotBoundary && cachedData?.features?.[0]?.geometry) {
+          setPlotBoundary(cachedData.features[0]);
+        }
+        return;
+      }
+    }
+
     // Use proxy in development to avoid CORS issues, direct URL in production
     // const baseUrl = import.meta.env.DEV 
       // ? '/api/dev-plot' 
@@ -457,6 +479,11 @@ const Map: React.FC<MapProps> = ({
       const data = await resp.json();
       setGrowthData(data);
       
+      // Cache the data if it's for today's date
+      if (currentEndDate === today) {
+        setCached(`growthData_${plotName}`, data);
+      }
+      
       // Preserve plot boundary from growth data if not already set
       if (!plotBoundary && data?.features?.[0]?.geometry) {
         setPlotBoundary(data.features[0]);
@@ -491,6 +518,21 @@ const Map: React.FC<MapProps> = ({
 
   const fetchWaterUptakeData = async (plotName: string) => {
     if (!plotName) return;
+
+    // Check cache first (only for today's date to ensure freshness)
+    const today = new Date().toISOString().split('T')[0];
+    if (currentEndDate === today) {
+      const cachedData = getCached(`waterUptakeData_${plotName}`);
+      if (cachedData) {
+        console.log('✅ Using cached water uptake data');
+        setWaterUptakeData(cachedData);
+        // Preserve plot boundary from water uptake data if not already set
+        if (!plotBoundary && cachedData?.features?.[0]?.geometry) {
+          setPlotBoundary(cachedData.features[0]);
+        }
+        return;
+      }
+    }
 
     // Use direct backend URL in production (proxy only works in dev)
     // const baseUrl = import.meta.env.DEV 
@@ -529,6 +571,11 @@ const Map: React.FC<MapProps> = ({
       const data = await resp.json();
       setWaterUptakeData(data);
       
+      // Cache the data if it's for today's date
+      if (currentEndDate === today) {
+        setCached(`waterUptakeData_${plotName}`, data);
+      }
+      
       // Preserve plot boundary from water uptake data if not already set
       if (!plotBoundary && data?.features?.[0]?.geometry) {
         setPlotBoundary(data.features[0]);
@@ -563,6 +610,21 @@ const Map: React.FC<MapProps> = ({
 
   const fetchSoilMoistureData = async (plotName: string) => {
     if (!plotName) return;
+
+    // Check cache first (only for today's date to ensure freshness)
+    const today = new Date().toISOString().split('T')[0];
+    if (currentEndDate === today) {
+      const cachedData = getCached(`soilMoistureData_${plotName}`);
+      if (cachedData) {
+        console.log('✅ Using cached soil moisture data');
+        setSoilMoistureData(cachedData);
+        // Preserve plot boundary from soil moisture data if not already set
+        if (!plotBoundary && cachedData?.features?.[0]?.geometry) {
+          setPlotBoundary(cachedData.features[0]);
+        }
+        return;
+      }
+    }
 
     // Use direct backend URL in production (proxy only works in dev)
     // const baseUrl = import.meta.env.DEV 
@@ -601,6 +663,11 @@ const Map: React.FC<MapProps> = ({
 
       const data = await resp.json();
       setSoilMoistureData(data);
+      
+      // Cache the data if it's for today's date
+      if (currentEndDate === today) {
+        setCached(`soilMoistureData_${plotName}`, data);
+      }
       
       // Preserve plot boundary from soil moisture data if not already set
       if (!plotBoundary && data?.features?.[0]?.geometry) {
@@ -780,6 +847,17 @@ const Map: React.FC<MapProps> = ({
       return;
     }
 
+    // Check cache first (only for today's date to ensure freshness)
+    const today = new Date().toISOString().split('T')[0];
+    if (currentEndDate === today) {
+      const cachedData = getCached(`pestData_${plotName}`);
+      if (cachedData) {
+        console.log('✅ Using cached pest data');
+        setPestData(cachedData);
+        return;
+      }
+    }
+
     // Use direct backend URL in production (proxy only works in dev)
     // const baseUrl = import.meta.env.DEV 
     //   ? '/api/dev-plot' 
@@ -816,6 +894,11 @@ const Map: React.FC<MapProps> = ({
 
       const data = await resp.json();
       setPestData(data);
+      
+      // Cache the data if it's for today's date
+      if (currentEndDate === today) {
+        setCached(`pestData_${plotName}`, data);
+      }
       
       // Preserve plot boundary from pest data if not already set
       if (!plotBoundary && data?.features?.[0]?.geometry) {
@@ -1530,6 +1613,45 @@ const Map: React.FC<MapProps> = ({
       )}
 
       <div className="map-container" ref={mapWrapperRef}>
+        {/* Loading Spinner Overlay - Shows when fetching map data */}
+        {dateNavigationLoading && (
+          <div 
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(255, 255, 255, 0.8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 2000,
+              pointerEvents: 'none'
+            }}
+          >
+            <div 
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '12px'
+              }}
+            >
+              <Loader2 className="w-10 h-10 animate-spin" style={{ color: '#3B82F6' }} />
+              <p style={{ 
+                fontSize: '14px', 
+                color: '#374151', 
+                fontWeight: 500,
+                margin: 0
+              }}>
+                Loading map data...
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Back Button */}
         <button
           className="back-btn"
@@ -1576,23 +1698,38 @@ const Map: React.FC<MapProps> = ({
             <button
               className="timeseries-nav-arrow-left"
               onClick={onLeftArrowClick}
-              aria-label="Previous date (-15 days)"
-              title="Previous (-15 days)"
+              aria-label="Previous date (-5 days)"
+              title={dateNavigationLoading ? "Loading..." : "Previous (-5 days)"}
+              disabled={dateNavigationLoading}
+              style={{
+                opacity: dateNavigationLoading ? 0.7 : 1,
+                cursor: dateNavigationLoading ? 'not-allowed' : 'pointer',
+                pointerEvents: dateNavigationLoading ? 'none' : 'auto'
+              }}
             >
-              <span className="timeseries-arrow-icon timeseries-arrow-left-icon"></span>
+              {dateNavigationLoading ? (
+                <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'white' }} />
+              ) : (
+                <span className="timeseries-arrow-icon timeseries-arrow-left-icon"></span>
+              )}
             </button>
             <button
               className="timeseries-nav-arrow-right"
               onClick={onRightArrowClick}
-              aria-label="Next date (+15 days)"
-              title="Next (+15 days)"
-              disabled={isAtOrAfterCurrentDate(currentEndDate)}
+              aria-label="Next date (+5 days)"
+              title={dateNavigationLoading ? "Loading..." : "Next (+5 days)"}
+              disabled={isAtOrAfterCurrentDate(currentEndDate) || dateNavigationLoading}
               style={{
-                opacity: isAtOrAfterCurrentDate(currentEndDate) ? 0.5 : 1,
-                cursor: isAtOrAfterCurrentDate(currentEndDate) ? 'not-allowed' : 'pointer'
+                opacity: (isAtOrAfterCurrentDate(currentEndDate) || dateNavigationLoading) ? 0.7 : 1,
+                cursor: (isAtOrAfterCurrentDate(currentEndDate) || dateNavigationLoading) ? 'not-allowed' : 'pointer',
+                pointerEvents: (isAtOrAfterCurrentDate(currentEndDate) || dateNavigationLoading) ? 'none' : 'auto'
               }}
             >
-              <span className="timeseries-arrow-icon timeseries-arrow-right-icon"></span>
+              {dateNavigationLoading ? (
+                <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'white' }} />
+              ) : (
+                <span className="timeseries-arrow-icon timeseries-arrow-right-icon"></span>
+              )}
             </button>
             
             {/* Date Popup */}

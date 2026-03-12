@@ -76,6 +76,11 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedFarmers, setSelectedFarmers] = useState<Set<number>>(new Set());
   
+  // Loading states for filter operations
+  const [filtering, setFiltering] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [deleting, setDeleting] = useState<number | null>(null);
+  
   // Edit modal state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingFarmer, setEditingFarmer] = useState<Farmer | null>(null);
@@ -484,11 +489,18 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
     }
   };
 
-  const handleDelete = (id: number) => {
-    const updatedUsers = displayUsers.filter((user) => user.id !== id);
-    setUsers(updatedUsers);
-    if (propSetUsers) {
-      propSetUsers(updatedUsers);
+  const handleDelete = async (id: number) => {
+    setDeleting(id);
+    try {
+      // Simulate async operation for better UX
+      await new Promise(resolve => setTimeout(resolve, 300));
+      const updatedUsers = displayUsers.filter((user) => user.id !== id);
+      setUsers(updatedUsers);
+      if (propSetUsers) {
+        propSetUsers(updatedUsers);
+      }
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -1011,14 +1023,19 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
     document.body.removeChild(link);
   };
 
-  const handleBulkDownload = () => {
+  const handleBulkDownload = async () => {
     if (selectedFarmers.size === 0) {
       alert('Please select at least one farmer to download.');
       return;
     }
 
-    // Get selected farmers data
-    const selectedFarmersData = displayUsers.filter(farmer => selectedFarmers.has(farmer.id));
+    setDownloading(true);
+    try {
+      // Simulate async filter operation
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Get selected farmers data
+      const selectedFarmersData = displayUsers.filter(farmer => selectedFarmers.has(farmer.id));
     
     // Create comprehensive CSV data for all selected farmers with proper columns
     const csvData = [];
@@ -1250,18 +1267,45 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
     
     // Clear selection after download
     setSelectedFarmers(new Set());
+    } finally {
+      setDownloading(false);
+    }
   };
 
 
-  const filtered = displayUsers.filter(
-    (user) =>
-      user.farmer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.phone_number.toString().includes(searchTerm) ||
-      formatAcresValue(user.area).includes(searchTerm) ||
-      user.plantation_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.crop_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (user.crop_variety && user.crop_variety.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  // Filter with loading state
+  const [filtered, setFiltered] = useState<Farmer[]>([]);
+  
+  useEffect(() => {
+    const performFilter = async () => {
+      // Only show loading if there's a search term or if we have data to filter
+      if (searchTerm || displayUsers.length > 0) {
+        setFiltering(true);
+      }
+      
+      try {
+        // Simulate async filter operation for better UX (only if search term exists)
+        if (searchTerm) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        
+        const result = displayUsers.filter(
+          (user) =>
+            user.farmer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            user.phone_number.toString().includes(searchTerm) ||
+            formatAcresValue(user.area).includes(searchTerm) ||
+            user.plantation_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            user.crop_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (user.crop_variety && user.crop_variety.toLowerCase().includes(searchTerm.toLowerCase()))
+        );
+        setFiltered(result);
+      } finally {
+        setFiltering(false);
+      }
+    };
+    
+    performFilter();
+  }, [displayUsers, searchTerm]);
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginatedData = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
@@ -1291,12 +1335,23 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
             {selectedFarmers.size > 0 && (
               <button 
-                onClick={handleBulkDownload} 
-                className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded-lg flex items-center justify-center transition-colors text-sm sm:text-base"
+                onClick={handleBulkDownload}
+                disabled={downloading}
+                className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white px-3 sm:px-4 py-2 rounded-lg flex items-center justify-center transition-colors text-sm sm:text-base"
               >
-                <Download className="w-4 h-4 mr-2" />
-                <span className="hidden sm:inline">Download Selected ({selectedFarmers.size})</span>
-                <span className="sm:hidden">Download ({selectedFarmers.size})</span>
+                {downloading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    <span className="hidden sm:inline">Processing...</span>
+                    <span className="sm:hidden">Processing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4 mr-2" />
+                    <span className="hidden sm:inline">Download Selected ({selectedFarmers.size})</span>
+                    <span className="sm:hidden">Download ({selectedFarmers.size})</span>
+                  </>
+                )}
               </button>
             )}
 
@@ -1307,8 +1362,11 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                 placeholder="Search farmers..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                className="w-full pl-9 pr-10 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
               />
+              {filtering && (
+                <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-blue-500" />
+              )}
             </div>
           </div>
         </div>
@@ -1351,6 +1409,15 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                     Error: {error}
                   </td>
                 </tr>
+              ) : filtering ? (
+                <tr>
+                  <td colSpan={8} className="text-center py-8">
+                    <div className="flex items-center justify-center">
+                      <Loader2 className="w-5 h-5 animate-spin mr-2 text-blue-500" />
+                      <span className="text-gray-600">Filtering results...</span>
+                    </div>
+                  </td>
+                </tr>
               ) : paginatedData.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="text-center py-4">No farms found</td>
@@ -1390,8 +1457,17 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                       <button onClick={() => handleEdit(user.id)} className="text-blue-600 hover:text-blue-800">
                         <Edit className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleDelete(user.id)} className="text-red-600 hover:text-red-800">
-                        <Trash2 className="w-4 h-4" />
+                      <button 
+                        onClick={() => handleDelete(user.id)} 
+                        disabled={deleting === user.id}
+                        className="text-red-600 hover:text-red-800 disabled:text-red-400 disabled:cursor-not-allowed"
+                        title={deleting === user.id ? "Deleting..." : "Delete"}
+                      >
+                        {deleting === user.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
                       </button>
                     </td>
                   </tr>
@@ -1413,6 +1489,13 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
           ) : error ? (
             <div className="text-center py-8 text-red-600">
               Error: {error}
+            </div>
+          ) : filtering ? (
+            <div className="text-center py-8">
+              <div className="flex items-center justify-center">
+                <Loader2 className="w-6 h-6 animate-spin mr-2 text-blue-500" />
+                <span className="text-gray-600">Filtering results...</span>
+              </div>
             </div>
           ) : paginatedData.length === 0 ? (
             <div className="text-center py-4">No farms found</div>
@@ -1498,11 +1581,16 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                           <Edit className="w-3 h-3" />
                         </button>
                         <button 
-                          onClick={() => handleDelete(user.id)} 
-                          className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors"
-                          title="Delete"
+                          onClick={() => handleDelete(user.id)}
+                          disabled={deleting === user.id}
+                          className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 disabled:text-red-400 disabled:cursor-not-allowed rounded transition-colors"
+                          title={deleting === user.id ? "Deleting..." : "Delete"}
                         >
-                          <Trash2 className="w-3 h-3" />
+                          {deleting === user.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3 h-3" />
+                          )}
                         </button>
                       </div>
                     </div>

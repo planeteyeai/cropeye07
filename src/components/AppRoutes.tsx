@@ -20,6 +20,7 @@ import {
 import { getCurrentUser } from "../api";
 import { initializeTokenRefresh } from "../utils/tokenManager";
 import { useAppContext } from "../context/AppContext";
+import { prefetchAllData } from "../services/prefetchService";
 
 export type UserRole =
   | "manager"
@@ -30,7 +31,7 @@ export type UserRole =
 
 const AppRoutesContent: React.FC = () => {
   const navigate = useNavigate();
-  const { clearAppStateOnLogout } = useAppContext();
+  const { clearAppStateOnLogout, setCached } = useAppContext();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -167,7 +168,7 @@ const AppRoutesContent: React.FC = () => {
     }
   };
 
-  const handleLoginSuccess = (role: UserRole, token: string) => {
+  const handleLoginSuccess = async (role: UserRole, token: string) => {
     const normalizedRole = role.toLowerCase() as UserRole;
 
     // Store authentication data using utility function
@@ -176,6 +177,18 @@ const AppRoutesContent: React.FC = () => {
     // Update state
     setUserRole(normalizedRole);
     setIsAuthenticated(true);
+
+    // Pre-fetch all commonly used data in the background (non-blocking)
+    // This improves performance by loading data before user navigates
+    if (normalizedRole === 'farmer') {
+      prefetchAllData(setCached, null)
+        .then((result) => {
+          console.log('🚀 Pre-fetch result:', result);
+        })
+        .catch((err) => {
+          console.warn('⚠️ Pre-fetch failed (non-critical):', err);
+        });
+    }
 
     // Auto-redirect to dashboard
     navigate("/dashboard");
