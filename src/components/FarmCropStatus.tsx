@@ -1176,7 +1176,7 @@ const OfficerDashboard: React.FC = () => {
               <pre className="text-xs text-green-300 font-mono">
                 {JSON.stringify(
                   {
-                    endpoint: `${import.meta.env.VITE_API_BASE_URL || "https://cropeye-server-flyio.onrender.com/api"}/farms/recent-farmers/`,
+                    endpoint: `${import.meta.env.VITE_API_BASE_URL || "https://cropeye-backend.up.railway.app/api"}/farms/recent-farmers/`,
                     method: "GET",
                     bearerToken: localStorage.getItem("token")
                       ? "✅ Present"

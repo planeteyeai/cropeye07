@@ -14,7 +14,7 @@ import {
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { getContactDetails } from "../api";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://cropeye-server-flyio.onrender.com/api";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://cropeye-backend.up.railway.app/api";
 const FIELD_OFFICER_TASKS_URL = `${API_BASE.replace(/\/$/, "")}/fieldofficertasks`;
 
 const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];

@@ -47,10 +47,29 @@ const EvapotranspirationGraph: React.FC = () => {
 
   const responsiveChartWidth = Math.max(containerWidth, 600);
 
-  const maxTrendValue =
+  // Determine the highest ET value and round the Y-axis max to a “nice” value
+  const rawMaxValue =
     Array.isArray(trendData) && trendData.length > 0
       ? Math.max(...trendData.map((v: any) => Number(v) || 0), etValue)
-      : Math.max(etValue, 1);
+      : Math.max(etValue, 0);
+
+  // Helper: round up to a visually pleasing maximum (1, 2, 5, 10, 20, 50, etc.)
+  const getNiceMax = (value: number): number => {
+    const safeValue = value <= 0 ? 1 : value;
+    const exponent = Math.floor(Math.log10(safeValue));
+    const base = Math.pow(10, exponent);
+    const fraction = safeValue / base;
+
+    let niceFraction: number;
+    if (fraction <= 1) niceFraction = 1;
+    else if (fraction <= 2) niceFraction = 2;
+    else if (fraction <= 5) niceFraction = 5;
+    else niceFraction = 10;
+
+    return niceFraction * base;
+  };
+
+  const maxTrendValue = getNiceMax(rawMaxValue);
 
   // Calculate bar width and spacing
   const barCount = trendData.length || 24;
@@ -72,20 +91,24 @@ const EvapotranspirationGraph: React.FC = () => {
     return chartHeight - bottomPadding - barHeight;
   };
 
-  // Generate grid lines (horizontal)
-  const gridLines = Array.from({ length: 6 }).map((_, i) => {
+  // Generate Y-axis ticks only (no full horizontal grid lines, just left axis “points”)
+  const yTicks = Array.from({ length: 6 }).map((_, i) => {
     const value = (maxTrendValue / 5) * i;
-    const y = topPadding + (chartHeight - topPadding - bottomPadding) * (1 - value / maxTrendValue);
+    const y =
+      topPadding +
+      (chartHeight - topPadding - bottomPadding) * (1 - value / maxTrendValue);
     return (
-      <g key={`grid-${i}`}>
+      <g key={`ytick-${i}`}>
+        {/* Small tick mark on Y-axis */}
         <line
-          x1={leftPadding}
+          x1={leftPadding - 6}
           y1={y}
-          x2={responsiveChartWidth - rightPadding}
+          x2={leftPadding}
           y2={y}
-          stroke="#e2e8f0"
+          stroke="#94a3b8"
           strokeWidth="1"
         />
+        {/* Y-axis label */}
         <text
           x={leftPadding - 10}
           y={y + 4}
@@ -154,8 +177,8 @@ const EvapotranspirationGraph: React.FC = () => {
             height={chartHeight}
             style={{ display: 'block', margin: '0 auto', minWidth: '600px' }}
           >
-            {/* Grid lines */}
-            {gridLines}
+            {/* Y-axis ticks only (no full horizontal grid) */}
+            {yTicks}
 
             {/* Bars */}
             {trendData.map((val: number, i: number) => {
