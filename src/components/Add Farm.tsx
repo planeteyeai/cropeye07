@@ -1404,8 +1404,19 @@ The farmer can now login with Email credentials to access the dashboard and moni
       
       let errorMessage = "An unexpected error occurred. Please try again.";
       
-      if (status === 401 || status === 403 || error.requiresAuth) {
-        errorMessage = "❌ Authentication Required: Please login as a Field Officer or Admin to register farmers. The registration endpoint requires authentication.";
+      // Handle authentication and authorization errors with specific messages
+      if (status === 401 || error.requiresAuth) {
+        // 401: Not authenticated (no token or invalid token)
+        errorMessage = errorData?.detail || 
+                      errorData?.message || 
+                      error.message ||
+                      "❌ Authentication Required: Please login to register farmers. The registration endpoint requires authentication.";
+      } else if (status === 403) {
+        // 403: Authenticated but not authorized (wrong role)
+        errorMessage = errorData?.detail || 
+                      errorData?.message || 
+                      error.message ||
+                      "❌ Access Denied: Only Field Officers, Managers, and Admins can register farmers. Please login with an authorized account.";
       } else if (status === 400) {
         // Parse nested error structure from backend
         const detail = errorData?.detail || errorData?.message || errorData?.error || "";

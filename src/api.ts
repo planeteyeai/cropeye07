@@ -7,13 +7,14 @@ import {
   setRefreshToken,
   clearAuthData,
   clearAllLocalStorage,
+  getUserRole,
 } from "./utils/auth";
 import { checkAndRefreshToken, isTokenExpired } from "./utils/tokenManager";
 
 // Set base URL for backend (use .env VITE_API_BASE_URL or new Render backend)
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
-  "https://cropeye-backend.up.railway.app/api";
+  "https://cropeye-server-flyio.onrender.com/api";
 
 // KML/GeoJSON API URL
 const KML_API_URL = "http://192.168.41.51";
@@ -1128,6 +1129,7 @@ export const registerFarmerAllInOne = async (data: {
   try {
     // Check if user is authenticated - registration endpoint REQUIRES authentication
     const token = getAuthToken();
+    const userRole = getUserRole();
 
     // Registration endpoint requires authentication (Field Officers/Admins register farmers)
     if (!token || !isValidToken(token)) {
@@ -1137,6 +1139,22 @@ export const registerFarmerAllInOne = async (data: {
       (error as any).response = {
         status: 401,
         data: { detail: errorMsg },
+      };
+      (error as any).requiresAuth = true;
+      throw error;
+    }
+
+    // Check role permissions - only Field Officers, Managers, and Admins can register farmers
+    const allowedRoles = ['fieldofficer', 'manager', 'admin', 'owner'];
+    if (!userRole || !allowedRoles.includes(userRole.toLowerCase())) {
+      const errorMsg = `Access denied. Only Field Officers, Managers, and Admins can register farmers. Your current role: ${userRole || 'unknown'}. Please login with an authorized account.`;
+      const error = new Error(errorMsg);
+      (error as any).response = {
+        status: 403,
+        data: { 
+          detail: errorMsg,
+          message: errorMsg,
+        },
       };
       (error as any).requiresAuth = true;
       throw error;
@@ -1152,15 +1170,19 @@ export const registerFarmerAllInOne = async (data: {
       error.response?.status === 403 ||
       error.requiresAuth
     ) {
+      // If error already has a detailed message, use it; otherwise enhance it
       const errorMsg =
         error.response?.data?.detail ||
         error.response?.data?.message ||
         error.message ||
-        "Authentication credentials were not provided. Please login as a Field Officer or Admin to register farmers.";
+        (error.response?.status === 403
+          ? "Access denied. Only Field Officers, Managers, and Admins can register farmers."
+          : "Authentication credentials were not provided. Please login as a Field Officer or Admin to register farmers.");
+      
       const authError = new Error(errorMsg);
       (authError as any).response = error.response || {
-        status: 401,
-        data: { detail: errorMsg },
+        status: error.response?.status || 401,
+        data: { detail: errorMsg, message: errorMsg },
       };
       (authError as any).requiresAuth = true;
       throw authError;
@@ -1289,6 +1311,7 @@ export const registerFarmerAllInOneOnly = async (
   try {
     // Check if user is authenticated - registration endpoint REQUIRES authentication
     const token = getAuthToken();
+    const userRole = getUserRole();
 
     if (!token || !isValidToken(token)) {
       const errorMsg =
@@ -1297,6 +1320,22 @@ export const registerFarmerAllInOneOnly = async (
       (error as any).response = {
         status: 401,
         data: { detail: errorMsg },
+      };
+      (error as any).requiresAuth = true;
+      throw error;
+    }
+
+    // Check role permissions - only Field Officers, Managers, and Admins can register farmers
+    const allowedRoles = ['fieldofficer', 'manager', 'admin', 'owner'];
+    if (!userRole || !allowedRoles.includes(userRole.toLowerCase())) {
+      const errorMsg = `Access denied. Only Field Officers, Managers, and Admins can register farmers. Your current role: ${userRole || 'unknown'}. Please login with an authorized account.`;
+      const error = new Error(errorMsg);
+      (error as any).response = {
+        status: 403,
+        data: { 
+          detail: errorMsg,
+          message: errorMsg,
+        },
       };
       (error as any).requiresAuth = true;
       throw error;
@@ -1334,8 +1373,27 @@ export const registerFarmerAllInOneOnly = async (
       throw bulkError;
     }
   } catch (error: any) {
+    // Enhance error messages for 403 and 401 errors
+    if (error.response?.status === 403 || error.response?.status === 401 || error.requiresAuth) {
+      // If error doesn't have a detailed message, enhance it
+      if (!error.response?.data?.detail && !error.response?.data?.message) {
+        const status = error.response?.status || 403;
+        const defaultMsg = status === 403
+          ? "Access denied. Only Field Officers, Managers, and Admins can register farmers."
+          : "Authentication required. Please login to register farmers.";
+        
+        (error as any).response = {
+          status: status,
+          data: { 
+            detail: defaultMsg,
+            message: defaultMsg,
+          },
+        };
+        (error as any).requiresAuth = true;
+      }
+    }
+    
     // Only log non-authentication errors to console
-    // Authentication errors are expected and handled by the UI
     if (
       !error.requiresAuth &&
       error.response?.status !== 401 &&
