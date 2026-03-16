@@ -5,7 +5,6 @@ import {
   isValidToken,
   getRefreshToken,
   setRefreshToken,
-  clearAuthData,
   clearAllLocalStorage,
   getUserRole,
 } from "./utils/auth";
@@ -14,7 +13,7 @@ import { checkAndRefreshToken, isTokenExpired } from "./utils/tokenManager";
 // Set base URL for backend (use .env VITE_API_BASE_URL or new Render backend)
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
-  "https://cropeye-server-flyio.onrender.com/api";
+  "https://cropeye-backend.up.railway.app/api";
 
 // KML/GeoJSON API URL
 const KML_API_URL = "http://192.168.41.51";
@@ -1069,63 +1068,9 @@ export const getFarmerProfile = async () => {
 
 // All-in-one farmer registration API for field officers
 // Note: This endpoint should NOT require authentication since users are registering for the first time
-export const registerFarmerAllInOne = async (data: {
-  farmer: {
-    username: string;
-    email: string;
-    password: string;
-    first_name: string;
-    last_name: string;
-    phone_number: string;
-    address: string;
-    village: string;
-    district: string;
-    state: string;
-    taluka: string;
-  };
-  plot: {
-    gat_number: string;
-    plot_number: string;
-    village: string;
-    taluka: string;
-    district: string;
-    state: string;
-    country: string;
-    pin_code: string;
-    location: {
-      type: "Point";
-      coordinates: [number, number]; // [longitude, latitude]
-    };
-    boundary: {
-      type: "Polygon";
-      coordinates: [[[number, number]]]; // GeoJSON Polygon coordinates
-    };
-  };
-  farm: {
-    address: string;
-    area_size: string;
-    soil_type_name: string;
-    crop_type_name: string;
-    crop_variety?: string;
-    plantation_type: string;
-    planting_method: string;
-  };
-  irrigation: {
-    irrigation_type_name: string;
-    status: boolean;
-    location: {
-      type: "Point";
-      coordinates: [number, number];
-    };
-    // Optional fields based on irrigation type
-    // plants_per_acre?: number;
-    flow_rate_lph?: number;
-    emitters_count?: number;
-    motor_horsepower?: number;
-    pipe_width_inches?: number;
-    distance_motor_to_plot_m?: number;
-  };
-}) => {
+// The payload shape can vary slightly depending on how plots are converted,
+// so we keep the type broad here and rely on runtime validation on the backend.
+export const registerFarmerAllInOne = async (data: any) => {
   try {
     // Check if user is authenticated - registration endpoint REQUIRES authentication
     const token = getAuthToken();
@@ -1553,9 +1498,7 @@ const convertToAllInOneFormat = (formData: any, plots: any[]) => {
   }
 
   // Return array of payloads - one for each plot
-  return plots.map((plot, index) =>
-    convertSinglePlotToAllInOneFormat(formData, plot),
-  );
+  return plots.map((plot) => convertSinglePlotToAllInOneFormat(formData, plot));
 };
 
 // ==================== SYSTEM/UTILITY API ====================
@@ -1593,6 +1536,26 @@ export const refreshApiEndpoints = async () => {
   // Use Promise.allSettled to ensure all promises complete, regardless of success or failure
   const results = await Promise.allSettled(refreshPromises);
   return results;
+};
+
+// ==================== EVENTS SERVICE (AGRO STATS) HELPERS ====================
+
+// New fast agro stats endpoint for a single plot (Farmer dashboard)
+export const getSinglePlotAgroStats = async (plotId: string | number) => {
+  const url = `https://events-cropeye.up.railway.app/plots/analyzeSinglePlot?plot_id=${plotId}`;
+  const response = await axios.get(url);
+  return response.data;
+};
+
+// New agro stats endpoint for field officer dashboard (all plots under officer)
+export const getFieldOfficerAgroStats = async (
+  fieldOfficerId: string | number,
+  endDate?: string,
+) => {
+  const dateParam = endDate ? `?end_date=${endDate}` : "";
+  const url = `https://events-cropeye.up.railway.app/field-officers/${fieldOfficerId}/agroStats${dateParam}`;
+  const response = await axios.get(url);
+  return response.data;
 };
 
 // Debug function to validate data format before sending

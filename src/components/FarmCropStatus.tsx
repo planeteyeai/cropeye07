@@ -51,13 +51,12 @@ import "leaflet/dist/leaflet.css";
 import axios from "axios";
 import { getCache, setCache } from "../utils/cache";
 import { getRecentFarmers } from "../api";
-import CommonSpinner from "./CommanSpinner";
 
 // Constants (same as FarmerDashboard)
 const BASE_URL = "https://events-cropeye.up.railway.app";
-const OPTIMAL_BIOMASS = 150;
-const SOIL_API_URL = "https://admin-cropeye.up.railway.app";
-const SOIL_DATE = "2025-10-03";
+// const OPTIMAL_BIOMASS = 150;
+// const SOIL_API_URL = "https://admin-cropeye.up.railway.app";
+// const SOIL_DATE = "2025-10-03";
 
 const OTHER_FARMERS_RECOVERY = {
   regional_average: 7.85,
@@ -154,7 +153,7 @@ const OfficerDashboard: React.FC = () => {
   const [plots, setPlots] = useState<string[]>([]);
   const [loadingFarmers, setLoadingFarmers] = useState<boolean>(false);
   const [loadingData, setLoadingData] = useState<boolean>(false);
-  const [showDebugInfo, setShowDebugInfo] = useState(false);
+  const [showDebugInfo] = useState(false);
 
   const lineStyles: LineStyles = {
     growth: { color: "#22c55e", label: "Growth Index", icon: TrendingUp },
@@ -463,51 +462,49 @@ const OfficerDashboard: React.FC = () => {
       // Determine which date to use for fetching yield data
       const yieldDataDate = isHarvested && harvestDate ? harvestDate : today;
 
-      // Step 1: Fetch critical data first (agroStats) with caching
-      const agroStatsCacheKey = `agroStats_v3_${yieldDataDate}`;
-      let allPlotsData = getCache(agroStatsCacheKey);
+      // Step 1: Prefer new single-plot agro stats endpoint for better performance
+      const singlePlotCacheKey = `agroSingle_v1_${selectedPlotId}_${yieldDataDate}`;
+      let currentPlotData = getCache(singlePlotCacheKey);
 
-      // Also check plot-specific cache for faster retrieval
-      const plotSpecificCacheKey = `plot_v3_${selectedPlotId}_${yieldDataDate}`;
-      let currentPlotData = getCache(plotSpecificCacheKey);
-
-      if (!allPlotsData || !currentPlotData) {
+      if (!currentPlotData) {
         try {
-          // Fetch agroStats with shorter timeout for faster failure/recovery
-          const agroStatsRes = await makeRequestWithRetry(
-            `https://events-cropeye.up.railway.app/plots/agroStats?end_date=${yieldDataDate}`,
-            1,
-            12000, // Reduced timeout for faster retrieval
+          const singlePlotRes = await axios.get(
+            `https://events-cropeye.up.railway.app/plots/analyzeSinglePlot?plot_id=${selectedPlotId}`,
           );
-          allPlotsData = agroStatsRes;
-          setCache(agroStatsCacheKey, allPlotsData);
+          currentPlotData = singlePlotRes.data;
+          setCache(singlePlotCacheKey, currentPlotData);
+        } catch (singleErr) {
+          // If new endpoint fails, fall back to bulk agroStats endpoint
+          console.error(
+            "Error fetching single-plot agroStats in FarmCropStatus, falling back to bulk agroStats:",
+            singleErr,
+          );
 
-          // Extract and cache plot-specific data
-          currentPlotData = allPlotsData[selectedPlotId];
-          if (!currentPlotData && allPlotsData) {
-            const quotedPlotId = `"${selectedPlotId}"`;
-            currentPlotData = allPlotsData[quotedPlotId];
+          const agroStatsCacheKey = `agroStats_v3_${yieldDataDate}`;
+          let allPlotsData = getCache(agroStatsCacheKey);
+
+          if (!allPlotsData) {
+            try {
+              const agroStatsRes = await makeRequestWithRetry(
+                `https://events-cropeye.up.railway.app/plots/agroStats?end_date=${yieldDataDate}`,
+                1,
+                12000,
+              );
+              allPlotsData = agroStatsRes;
+              setCache(agroStatsCacheKey, allPlotsData);
+            } catch (bulkErr) {
+              console.error("Error fetching bulk agroStats:", bulkErr);
+              allPlotsData = null;
+            }
           }
 
-          if (currentPlotData) {
-            setCache(plotSpecificCacheKey, currentPlotData);
-          }
-        } catch (error: any) {
-          if (!allPlotsData) allPlotsData = null;
-          if (!currentPlotData && allPlotsData) {
+          if (allPlotsData) {
             currentPlotData = allPlotsData[selectedPlotId];
             if (!currentPlotData) {
               const quotedPlotId = `"${selectedPlotId}"`;
               currentPlotData = allPlotsData[quotedPlotId];
             }
           }
-        }
-      } else {
-        // Use cached plot data
-        currentPlotData = allPlotsData[selectedPlotId];
-        if (!currentPlotData && allPlotsData) {
-          const quotedPlotId = `"${selectedPlotId}"`;
-          currentPlotData = allPlotsData[quotedPlotId];
         }
       }
 
@@ -1151,15 +1148,6 @@ const OfficerDashboard: React.FC = () => {
     );
   };
 
-  // Show loading spinner while fetching initial farmers data
-  if (loadingFarmers && farmers.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center">
-        <CommonSpinner />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
       {/* Enhanced Header */}
@@ -1176,7 +1164,7 @@ const OfficerDashboard: React.FC = () => {
               <pre className="text-xs text-green-300 font-mono">
                 {JSON.stringify(
                   {
-                    endpoint: `${import.meta.env.VITE_API_BASE_URL || "https://cropeye-server-flyio.onrender.com/api"}/farms/recent-farmers/`,
+                    endpoint: `${import.meta.env.VITE_API_BASE_URL || "https://cropeye-backend.up.railway.app/api"}/farms/recent-farmers/`,
                     method: "GET",
                     bearerToken: localStorage.getItem("token")
                       ? "✅ Present"
@@ -1233,7 +1221,7 @@ const OfficerDashboard: React.FC = () => {
                     ) : (
                       <>
                         <option value="">Select a farmer</option>
-                        {farmers.map((farmer, index) => {
+                        {farmers.map((farmer) => {
                           const farmerId = String(farmer.id);
                           const farmerName =
                             `${farmer.first_name} ${farmer.last_name}`.trim();
@@ -1276,12 +1264,9 @@ const OfficerDashboard: React.FC = () => {
                     ) : (
                       <>
                         <option value="">Select a plot</option>
-                        {plots.map((plotId, index) => {
+                        {plots.map((plotId) => {
                           return (
-                            <option
-                              key={`plot-${plotId}-${index}`}
-                              value={plotId}
-                            >
+                            <option key={`plot-${plotId}`} value={plotId}>
                               Plot: {plotId}
                             </option>
                           );

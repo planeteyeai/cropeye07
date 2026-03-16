@@ -50,13 +50,12 @@ import "leaflet/dist/leaflet.css";
 import axios from "axios";
 import { getCache, setCache } from "../utils/cache";
 import api from "../api"; // Import the authenticated api instance
-import CommonSpinner from "./CommanSpinner";
 
 // Constants (same as FarmerDashboard)
 const BASE_URL = "https://events-cropeye.up.railway.app";
-const OPTIMAL_BIOMASS = 150;
-const SOIL_API_URL = "https://events-cropeye.up.railway.app";
-const SOIL_DATE = "2025-10-03";
+// const OPTIMAL_BIOMASS = 150;
+// const SOIL_API_URL = "https://events-cropeye.up.railway.app";
+// const SOIL_DATE = "2025-10-03";
 
 const OTHER_FARMERS_RECOVERY = {
   regional_average: 7.85,
@@ -158,7 +157,7 @@ const ManagerFarmDash: React.FC = () => {
   const [plots, setPlots] = useState<string[]>([]);
   const [loadingFarmers, setLoadingFarmers] = useState<boolean>(false);
   const [loadingData, setLoadingData] = useState<boolean>(false);
-  const [showDebugInfo, setShowDebugInfo] = useState(false);
+  const [showDebugInfo] = useState(false);
 
   const lineStyles: LineStyles = {
     growth: { color: "#16a34a", label: "Growth Index" },
@@ -444,8 +443,7 @@ const ManagerFarmDash: React.FC = () => {
 
       // Step 1: Fetch harvest status first to determine correct date for yield data
       const harvestCacheKey = `harvest_${selectedPlotId}_${today}`;
-      let harvestStatus = null;
-      let harvestDate = null;
+      let harvestStatus: string | null = null;
       let harvestData = getCache(harvestCacheKey);
 
       if (!harvestData) {
@@ -466,21 +464,12 @@ const ManagerFarmDash: React.FC = () => {
         harvestStatus =
           harvestData.harvest_status ||
           harvestData.harvest_summary?.harvest_status ||
-          harvestData.features?.[0]?.properties?.harvest_status;
-        harvestDate =
-          harvestData.harvest_date || harvestData.harvest_summary?.harvest_date;
+          harvestData.features?.[0]?.properties?.harvest_status ||
+          null;
       }
 
-      // Determine date for yield data
-      let yieldDataDate = today;
-      // User requested to always use current date for agroStats
-      // const isHarvested =
-      //   harvestStatus?.toLowerCase().includes("harvested") &&
-      //   !harvestStatus?.toLowerCase().includes("partially");
-
-      // if (isHarvested && harvestDate) {
-      //   yieldDataDate = harvestDate;
-      // }
+      // Determine date for yield data (always use today for agroStats)
+      const yieldDataDate = today;
 
       // Helper to fetch agroStats with fallback dates
       const fetchAgroStatsWithFallback = async (dates: string[]) => {
@@ -739,7 +728,7 @@ const ManagerFarmDash: React.FC = () => {
     try {
       // Use authenticated API call from api.ts
       const response = await api.get(
-        `${import.meta.env.VITE_API_BASE_URL || "https://cropeye-server-flyio.onrender.com/api"}/users/my-field-officers/`,
+        `${import.meta.env.VITE_API_BASE_URL || "https://cropeye-backend.up.railway.app/api"}/users/my-field-officers/`,
       );
       const responseData = response.data;
       // Extract the array of field officers from the response object
@@ -1150,20 +1139,6 @@ const ManagerFarmDash: React.FC = () => {
     );
   };
 
-  // Show loading spinner while fetching initial farmers data
-  if (loadingFarmers && fieldOfficers.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center">
-        <CommonSpinner />
-      </div>
-    );
-  }
-
-  const totalFarmers = fieldOfficers.reduce(
-    (acc, officer) => acc + (officer.farmers?.length || 0),
-    0,
-  );
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
       {/* Enhanced Header */}
@@ -1180,7 +1155,7 @@ const ManagerFarmDash: React.FC = () => {
               <pre className="text-xs text-green-300 font-mono">
                 {JSON.stringify(
                   {
-                    endpoint: `${import.meta.env.VITE_API_BASE_URL || "https://cropeye-server-flyio.onrender.com/api"}/farms/recent-farmers/`,
+                    endpoint: `${import.meta.env.VITE_API_BASE_URL || "https://cropeye-backend.up.railway.app/api"}/farms/recent-farmers/`,
                     method: "GET",
                     bearerToken: localStorage.getItem("token")
                       ? "✅ Present"
@@ -1272,7 +1247,7 @@ const ManagerFarmDash: React.FC = () => {
                     ) : (
                       <>
                         <option value="">Select a farmer</option>
-                        {farmersForSelectedOfficer.map((farmer, index) => {
+                        {farmersForSelectedOfficer.map((farmer) => {
                           const farmerId = String(farmer.id);
                           const farmerName =
                             `${farmer.first_name} ${farmer.last_name}`.trim();

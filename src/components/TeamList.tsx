@@ -100,10 +100,10 @@ const CATEGORY_INFO: Record<
 
 const REMOTE_API_BASE =
   import.meta.env.VITE_API_BASE_URL ||
-  "https://cropeye-server-flyio.onrender.com/api";
+  "https://cropeye-backend.up.railway.app/api";
 const LOCAL_API_BASE = (
   import.meta.env.VITE_API_BASE_URL ||
-  "https://cropeye-server-flyio.onrender.com/api"
+  "https://cropeye-backend.up.railway.app/api"
 ).replace(/\/api\/?$/, "");
 
 const ensureArray = (payload: any): any[] => {

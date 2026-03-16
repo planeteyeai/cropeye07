@@ -184,7 +184,7 @@ const PieChartWithNeedle: React.FC<PieChartWithNeedleProps> = ({
 };
 
 const BASE_URL = "https://events-cropeye.up.railway.app";
-const OPTIMAL_BIOMASS = 150;
+// const OPTIMAL_BIOMASS = 150;
 const SOIL_API_URL = "https://main-cropeye.up.railway.app";
 const SOIL_DATE = "2025-10-03";
 
@@ -196,15 +196,11 @@ const OTHER_FARMERS_RECOVERY = {
 };
 
 const FarmerDashboard: React.FC = () => {
-  const {
-    profile,
-    loading: profileLoading,
-    getFarmerFullName,
-  } = useFarmerProfile();
+  const { profile, loading: profileLoading } = useFarmerProfile();
   const { selectedPlotName, setSelectedPlotName } = useAppContext();
 
   const [currentPlotId, setCurrentPlotId] = useState<string | null>(null);
-  const [showDebugInfo, setShowDebugInfo] = useState(false);
+  const [showDebugInfo] = useState(false);
   const [lineChartData, setLineChartData] = useState<LineChartData[]>([]);
   const [visibleLines, setVisibleLines] = useState<VisibleLines>({
     growth: true,
@@ -485,30 +481,52 @@ const FarmerDashboard: React.FC = () => {
       // Determine which date to use for fetching yield data
       // For harvested plots, use harvest_date; for others, use end_date
       const yieldDataDate = isHarvested && harvestDate ? harvestDate : endDate;
-      // Use versioned cache key to ensure fresh data structure
-      const agroStatsCacheKey = `agroStats_v3_${yieldDataDate}`;
-      const agroStatsUrl = `https://events-cropeye.up.railway.app/plots/agroStats?end_date=${yieldDataDate}`;
 
-      let allPlotsData = getCache(agroStatsCacheKey);
+      // Prefer new single-plot agro stats endpoint for better performance
+      const singlePlotCacheKey = `agroSingle_v1_${currentPlotId}_${yieldDataDate}`;
+      let currentPlotData = getCache(singlePlotCacheKey);
 
-      if (!allPlotsData) {
+      if (!currentPlotData) {
         try {
-          const agroStatsRes = await axios.get(agroStatsUrl);
-          allPlotsData = agroStatsRes.data;
-          setCache(agroStatsCacheKey, allPlotsData);
-        } catch (err) {
-          console.error("Error fetching agroStats:", err);
-          allPlotsData = null;
+          const singlePlotRes = await axios.get(
+            `https://events-cropeye.up.railway.app/plots/analyzeSinglePlot?plot_id=${currentPlotId}`,
+          );
+          currentPlotData = singlePlotRes.data;
+          setCache(singlePlotCacheKey, currentPlotData);
+        } catch (singleErr) {
+          console.error(
+            "Error fetching single-plot agroStats, falling back to bulk agroStats:",
+            singleErr,
+          );
+
+          // Fallback to older bulk agroStats endpoint if new one fails
+          const agroStatsCacheKey = `agroStats_v3_${yieldDataDate}`;
+          const agroStatsUrl = `https://events-cropeye.up.railway.app/plots/agroStats?end_date=${yieldDataDate}`;
+
+          let allPlotsData = getCache(agroStatsCacheKey);
+
+          if (!allPlotsData) {
+            try {
+              const agroStatsRes = await axios.get(agroStatsUrl);
+              allPlotsData = agroStatsRes.data;
+              setCache(agroStatsCacheKey, allPlotsData);
+            } catch (err) {
+              console.error("Error fetching agroStats:", err);
+              allPlotsData = null;
+            }
+          }
+
+          if (allPlotsData) {
+            currentPlotData = allPlotsData[currentPlotId];
+            if (!currentPlotData) {
+              const quotedPlotId = `"${currentPlotId}"`;
+              currentPlotData = allPlotsData[quotedPlotId];
+            }
+          }
         }
       }
 
-      let currentPlotData = allPlotsData ? allPlotsData[currentPlotId] : null;
-      if (!currentPlotData && allPlotsData) {
-        const quotedPlotId = `"${currentPlotId}"`;
-        currentPlotData = allPlotsData[quotedPlotId];
-      }
-
-      const stats = soilData?.features?.[0]?.properties?.statistics;
+      // const stats = soilData?.features?.[0]?.properties?.statistics;
       const sugarYieldMeanValue =
         currentPlotData?.brix_sugar?.sugar_yield?.mean ?? null;
 
