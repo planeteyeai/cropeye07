@@ -248,8 +248,13 @@ export const prefetchAllData = async (
         });
     }
 
-    // 6. Fetch plot indices (for FarmerDashboard)
-    const plotId = profile?.plots?.[0]?.id || profile?.plots?.[0]?.fastapi_plot_id;
+    // 6. Fetch plot indices (for FarmerDashboard) - use fastapi_plot_id, Events Service expects this format not numeric plot.id
+    const plotId =
+      profile?.plots?.[0]?.fastapi_plot_id ||
+      (profile?.plots?.[0]
+        ? `${profile.plots[0].gat_number}_${profile.plots[0].plot_number}`
+        : null) ||
+      profile?.plots?.[0]?.id;
     let indicesPromise: Promise<any> | null = null;
     if (plotId) {
       indicesPromise = fetch(`${EVENTS_BASE_URL}/plots/${plotId}/indices`)

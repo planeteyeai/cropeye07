@@ -258,20 +258,17 @@ const FarmerDashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!profile || profileLoading) {
-      return;
-    }
+    if (!profile || profileLoading) return;
 
     const plotNames = profile.plots?.map((plot) => plot.fastapi_plot_id) || [];
-    const defaultPlot = plotNames.length > 0 ? plotNames[0] : null;
+    const savedPlot = localStorage.getItem("selectedPlot");
+    const savedIsValid = savedPlot && plotNames.includes(savedPlot);
+    const plotToUse = savedIsValid ? savedPlot : (plotNames.length > 0 ? plotNames[0] : null);
 
-    console.log("📊 FarmerDashboard: Available plots:", plotNames);
-    console.log("📊 FarmerDashboard: Selected plot:", defaultPlot);
-
-    if (defaultPlot) {
-      setCurrentPlotId(defaultPlot);
-      localStorage.setItem("selectedPlot", defaultPlot);
-      console.log("✅ FarmerDashboard: Using plot ID:", defaultPlot);
+    if (plotToUse) {
+      setCurrentPlotId(plotToUse);
+      setSelectedPlotName(plotToUse);
+      if (!savedIsValid) localStorage.setItem("selectedPlot", plotToUse);
     }
   }, [profile, profileLoading]);
 

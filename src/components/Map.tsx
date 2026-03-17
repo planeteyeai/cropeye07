@@ -312,26 +312,19 @@ const Map: React.FC<MapProps> = ({
     return `${year}-${month}-${day}`;
   };
 
-  // Auto-select first plot from farmer profile
+  // Use saved plot from localStorage when returning to Home, else default to first plot
   useEffect(() => {
-    // console.log('??? Map useEffect: profileLoading:', profileLoading, 'profile:', profile);
-    
-    if (profileLoading || !profile) {
-      // console.log('??? Waiting for profile to load...');
-      return;
-    }
+    if (profileLoading || !profile) return;
 
     const plotNames = profile.plots?.map(plot => plot.fastapi_plot_id) || [];
-    const defaultPlot = plotNames.length > 0 ? plotNames[0] : null;
-    
-    // console.log('??? Available plots:', plotNames);
-    // console.log('??? Setting default plot:', defaultPlot);
-    
-    if (defaultPlot) {
-      setSelectedPlotName(defaultPlot);
-      localStorage.setItem('selectedPlot', defaultPlot);
-      // Clear previous plot boundary when selecting a new plot
-      setPlotBoundary(null);
+    const savedPlot = typeof window !== 'undefined' ? localStorage.getItem('selectedPlot') : null;
+    const savedIsValid = savedPlot && plotNames.includes(savedPlot);
+    const plotToUse = savedIsValid ? savedPlot : (plotNames.length > 0 ? plotNames[0] : null);
+
+    if (plotToUse && plotToUse !== selectedPlotName) {
+      setSelectedPlotName(plotToUse);
+      if (!savedIsValid) localStorage.setItem('selectedPlot', plotToUse);
+      if (!savedIsValid) setPlotBoundary(null);
     }
   }, [profile, profileLoading]);
 
