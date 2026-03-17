@@ -1,7 +1,7 @@
 import { pestsData } from './pestsData';
 import { diseasesData } from './diseasesData';
 import { getFarmerMyProfile } from '../../../api';
-import { getCache } from '../../../components/utils/cache';
+import { getCache, setCache } from '../../../components/utils/cache';
 
 /** Get farmer profile - uses cache first (from login prefetch) to avoid duplicate my-profile/ requests */
 async function getProfileData(): Promise<any> {
@@ -294,6 +294,19 @@ export async function fetchPestDetectionData(plotId?: string): Promise<PestDetec
 
     const plotName = selectedPlot.plot_name || selectedPlot.fastapi_plot_id || `${selectedPlot.gat_number}_${selectedPlot.plot_number}`;
     const currentDate = new Date().toISOString().split('T')[0];
+
+    // Cache-first: prefetch + Map store pestData_${plotName}
+    const cacheKey = `pestData_${plotName}`;
+    const cached = getCache(cacheKey, 10 * 60 * 1000); // 10 min TTL
+    if (cached?.pixel_summary) {
+      const ps = cached.pixel_summary;
+      return {
+        fungi_affected_pixel_percentage: ps.fungi_affected_pixel_percentage || 0,
+        chewing_affected_pixel_percentage: ps.chewing_affected_pixel_percentage || 0,
+        sucking_affected_pixel_percentage: ps.sucking_affected_pixel_percentage || 0,
+        SoilBorn_affected_pixel_percentage: ps.SoilBorn_affected_pixel_percentage || 0,
+      };
+    }
     
     // Use proxy in development to avoid CORS issues, direct URL in production
     const baseUrl = import.meta.env.DEV 
@@ -322,6 +335,7 @@ export async function fetchPestDetectionData(plotId?: string): Promise<PestDetec
       
       if (postResponse.ok) {
         const pestData = await postResponse.json();
+        setCache(cacheKey, pestData); // Cache for Map and future calls
         const pixelSummary = pestData.pixel_summary || {};
         return {
           fungi_affected_pixel_percentage: pixelSummary.fungi_affected_pixel_percentage || 0,

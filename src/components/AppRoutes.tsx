@@ -20,7 +20,7 @@ import {
 import { getCurrentUser } from "../api";
 import { initializeTokenRefresh } from "../utils/tokenManager";
 import { useAppContext } from "../context/AppContext";
-import { prefetchAllData } from "../services/prefetchService";
+import { prefetchAllData, prefetchFarmerProfile } from "../services/prefetchService";
 
 export type UserRole =
   | "manager"
@@ -127,6 +127,11 @@ const AppRoutesContent: React.FC = () => {
           normalizedRole
         )
       ) {
+        // For farmer: preload profile before showing dashboard (reduces "Loading farmer profile...")
+        if (normalizedRole === "farmer") {
+          await prefetchFarmerProfile(setCached);
+        }
+
         setUserRole(normalizedRole);
         setIsAuthenticated(true);
 
@@ -193,10 +198,14 @@ const AppRoutesContent: React.FC = () => {
     setUserRole(normalizedRole);
     setIsAuthenticated(true);
 
-    // Pre-fetch complete data for all roles on login (non-blocking)
+    // For farmer: await profile prefetch before navigate so dashboard loads fast (no "Loading farmer profile...")
+    if (normalizedRole === "farmer") {
+      await prefetchFarmerProfile(setCached);
+    }
+
+    // Pre-fetch rest of data in background (non-blocking)
     triggerPrefetch(normalizedRole);
 
-    // Auto-redirect to dashboard
     navigate("/dashboard");
   };
 

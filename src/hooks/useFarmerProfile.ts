@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getFarmerProfile, getFarmerMyProfile } from '../api';
 import { getAuthToken, isValidToken, getUserRole } from '../utils/auth';
+import { getCache } from '../components/utils/cache';
 
 interface FarmerProfile {
   success?: boolean;
@@ -229,21 +230,25 @@ export const useFarmerProfile = () => {
   };
 
   useEffect(() => {
-    // Only fetch profile if user is authenticated with valid token AND is a farmer
     const token = getAuthToken();
     const userRole = getUserRole();
     
-    // Only fetch farmer profile if:
-    // 1. Token exists and is valid format
-    // 2. User role is 'farmer'
-    if (token && isValidToken(token) && userRole === 'farmer') {
-      fetchMyProfile(); // Use the new my-profile endpoint by default
-    } else {
-      // No valid token or not a farmer - don't attempt to fetch profile
+    if (!token || !isValidToken(token) || userRole !== 'farmer') {
       setLoading(false);
-      setError(null); // Don't set error - this is expected for non-farmer users or unauthenticated users
+      setError(null);
       setProfile(null);
+      return;
     }
+
+    // Cache-first: use prefetched profile to avoid blocking dashboard (10 min TTL)
+    const cached = getCache('farmerProfile', 10 * 60 * 1000);
+    if (cached && (cached.plots?.length || cached.farmer_profile)) {
+      setProfile(cached);
+      setLoading(false);
+      return;
+    }
+
+    fetchMyProfile();
   }, []);
 
   const getFarmerName = () => {

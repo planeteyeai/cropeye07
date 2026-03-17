@@ -4,6 +4,7 @@ import {
   getFarmsWithFarmerDetails,
   getTasks,
 } from '../api';
+import { getCache } from '../components/utils/cache';
 
 // Base URLs for external APIs
 const BASE_URL = 'https://admin-cropeye.up.railway.app';
@@ -17,6 +18,22 @@ interface PrefetchResult {
 }
 
 type UserRole = 'farmer' | 'manager' | 'admin' | 'fieldofficer' | 'owner';
+
+/**
+ * Pre-fetch farmer profile only - fast, blocks navigation until done.
+ * Use before navigate so dashboard loads with profile in cache.
+ */
+export const prefetchFarmerProfile = async (
+  setCached: (key: string, data: any) => void
+): Promise<boolean> => {
+  try {
+    const response = await getFarmerMyProfile();
+    setCached('farmerProfile', response.data);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 /**
  * Pre-fetches all commonly used endpoints on login/app load to improve performance
@@ -81,20 +98,21 @@ export const prefetchAllData = async (
       };
     }
 
-    // 3. Farmer-specific: fetch farmer profile (most important - used everywhere)
-    const profilePromise = getFarmerMyProfile()
-      .then((response) => {
-        setCached('farmerProfile', response.data);
-        fetchedEndpoints.push('farmerProfile');
-        return response.data;
-      })
-      .catch((err) => {
-        errors.push(`Profile: ${err.message}`);
-        return null;
-      });
-
-    // Wait for profile first to get plot information
-    const profile = await profilePromise;
+    // 3. Farmer-specific: use cached profile if available (avoids duplicate fetch after prefetchFarmerProfile)
+    let profile = getCache('farmerProfile', 10 * 60 * 1000);
+    if (!profile) {
+      const profilePromise = getFarmerMyProfile()
+        .then((response) => {
+          setCached('farmerProfile', response.data);
+          fetchedEndpoints.push('farmerProfile');
+          return response.data;
+        })
+        .catch((err) => {
+          errors.push(`Profile: ${err.message}`);
+          return null;
+        });
+      profile = await profilePromise;
+    }
     
     // Determine plot name from profile if not provided
     let plotName = selectedPlotName;
