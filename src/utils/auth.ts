@@ -1,3 +1,5 @@
+import { clearAllAppCache } from "../components/utils/cache";
+
 // Authentication utility functions
 export const AUTH_TOKEN_KEY = 'token';
 export const REFRESH_TOKEN_KEY = 'refresh_token'; // Add refresh token key
@@ -83,6 +85,11 @@ export const clearAuthData = (): void => {
 
 // Clear ALL localStorage and sessionStorage (used on logout - no local cache remains)
 export const clearAllLocalStorage = (): void => {
+  try {
+    clearAllAppCache();
+  } catch (e) {
+    // Ignore cache clear errors
+  }
   try {
     localStorage.clear();
     sessionStorage.clear();

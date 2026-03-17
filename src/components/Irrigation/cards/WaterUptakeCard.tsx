@@ -6,7 +6,7 @@ import { useAppContext } from "../../../context/AppContext";
 import { useFarmerProfile } from "../../../hooks/useFarmerProfile";
 
 const WaterUptakeCard: React.FC = () => {
-  const { appState } = useAppContext();
+  const { appState, getCached, setCached } = useAppContext();
 
   const irrigationSchedule = appState.irrigationScheduleData || [];
   const todayData = irrigationSchedule.find((day: any) => day.isToday);
@@ -36,28 +36,30 @@ const WaterUptakeCard: React.FC = () => {
       }
 
       try {
+        // Check cache first (prefetch + Map store waterUptakeData_${plotName})
+        const cacheKey = `waterUptakeData_${plotName}`;
+        const cached = getCached(cacheKey, 10 * 60 * 1000); // 10 min TTL
+        if (cached?.pixel_summary) {
+          const adequate = cached.pixel_summary?.adequat_pixel_percentage ?? 0;
+          const excellent = cached.pixel_summary?.excellent_pixel_percentage ?? 0;
+          setEfficiency(Math.round(adequate + excellent));
+          setLoading(false);
+          return;
+        }
+
         setLoading(true);
         setError(null);
         
-        // Calculate current end date in YYYY-MM-DD format
         const currentEndDate = new Date().toISOString().split('T')[0];
-        
-        // Use proxy in development to avoid CORS issues, direct URL in production
-        // const baseUrl = import.meta.env.DEV 
-          // ? '/api/dev-plot' 
-          // : 'https://admin-cropeye.up.railway.app';
         const baseUrl = 'https://admin-cropeye.up.railway.app';
         const url = `${baseUrl}/wateruptake?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`;
         
-        // Fetch with explicit CORS mode and proper headers matching other API calls
         const response = await fetch(url, {
           method: "POST",
           mode: "cors",
           cache: "no-cache",
           credentials: "omit",
-          headers: { 
-            "Accept": "application/json"
-          },
+          headers: { "Accept": "application/json" },
         });
 
         if (!response.ok) {
@@ -66,6 +68,7 @@ const WaterUptakeCard: React.FC = () => {
         }
 
         const data = await response.json();
+        setCached(cacheKey, data); // Cache for Map and future visits
 
         const pixelSummary = data.pixel_summary;
 

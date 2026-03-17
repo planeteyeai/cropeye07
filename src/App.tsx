@@ -88,9 +88,13 @@ interface AppProps {
   onLogout: () => void;
 }
 
+/** Max views to keep mounted (prevents remount/refetch when navigating back) */
+const VIEW_CACHE_SIZE = 5;
+
 const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [currentView, setCurrentView] = useState<View>(View.Home);
+  const [cachedViews, setCachedViews] = useState<View[]>([View.Home]);
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null);
   const [expandedSidebarMenu, setExpandedSidebarMenu] = useState<string | null>(
     null
@@ -186,7 +190,7 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
     };
   }, []);
 
-  // Map URL routes to View enum
+  // Map URL routes to View enum and ensure view is in cache
   const handleRouteFromURL = (route: string) => {
     const routeMap: Record<string, View> = {
       'agroclimatic': View.AgroDashboard,
@@ -223,6 +227,12 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
     const view = routeMap[route.toLowerCase()];
     if (view) {
       setCurrentView(view);
+      setCachedViews((prev) => {
+        if (prev.includes(view)) return prev;
+        const others = prev.filter((v) => v !== View.Home);
+        const newOthers = [...others, view].slice(-(VIEW_CACHE_SIZE - 1));
+        return [View.Home, ...newOthers];
+      });
     }
   };
 
@@ -352,6 +362,12 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
     }
 
     setCurrentView(nextView);
+    setCachedViews((prev) => {
+      if (prev.includes(nextView)) return prev;
+      const others = prev.filter((v) => v !== View.Home);
+      const newOthers = [...others, nextView].slice(-(VIEW_CACHE_SIZE - 1));
+      return [View.Home, ...newOthers];
+    });
     setIsSidebarOpen(false);
     
     // Update URL for refresh support
@@ -401,6 +417,9 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
 
   const handleHomeClick = () => {
     setCurrentView(View.Home);
+    if (!cachedViews.includes(View.Home)) {
+      setCachedViews((prev) => [View.Home, ...prev.filter((v) => v !== View.Home)].slice(0, VIEW_CACHE_SIZE));
+    }
     setIsSidebarOpen(false);
     setActiveSubmenu(null);
   };
@@ -484,160 +503,234 @@ const App: React.FC<AppProps> = ({ userRole, onLogout }) => {
           } overflow-auto`}
         >
           <div className="w-full h-full">
-            {currentView === View.Home && renderHomeGrid()}
-
-            {currentView === View.Dashboard && activeSubmenu && (
-              <DashboardGrid
-                submenu={activeSubmenu}
-                userRole={userRole}
-                onClose={() => setActiveSubmenu(null)}
-              />
+            {cachedViews.includes(View.Home) && (
+              <div style={{ display: currentView === View.Home ? 'block' : 'none' }}>{renderHomeGrid()}</div>
             )}
 
-            {currentView === View.AddUsers && (
-              <Addusers setUsers={setUsers} users={users} />
+            {cachedViews.includes(View.Dashboard) && activeSubmenu && (
+              <div style={{ display: currentView === View.Dashboard ? 'block' : 'none' }}>
+                <DashboardGrid submenu={activeSubmenu} userRole={userRole} onClose={() => setActiveSubmenu(null)} />
+              </div>
             )}
 
-            {currentView === View.userList && (
-              // <UserList users={users} setUsers={setUsers} />
-              <UserList
-                users={users}
-                setUsers={setUsers}
-                currentUserId={currentUser.id}
-                currentUserRole={
-                  currentUser.role as
-                    | "owner"
-                    | "manager"
-                    | "fieldofficer"
-                    | "farmer"
-                }
-              />
+            {cachedViews.includes(View.AddUsers) && (
+              <div style={{ display: currentView === View.AddUsers ? 'block' : 'none' }}>
+                <Addusers setUsers={setUsers} users={users} />
+              </div>
             )}
 
-            {currentView === View.Contactuser && (
-              <Contactuser users={users} setUsers={setUsers} />
+            {cachedViews.includes(View.userList) && (
+              <div style={{ display: currentView === View.userList ? 'block' : 'none' }}>
+                <UserList
+                  users={users}
+                  setUsers={setUsers}
+                  currentUserId={currentUser.id}
+                  currentUserRole={
+                    currentUser.role as "owner" | "manager" | "fieldofficer" | "farmer"
+                  }
+                />
+              </div>
             )}
 
-            {currentView === View.Addvendor && (
-              <Addvendor setUsers={setUsers} users={users} />
+            {cachedViews.includes(View.Contactuser) && (
+              <div style={{ display: currentView === View.Contactuser ? 'block' : 'none' }}>
+                <Contactuser users={users} setUsers={setUsers} />
+              </div>
             )}
 
-            {currentView === View.VendorList && (
-              <VendorList users={users} setUsers={setUsers} />
+            {cachedViews.includes(View.Addvendor) && (
+              <div style={{ display: currentView === View.Addvendor ? 'block' : 'none' }}>
+                <Addvendor setUsers={setUsers} users={users} />
+              </div>
             )}
 
-            {currentView === View.Addorder && (
-              <Addorder setItems={setItems} items={items} />
+            {cachedViews.includes(View.VendorList) && (
+              <div style={{ display: currentView === View.VendorList ? 'block' : 'none' }}>
+                <VendorList users={users} setUsers={setUsers} />
+              </div>
             )}
 
-            {currentView === View.orderlist && (
-              <OrderList items={items} setItems={setItems} />
+            {cachedViews.includes(View.Addorder) && (
+              <div style={{ display: currentView === View.Addorder ? 'block' : 'none' }}>
+                <Addorder setItems={setItems} items={items} />
+              </div>
             )}
 
-            {currentView === View.Addstock && (
-              <AddStock setStocks={setStocks} />
+            {cachedViews.includes(View.orderlist) && (
+              <div style={{ display: currentView === View.orderlist ? 'block' : 'none' }}>
+                <OrderList items={items} setItems={setItems} />
+              </div>
             )}
 
-            {currentView === View.stocklist && (
-              <StockList stocks={stocks} setStocks={setStocks} />
+            {cachedViews.includes(View.Addstock) && (
+              <div style={{ display: currentView === View.Addstock ? 'block' : 'none' }}>
+                <AddStock setStocks={setStocks} />
+              </div>
             )}
 
-            {currentView === View.AddBooking && (
-              <AddBooking bookings={bookings} setBookings={setBookings} />
+            {cachedViews.includes(View.stocklist) && (
+              <div style={{ display: currentView === View.stocklist ? 'block' : 'none' }}>
+                <StockList stocks={stocks} setStocks={setStocks} />
+              </div>
             )}
 
-            {currentView === View.Bookinglist && (
-              <BookingList bookings={bookings} setBookings={setBookings} />
+            {cachedViews.includes(View.AddBooking) && (
+              <div style={{ display: currentView === View.AddBooking ? 'block' : 'none' }}>
+                <AddBooking bookings={bookings} setBookings={setBookings} />
+              </div>
             )}
 
-            {currentView === View.FarmList && (
-              <FarmList users={users} setUsers={setUsers} />
+            {cachedViews.includes(View.Bookinglist) && (
+              <div style={{ display: currentView === View.Bookinglist ? 'block' : 'none' }}>
+                <BookingList bookings={bookings} setBookings={setBookings} />
+              </div>
             )}
 
-            {currentView === View.CalendarView && <CalendarView />}
-
-            {currentView === View.MyList && <MyList />}
-
-            {currentView === View.TeamList && (
-              <TeamList setUsers={setUsers} users={users} />
+            {cachedViews.includes(View.FarmList) && (
+              <div style={{ display: currentView === View.FarmList ? 'block' : 'none' }}>
+                <FarmList users={users} setUsers={setUsers} />
+              </div>
             )}
 
-            {/* {currentView === View.Calendar && <Calendar />} */}
-
-            {currentView === View.Calendar && (
-              <Calendar
-                currentUserId={currentUser.id}
-                currentUserRole={
-                  currentUser.role as "manager" | "fieldofficer" | "farmer"
-                }
-              />
+            {cachedViews.includes(View.CalendarView) && (
+              <div style={{ display: currentView === View.CalendarView ? 'block' : 'none' }}>
+                <CalendarView />
+              </div>
             )}
 
-            {currentView === View.AddFarm && <AddFarm />}
-
-            {/* {currentView === View.TaskCalendar && <TaskCalendar currentUserId={3} currentUserRole="fieldofficer" />} */}
-
-            {currentView === View.TaskCalendar && currentUser && (
-              <TaskCalendar
-                currentUserId={currentUser.id}
-                currentUserRole={
-                  currentUser.role as "manager" | "fieldofficer" | "farmer"
-                }
-              />
+            {cachedViews.includes(View.MyList) && (
+              <div style={{ display: currentView === View.MyList ? 'block' : 'none' }}>
+                <MyList />
+              </div>
             )}
 
-            {/* {currentView === View.ViewList && <ViewList />}
-            
-            {currentView === View.Tasklist && <Tasklist  />} */}
-
-            {currentView === View.ViewList && (
-              <ViewList
-                currentUserId={currentUser.id}
-                currentUserRole={
-                  currentUser.role as "manager" | "fieldofficer" | "farmer"
-                }
-                currentUserName={currentUser.name}
-              />
+            {cachedViews.includes(View.TeamList) && (
+              <div style={{ display: currentView === View.TeamList ? 'block' : 'none' }}>
+                <TeamList setUsers={setUsers} users={users} />
+              </div>
             )}
 
-            {/* UPDATED: Tasklist with currentUser */}
-            {currentView === View.Tasklist && currentUser && (
-              <Tasklist
-                currentUserId={currentUser.id}
-                currentUserRole={
-                  currentUser.role as "manager" | "fieldofficer" | "farmer"
-                }
-                currentUserName={currentUser.name}
-              />
-            )}
-            {currentView === View.PestDisease && <PestDisease />}
-
-            {currentView === View.Fertilizer && <Fertilizer />}
-
-            {currentView === View.Irrigation && (
-              <Irrigation selectedPlotName={selectedPlotName} />
+            {cachedViews.includes(View.Calendar) && (
+              <div style={{ display: currentView === View.Calendar ? 'block' : 'none' }}>
+                <Calendar
+                  currentUserId={currentUser.id}
+                  currentUserRole={currentUser.role as "manager" | "fieldofficer" | "farmer"}
+                />
+              </div>
             )}
 
-            {currentView === View.BlogCard && <BlogCard />}
-
-            {currentView === View.AgricultureData && <AgricultureData />}
-
-            {currentView === View.Map && (
-              <Map onSoilDataChange={handleSoilDataChange} />
+            {cachedViews.includes(View.AddFarm) && (
+              <div style={{ display: currentView === View.AddFarm ? 'block' : 'none' }}>
+                <AddFarm />
+              </div>
             )}
 
-            {currentView === View.FarmerDashboard && <FarmerDashboard />}
+            {cachedViews.includes(View.TaskCalendar) && currentUser && (
+              <div style={{ display: currentView === View.TaskCalendar ? 'block' : 'none' }}>
+                <TaskCalendar
+                  currentUserId={currentUser.id}
+                  currentUserRole={currentUser.role as "manager" | "fieldofficer" | "farmer"}
+                />
+              </div>
+            )}
 
-            {currentView === View.FarmCropStatus && <OfficerDashboard />}
+            {cachedViews.includes(View.ViewList) && (
+              <div style={{ display: currentView === View.ViewList ? 'block' : 'none' }}>
+                <ViewList
+                  currentUserId={currentUser.id}
+                  currentUserRole={currentUser.role as "manager" | "fieldofficer" | "farmer"}
+                  currentUserName={currentUser.name}
+                />
+              </div>
+            )}
 
-            {currentView === View.ManagerFarmDash && <ManagerFarmDash />}
+            {cachedViews.includes(View.Tasklist) && currentUser && (
+              <div style={{ display: currentView === View.Tasklist ? 'block' : 'none' }}>
+                <Tasklist
+                  currentUserId={currentUser.id}
+                  currentUserRole={currentUser.role as "manager" | "fieldofficer" | "farmer"}
+                  currentUserName={currentUser.name}
+                />
+              </div>
+            )}
 
-            {currentView === View.AgroDashboard && <AgroDashboard />}
-            {currentView === View.HarvestDashboard && <HarvestDashboard />}
+            {cachedViews.includes(View.PestDisease) && (
+              <div style={{ display: currentView === View.PestDisease ? 'block' : 'none' }}>
+                <PestDisease />
+              </div>
+            )}
 
-            {currentView === View.OwnerFarmDash && <OwnerFarmDash />}
+            {cachedViews.includes(View.Fertilizer) && (
+              <div style={{ display: currentView === View.Fertilizer ? 'block' : 'none' }}>
+                <Fertilizer />
+              </div>
+            )}
 
-            {currentView === View.OwnerHarvestDash && <OwnerHarvestDash />}
+            {cachedViews.includes(View.Irrigation) && (
+              <div style={{ display: currentView === View.Irrigation ? 'block' : 'none' }}>
+                <Irrigation selectedPlotName={selectedPlotName} />
+              </div>
+            )}
+
+            {cachedViews.includes(View.BlogCard) && (
+              <div style={{ display: currentView === View.BlogCard ? 'block' : 'none' }}>
+                <BlogCard />
+              </div>
+            )}
+
+            {cachedViews.includes(View.AgricultureData) && (
+              <div style={{ display: currentView === View.AgricultureData ? 'block' : 'none' }}>
+                <AgricultureData />
+              </div>
+            )}
+
+            {cachedViews.includes(View.Map) && (
+              <div style={{ display: currentView === View.Map ? 'block' : 'none' }}>
+                <Map onSoilDataChange={handleSoilDataChange} />
+              </div>
+            )}
+
+            {cachedViews.includes(View.FarmerDashboard) && (
+              <div style={{ display: currentView === View.FarmerDashboard ? 'block' : 'none' }}>
+                <FarmerDashboard />
+              </div>
+            )}
+
+            {cachedViews.includes(View.FarmCropStatus) && (
+              <div style={{ display: currentView === View.FarmCropStatus ? 'block' : 'none' }}>
+                <OfficerDashboard />
+              </div>
+            )}
+
+            {cachedViews.includes(View.ManagerFarmDash) && (
+              <div style={{ display: currentView === View.ManagerFarmDash ? 'block' : 'none' }}>
+                <ManagerFarmDash />
+              </div>
+            )}
+
+            {cachedViews.includes(View.AgroDashboard) && (
+              <div style={{ display: currentView === View.AgroDashboard ? 'block' : 'none' }}>
+                <AgroDashboard />
+              </div>
+            )}
+
+            {cachedViews.includes(View.HarvestDashboard) && (
+              <div style={{ display: currentView === View.HarvestDashboard ? 'block' : 'none' }}>
+                <HarvestDashboard />
+              </div>
+            )}
+
+            {cachedViews.includes(View.OwnerFarmDash) && (
+              <div style={{ display: currentView === View.OwnerFarmDash ? 'block' : 'none' }}>
+                <OwnerFarmDash />
+              </div>
+            )}
+
+            {cachedViews.includes(View.OwnerHarvestDash) && (
+              <div style={{ display: currentView === View.OwnerHarvestDash ? 'block' : 'none' }}>
+                <OwnerHarvestDash />
+              </div>
+            )}
           </div>
         </main>
       </div>

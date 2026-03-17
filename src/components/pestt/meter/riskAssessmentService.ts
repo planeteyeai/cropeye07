@@ -1,6 +1,15 @@
 import { pestsData } from './pestsData';
 import { diseasesData } from './diseasesData';
 import { getFarmerMyProfile } from '../../../api';
+import { getCache } from '../../../components/utils/cache';
+
+/** Get farmer profile - uses cache first (from login prefetch) to avoid duplicate my-profile/ requests */
+async function getProfileData(): Promise<any> {
+  const cached = getCache('farmerProfile', 10 * 60 * 1000); // 10 min TTL
+  if (cached) return cached;
+  const response = await getFarmerMyProfile();
+  return response.data;
+}
 
 export interface WeatherData {
   temperature: number;
@@ -257,8 +266,7 @@ export async function fetchPestDetectionData(plotId?: string): Promise<PestDetec
       };
     }
 
-    const response = await getFarmerMyProfile();
-    const profileData = response.data;
+    const profileData = await getProfileData();
     
     if (!profileData.plots || profileData.plots.length === 0) {
       console.warn('No plots found in user profile for pest detection');
@@ -596,8 +604,7 @@ export async function fetchPlantationDate(plotId?: string): Promise<string> {
     }
 
     console.log('📅 Fetching plantation date for plot:', plotId);
-    const response = await getFarmerMyProfile();
-    const profileData = response.data;
+    const profileData = await getProfileData();
     
     if (!profileData.plots || profileData.plots.length === 0) {
       console.warn('⚠️ No plots found in profile, using fallback date');
@@ -668,8 +675,7 @@ export async function fetchCurrentWeather(plotId?: string): Promise<WeatherData>
       };
     }
 
-    const response = await getFarmerMyProfile();
-    const profileData = response.data;
+    const profileData = await getProfileData();
     
     if (!profileData.plots || profileData.plots.length === 0) {
       throw new Error('No plots found in user profile');

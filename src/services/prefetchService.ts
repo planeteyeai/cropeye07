@@ -1,4 +1,9 @@
-import { getFarmerMyProfile } from '../api';
+import {
+  getFarmerMyProfile,
+  getCurrentUser,
+  getFarmsWithFarmerDetails,
+  getTasks,
+} from '../api';
 
 // Base URLs for external APIs
 const BASE_URL = 'https://admin-cropeye.up.railway.app';
@@ -11,20 +16,72 @@ interface PrefetchResult {
   fetchedEndpoints: string[];
 }
 
+type UserRole = 'farmer' | 'manager' | 'admin' | 'fieldofficer' | 'owner';
+
 /**
- * Pre-fetches all commonly used endpoints on login to improve performance
- * Fetches data in parallel for maximum speed
+ * Pre-fetches all commonly used endpoints on login/app load to improve performance
+ * Loads complete data at login and stores in cache for fast representation
+ * Runs for ALL roles - farmer gets plot/map data, others get dashboard data
  */
 export const prefetchAllData = async (
   setCached: (key: string, data: any) => void,
-  selectedPlotName?: string | null
+  selectedPlotName?: string | null,
+  role?: UserRole | null
 ): Promise<PrefetchResult> => {
   const errors: string[] = [];
   const fetchedEndpoints: string[] = [];
   const today = new Date().toISOString().split('T')[0];
+  const isFarmer = role === 'farmer' || !role;
 
   try {
-    // 1. Fetch farmer profile (most important - used everywhere)
+    // 1. Fetch current user (used by all roles)
+    const userPromise = getCurrentUser()
+      .then((response) => {
+        setCached('currentUser', response.data);
+        fetchedEndpoints.push('currentUser');
+        return response.data;
+      })
+      .catch((err) => {
+        errors.push(`CurrentUser: ${err.message}`);
+        return null;
+      });
+
+    // 2. For non-farmer roles: prefetch farms and tasks
+    if (!isFarmer) {
+      const commonPromises = [
+        userPromise,
+        getFarmsWithFarmerDetails()
+          .then((response) => {
+            const data = response.data?.results || response.data || [];
+            setCached('farmsWithFarmerDetails', data);
+            fetchedEndpoints.push('farmsWithFarmerDetails');
+            return data;
+          })
+          .catch((err) => {
+            errors.push(`Farms: ${err.message}`);
+            return null;
+          }),
+        getTasks()
+          .then((response) => {
+            const data = response.data?.results || response.data || response.data?.data || [];
+            setCached('tasks', Array.isArray(data) ? data : []);
+            fetchedEndpoints.push('tasks');
+            return data;
+          })
+          .catch((err) => {
+            errors.push(`Tasks: ${err.message}`);
+            return null;
+          }),
+      ];
+      await Promise.allSettled(commonPromises);
+      return {
+        success: errors.length === 0,
+        errors: errors.length > 0 ? errors : undefined,
+        fetchedEndpoints,
+      };
+    }
+
+    // 3. Farmer-specific: fetch farmer profile (most important - used everywhere)
     const profilePromise = getFarmerMyProfile()
       .then((response) => {
         setCached('farmerProfile', response.data);
@@ -49,6 +106,8 @@ export const prefetchAllData = async (
     }
 
     if (!plotName) {
+      // Still cache current user if we got it
+      await userPromise;
       console.warn('⚠️ No plot name available for pre-fetching');
       return {
         success: errors.length === 0,
@@ -57,7 +116,7 @@ export const prefetchAllData = async (
       };
     }
 
-    // 2. Fetch all map layer data in parallel (Growth, Water Uptake, Soil Moisture, Pest)
+    // 4. Fetch all map layer data in parallel (Growth, Water Uptake, Soil Moisture, Pest)
     const mapDataPromises = [
       // Growth data
       fetch(`${BASE_URL}/analyze_Growth?plot_name=${plotName}&end_date=${today}&days_back=7`, {
@@ -148,7 +207,7 @@ export const prefetchAllData = async (
         }),
     ];
 
-    // 3. Fetch weather data if plot has coordinates
+    // 5. Fetch weather data if plot has coordinates
     let weatherPromise: Promise<any> | null = null;
     if (profile?.plots?.[0]?.coordinates?.location) {
       const plot = profile.plots[0];
@@ -171,7 +230,7 @@ export const prefetchAllData = async (
         });
     }
 
-    // 4. Fetch plot indices (for FarmerDashboard)
+    // 6. Fetch plot indices (for FarmerDashboard)
     const plotId = profile?.plots?.[0]?.id || profile?.plots?.[0]?.fastapi_plot_id;
     let indicesPromise: Promise<any> | null = null;
     if (plotId) {
@@ -198,8 +257,9 @@ export const prefetchAllData = async (
         });
     }
 
-    // Execute all promises in parallel
+    // Execute all promises in parallel (including user for farmer)
     const allPromises = [
+      userPromise,
       ...mapDataPromises,
       weatherPromise,
       indicesPromise,

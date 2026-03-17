@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState } from "react";
-import { getCache, setCache } from "../components/utils/cache";
+import { getCache, setCache, clearAllAppCache } from "../components/utils/cache";
 
 // Define a generic cache type
 interface GlobalCache {
@@ -68,6 +68,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const clearAppStateOnLogout = () => {
     setAppState({ selectedPlotName: null });
     setGlobalCache({});
+    clearAllAppCache();
   };
 
   return (

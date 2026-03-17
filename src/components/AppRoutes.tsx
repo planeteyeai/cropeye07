@@ -138,6 +138,9 @@ const AppRoutesContent: React.FC = () => {
           username: userData.username || "",
           id: userData.id || "",
         });
+
+        // Pre-fetch complete data on app load (e.g. page refresh with valid token)
+        triggerPrefetch(normalizedRole);
       } else {
         // Invalid role, logout
         handleLogout();
@@ -168,6 +171,18 @@ const AppRoutesContent: React.FC = () => {
     }
   };
 
+  const triggerPrefetch = (role: UserRole | null) => {
+    // Pre-fetch all commonly used data on login/app load (non-blocking)
+    // Loads complete data and stores in cache for fast representation
+    prefetchAllData(setCached, null, role)
+      .then((result) => {
+        console.log('🚀 Pre-fetch result:', result);
+      })
+      .catch((err) => {
+        console.warn('⚠️ Pre-fetch failed (non-critical):', err);
+      });
+  };
+
   const handleLoginSuccess = async (role: UserRole, token: string) => {
     const normalizedRole = role.toLowerCase() as UserRole;
 
@@ -178,17 +193,8 @@ const AppRoutesContent: React.FC = () => {
     setUserRole(normalizedRole);
     setIsAuthenticated(true);
 
-    // Pre-fetch all commonly used data in the background (non-blocking)
-    // This improves performance by loading data before user navigates
-    if (normalizedRole === 'farmer') {
-      prefetchAllData(setCached, null)
-        .then((result) => {
-          console.log('🚀 Pre-fetch result:', result);
-        })
-        .catch((err) => {
-          console.warn('⚠️ Pre-fetch failed (non-critical):', err);
-        });
-    }
+    // Pre-fetch complete data for all roles on login (non-blocking)
+    triggerPrefetch(normalizedRole);
 
     // Auto-redirect to dashboard
     navigate("/dashboard");
