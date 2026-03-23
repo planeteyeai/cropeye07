@@ -3,6 +3,7 @@ import {
   getCurrentUser,
   getFarmsWithFarmerDetails,
   getTasks,
+  getFieldOfficerAgroStats,
 } from '../api';
 import { getCache } from '../components/utils/cache';
 
@@ -31,6 +32,28 @@ export const prefetchFarmerProfile = async (
     setCached('farmerProfile', response.data);
     return true;
   } catch {
+    return false;
+  }
+};
+
+/**
+ * Pre-fetch field officer agroStats (all plots under that officer).
+ * Use on field officer login so "View Field Plot" shows data instantly.
+ */
+export const prefetchFieldOfficerAgroStats = async (
+  setCached: (key: string, data: any) => void,
+  fieldOfficerId: string | number
+): Promise<boolean> => {
+  try {
+    // Match FarmCropStatus "today" calculation (timezone-safe)
+    const tzOffsetMs = new Date().getTimezoneOffset() * 60000;
+    const endDate = new Date(Date.now() - tzOffsetMs).toISOString().slice(0, 10);
+    const data = await getFieldOfficerAgroStats(fieldOfficerId, endDate);
+    // Cache by end_date so harvested plots (different yieldDataDate) remain correct
+    setCached(`fieldOfficerAgroStats_${endDate}`, data);
+    return true;
+  } catch (err) {
+    console.warn('⚠️ Field officer agroStats prefetch failed:', err);
     return false;
   }
 };
@@ -65,7 +88,7 @@ export const prefetchAllData = async (
 
     // 2. For non-farmer roles: prefetch farms and tasks
     if (!isFarmer) {
-      const commonPromises = [
+      const commonPromises: Promise<any>[] = [
         userPromise,
         getFarmsWithFarmerDetails()
           .then((response) => {
@@ -90,6 +113,27 @@ export const prefetchAllData = async (
             return null;
           }),
       ];
+
+      // 2b. For field officer: prefetch agroStats (all plots) so View Field Plot loads instantly
+      if (role === 'fieldofficer') {
+        const agroPromise = userPromise.then((userData) => {
+          const foId = userData?.id;
+          if (foId) {
+            return prefetchFieldOfficerAgroStats(setCached, foId)
+              .then((ok) => {
+                if (ok) fetchedEndpoints.push('fieldOfficerAgroStats');
+                return ok;
+              })
+              .catch((err) => {
+                errors.push(`FieldOfficerAgroStats: ${err.message}`);
+                return false;
+              });
+          }
+          return null;
+        });
+        commonPromises.push(agroPromise);
+      }
+
       await Promise.allSettled(commonPromises);
       return {
         success: errors.length === 0,

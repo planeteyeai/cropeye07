@@ -1237,11 +1237,13 @@ const convertToBulkFormat = (formData: any, plots: any[]) => {
       first_name: formData.first_name,
       last_name: formData.last_name,
       phone_number: formData.phone_number,
+      last_year_yield: formData.last_year_yield,
       address: formData.address,
       village: formData.district, // Use district as village if not specified
       district: formData.district,
       state: formData.state,
       taluka: formData.taluka,
+      aadhar_card_filename: formData.aadhar_card?.[0]?.name || null,
     },
     plots: plotsData,
   };
@@ -1396,11 +1398,13 @@ const convertSinglePlotToAllInOneFormat = (formData: any, plot: any) => {
       first_name: formData.first_name,
       last_name: formData.last_name,
       phone_number: formData.phone_number,
+      last_year_yield: formData.last_year_yield,
       address: formData.address,
       village: plot.village || formData.district,
       district: formData.district,
       state: formData.state,
       taluka: formData.taluka,
+      aadhar_card_filename: formData.aadhar_card?.[0]?.name || null,
     },
     plot: {
       gat_number: plot.Group_Gat_No || plot.GroupGatNo || "",

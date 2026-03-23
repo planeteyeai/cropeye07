@@ -87,7 +87,9 @@ interface FarmerData {
   taluka: string;
   state: string;
   district: string;
+  last_year_yield: string;
   documents: FileList | null;
+  aadhar_card: FileList | null;
 }
 
 interface IconVisibility {
@@ -291,7 +293,9 @@ function AddFarm() {
     taluka: "",
     state: "",
     district: "",
+    last_year_yield: "",
     documents: null,
+    aadhar_card: null,
   });
 
   const [showIcons, setShowIcons] = useState<IconVisibility>({
@@ -1099,6 +1103,15 @@ function AddFarm() {
     }));
   };
 
+  const handleAadharFileChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      aadhar_card: e.target.files,
+    }));
+  };
+
   //   const handleSubmit = async (e: React.FormEvent) => {
   //     e.preventDefault();
 
@@ -1292,6 +1305,7 @@ function AddFarm() {
       "password",
       "email",
       "phone_number",
+      "last_year_yield",
     ];
     const missingFields = requiredFields.filter(
       (field) => !formData[field as keyof FarmerData]
@@ -1371,7 +1385,9 @@ The farmer can now login with Email credentials to access the dashboard and moni
         taluka: "",
         state: "",
         district: "",
+        last_year_yield: "",
         documents: null,
+        aadhar_card: null,
       });
 
       // Clear plots and map
@@ -1697,7 +1713,9 @@ The farmer can now login with Email credentials to access the dashboard and moni
     return (
       <div key={key} className="relative">
         <label className="block text-sm font-medium text-gray-700 capitalize mb-1">
-          {key.replace("_", " ").replace("number", "Number")}{" "}
+          {key === "last_year_yield"
+            ? "Last Year Yield"
+            : key.replace("_", " ").replace("number", "Number")}{" "}
           <span className="text-red-500">*</span>
         </label>
         <div className="relative">
@@ -1720,6 +1738,8 @@ The farmer can now login with Email credentials to access the dashboard and moni
               type={
                 key === "email"
                   ? "email"
+                  : key === "last_year_yield"
+                    ? "number"
                   : key === "plantation_Date"
                   ? "date"
                   : key === "password" || key === "confirm_password"
@@ -2162,6 +2182,7 @@ The farmer can now login with Email credentials to access the dashboard and moni
     "state",
     "district",
     "taluka",
+    "last_year_yield",
   ];
 
   return (
@@ -2222,6 +2243,19 @@ The farmer can now login with Email credentials to access the dashboard and moni
                     formData[field as keyof FarmerData] as string
                   )
                 )}
+              </div>
+              {/* Aadhaar Card Upload */}
+              <div className="mt-4 sm:mt-6">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Aadhar Card
+                </label>
+                <input
+                  type="file"
+                  name="aadhar_card"
+                  accept="image/*,application/pdf"
+                  onChange={handleAadharFileChange}
+                  className="block w-full text-xs sm:text-sm text-gray-500 file:mr-2 sm:file:mr-4 file:py-1 sm:file:py-2 file:px-2 sm:file:px-4 file:rounded file:border-0 file:text-xs sm:file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                />
               </div>
               {/* File Upload */}
               <div className="mt-4 sm:mt-6">

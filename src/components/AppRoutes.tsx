@@ -16,11 +16,12 @@ import {
   clearAllLocalStorage,
   setAuthData,
   isValidToken,
+  getUserData,
 } from "../utils/auth";
 import { getCurrentUser } from "../api";
 import { initializeTokenRefresh } from "../utils/tokenManager";
 import { useAppContext } from "../context/AppContext";
-import { prefetchAllData, prefetchFarmerProfile } from "../services/prefetchService";
+import { prefetchAllData, prefetchFarmerProfile, prefetchFieldOfficerAgroStats } from "../services/prefetchService";
 
 export type UserRole =
   | "manager"
@@ -201,6 +202,15 @@ const AppRoutesContent: React.FC = () => {
     // For farmer: await profile prefetch before navigate so dashboard loads fast (no "Loading farmer profile...")
     if (normalizedRole === "farmer") {
       await prefetchFarmerProfile(setCached);
+    }
+
+    // For field officer: await agroStats prefetch so "View Field Plot" shows data instantly (no loading)
+    if (normalizedRole === "fieldofficer") {
+      const userData = getUserData();
+      const fieldOfficerId = userData?.id;
+      if (fieldOfficerId) {
+        await prefetchFieldOfficerAgroStats(setCached, fieldOfficerId);
+      }
     }
 
     // Pre-fetch rest of data in background (non-blocking)

@@ -1832,13 +1832,26 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                       village: plot.village || '',
                       pin_code: plot.pin_code || '',
                       gat_number: plot.gat_number || '',
-                      area_size: plot.area_size ? formatAcresFromHectaresOrNA(plot.area_size) : '0',
+                      // If plot.area_size is missing, fall back to total farm area (selectedFarmer.area)
+                      // so "Area" doesn't show as N/A.
+                      area_size:
+                        plot.area_size !== null &&
+                        plot.area_size !== undefined &&
+                        plot.area_size !== ''
+                          ? formatAcresFromHectaresOrNA(plot.area_size)
+                          : selectedFarmer?.area !== null &&
+                            selectedFarmer?.area !== undefined
+                            ? formatAcresValue(selectedFarmer.area)
+                            : '0',
                     };
 
                     return (
                       <div key={index} className="bg-white rounded-lg p-3 sm:p-4 mb-3 sm:mb-4 border">
                         <h4 className="text-base sm:text-lg font-semibold text-green-600 mb-3">
-                          Plot {index + 1} - {isViewModalEditMode ? `${plotForm.area_size} acres` : `${formatAcresFromHectaresOrNA(plot.area_size)} acres`}
+                          Plot {index + 1} -{" "}
+                          {isViewModalEditMode
+                            ? `${plotForm.area_size} acres`
+                            : `${(plot.area_size !== null && plot.area_size !== undefined && plot.area_size !== '') ? formatAcresFromHectaresOrNA(plot.area_size) : (selectedFarmer?.area !== null && selectedFarmer?.area !== undefined ? formatAcresValue(selectedFarmer.area) : 'N/A')} acres`}
                         </h4>
                         
                         {/* Plot Fields */}
@@ -1894,7 +1907,16 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                             </div>
                             <div className="space-y-2">
                               <p className="text-sm sm:text-base"><span className="font-medium">Gat No:</span> {plot.gat_number || 'N/A'}</p>
-                              <p className="text-sm sm:text-base"><span className="font-medium">Area:</span> {formatAcresFromHectaresOrNA(plot.area_size)} acres</p>
+                              <p className="text-sm sm:text-base">
+                                <span className="font-medium">Area:</span>{" "}
+                                {(plot.area_size !== null && plot.area_size !== undefined && plot.area_size !== '')
+                                  ? `${formatAcresFromHectaresOrNA(plot.area_size)}`
+                                  : selectedFarmer?.area !== null &&
+                                    selectedFarmer?.area !== undefined
+                                  ? `${formatAcresValue(selectedFarmer.area)}`
+                                  : 'N/A'}{" "}
+                                acres
+                              </p>
                             </div>
                           </div>
                         )}

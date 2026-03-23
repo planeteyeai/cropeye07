@@ -50,7 +50,8 @@ import {
 import "leaflet/dist/leaflet.css";
 import axios from "axios";
 import { getCache, setCache } from "../utils/cache";
-import { getRecentFarmers } from "../api";
+import { getRecentFarmers, getFieldOfficerAgroStats } from "../api";
+import { getUserData } from "../utils/auth";
 
 // Constants (same as FarmerDashboard)
 const BASE_URL = "https://events-cropeye.up.railway.app";
@@ -334,13 +335,13 @@ const OfficerDashboard: React.FC = () => {
   // Optimized with shorter timeout for faster retrieval
   const makeRequestWithRetry = async (
     url: string,
-    retries = 1,
-    timeout = 15000,
+    retries = 2,
+    timeout = 25000,
   ): Promise<any> => {
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => {
       abortController.abort();
-    }, timeout);
+    }, timeout + 1000);
 
     try {
       const response = await axios.get(url, {
@@ -418,7 +419,7 @@ const OfficerDashboard: React.FC = () => {
   const fetchAllData = async (): Promise<void> => {
     if (!selectedPlotId) return;
 
-    setLoadingData(true);
+    let shouldShowLoading = false;
     try {
       const tzOffsetMs = new Date().getTimezoneOffset() * 60000;
       const endDate = new Date(Date.now() - tzOffsetMs)
@@ -426,87 +427,63 @@ const OfficerDashboard: React.FC = () => {
         .slice(0, 10);
       const today = endDate; // For compatibility
 
-      // Fetch harvest status first to determine correct date for yield data
-      const harvestCacheKey = `harvest_${selectedPlotId}_${today}`;
-      let harvestData = getCache(harvestCacheKey);
-      let harvestStatus = null;
-      let harvestDate = null;
-      let isHarvested = false;
+      // Harvest status comes from field-officer agroStats JSON already
+      // (days_to_harvest + Sugarcane_Status). Avoid extra network call here.
+      const harvestStatus: string | null = null;
+      const yieldDataDate = today;
 
-      if (!harvestData) {
-        try {
-          const harvestRes = await axios.post(
-            `${BASE_URL}/sugarcane-harvest?plot_name=${selectedPlotId}&end_date=${today}`,
-          );
-          harvestData = harvestRes.data;
-          setCache(harvestCacheKey, harvestData);
-        } catch (harvestErr) {}
+      // Step 1: Use pre-fetched field-officer agroStats (all plots) - no analyzeSinglePlot calls
+      // Cache is date-specific because yieldDataDate may change for harvested plots
+      const agroStatsCacheKey = `fieldOfficerAgroStats_${yieldDataDate}`;
+      let allPlotsData = getCache(agroStatsCacheKey);
+
+      // Check other plot-level caches too (so we can avoid showing loading when everything is already cached)
+      const indicesCacheKey = `indices_${selectedPlotId}`;
+      const stressCacheKey = `stress_${selectedPlotId}_NDRE_0.15`;
+      const irrigationCacheKey = `irrigation_${selectedPlotId}`;
+
+      const cachedIndices = getCache(indicesCacheKey);
+      const cachedStress = getCache(stressCacheKey);
+      const cachedIrrigation = getCache(irrigationCacheKey);
+
+      const cachedCurrentPlotData = allPlotsData
+        ? allPlotsData[selectedPlotId] ??
+          allPlotsData[`"${selectedPlotId}"`] ??
+          null
+        : null;
+
+      if (
+        !allPlotsData ||
+        !cachedCurrentPlotData
+      ) {
+        shouldShowLoading = true;
       }
 
-      if (harvestData) {
-        const harvestProperties =
-          harvestData?.features?.[0]?.properties ||
-          harvestData?.harvest_summary;
-
-        harvestStatus =
-          harvestProperties?.harvest_status ||
-          harvestData?.harvest_summary?.harvest_status ||
-          null;
-
-        harvestDate = harvestProperties?.harvest_date || null;
-        isHarvested =
-          harvestProperties?.has_harvest === true &&
-          harvestProperties?.harvest_status === "harvested";
+      if (shouldShowLoading) {
+        setLoadingData(true);
       }
 
-      // Determine which date to use for fetching yield data
-      const yieldDataDate = isHarvested && harvestDate ? harvestDate : today;
-
-      // Step 1: Prefer new single-plot agro stats endpoint for better performance
-      const singlePlotCacheKey = `agroSingle_v1_${selectedPlotId}_${yieldDataDate}`;
-      let currentPlotData = getCache(singlePlotCacheKey);
-
-      if (!currentPlotData) {
-        try {
-          const singlePlotRes = await axios.get(
-            `https://events-cropeye.up.railway.app/plots/analyzeSinglePlot?plot_id=${selectedPlotId}`,
-          );
-          currentPlotData = singlePlotRes.data;
-          setCache(singlePlotCacheKey, currentPlotData);
-        } catch (singleErr) {
-          // If new endpoint fails, fall back to bulk agroStats endpoint
-          console.error(
-            "Error fetching single-plot agroStats in FarmCropStatus, falling back to bulk agroStats:",
-            singleErr,
-          );
-
-          const agroStatsCacheKey = `agroStats_v3_${yieldDataDate}`;
-          let allPlotsData = getCache(agroStatsCacheKey);
-
-          if (!allPlotsData) {
-            try {
-              const agroStatsRes = await makeRequestWithRetry(
-                `https://events-cropeye.up.railway.app/plots/agroStats?end_date=${yieldDataDate}`,
-                1,
-                12000,
-              );
-              allPlotsData = agroStatsRes;
-              setCache(agroStatsCacheKey, allPlotsData);
-            } catch (bulkErr) {
-              console.error("Error fetching bulk agroStats:", bulkErr);
-              allPlotsData = null;
-            }
-          }
-
-          if (allPlotsData) {
-            currentPlotData = allPlotsData[selectedPlotId];
-            if (!currentPlotData) {
-              const quotedPlotId = `"${selectedPlotId}"`;
-              currentPlotData = allPlotsData[quotedPlotId];
-            }
+      if (!allPlotsData) {
+        const userData = getUserData();
+        const fieldOfficerId = userData?.id;
+        if (fieldOfficerId) {
+          try {
+            allPlotsData = await getFieldOfficerAgroStats(
+              fieldOfficerId,
+              yieldDataDate,
+            );
+            setCache(agroStatsCacheKey, allPlotsData);
+          } catch (agroErr) {
+            console.error("Error fetching field officer agroStats:", agroErr);
           }
         }
       }
+
+      let currentPlotData = allPlotsData
+        ? allPlotsData[selectedPlotId] ??
+          allPlotsData[`"${selectedPlotId}"`] ??
+          null
+        : null;
 
       // Step 2: Calculate biomass from sugarYieldMean (matching FarmerDashboard)
       const sugarYieldMeanValue =
@@ -552,15 +529,6 @@ const OfficerDashboard: React.FC = () => {
       }
 
       // Step 4: Fetch additional data in parallel with shorter timeouts
-      // Check cache first for each endpoint
-      const indicesCacheKey = `indices_${selectedPlotId}`;
-      const stressCacheKey = `stress_${selectedPlotId}_NDRE_0.15`;
-      const irrigationCacheKey = `irrigation_${selectedPlotId}`;
-
-      let cachedIndices = getCache(indicesCacheKey);
-      let cachedStress = getCache(stressCacheKey);
-      let cachedIrrigation = getCache(irrigationCacheKey);
-
       // Only fetch what's not cached, with shorter timeouts
       const fetchPromises = [];
 
@@ -568,8 +536,8 @@ const OfficerDashboard: React.FC = () => {
         fetchPromises.push(
           makeRequestWithRetry(
             `${BASE_URL}/plots/${selectedPlotId}/indices`,
-            1,
-            10000, // Shorter timeout for indices
+            2,
+            25000, // Higher timeout to reduce network timeouts
           )
             .then((data: any) => {
               const processed = data.map((item: any) => ({
@@ -594,8 +562,8 @@ const OfficerDashboard: React.FC = () => {
         fetchPromises.push(
           makeRequestWithRetry(
             `${BASE_URL}/plots/${selectedPlotId}/stress?index_type=NDRE&threshold=0.15`,
-            1,
-            10000,
+            2,
+            25000,
           )
             .then((data: any) => {
               setCache(stressCacheKey, data);
@@ -616,8 +584,8 @@ const OfficerDashboard: React.FC = () => {
         fetchPromises.push(
           makeRequestWithRetry(
             `${BASE_URL}/plots/${selectedPlotId}/irrigation?threshold_ndmi=0.05&threshold_ndwi=0.05&min_days_between_events=10`,
-            1,
-            10000,
+            2,
+            25000,
           )
             .then((data: any) => {
               setCache(irrigationCacheKey, data);
