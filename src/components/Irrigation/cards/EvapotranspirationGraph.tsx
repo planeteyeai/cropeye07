@@ -69,7 +69,13 @@ const EvapotranspirationGraph: React.FC = () => {
     return niceFraction * base;
   };
 
-  const maxTrendValue = getNiceMax(rawMaxValue);
+  // Y-axis max: use only hourly bar data (exclude etValue – it's a daily total
+  // and inflates the scale). Minimum ceiling is 2 mm for readability.
+  const rawHourlyMax =
+    Array.isArray(trendData) && trendData.length > 0
+      ? Math.max(...trendData.map((v: any) => Number(v) || 0))
+      : 0;
+  const maxTrendValue = rawHourlyMax > 2 ? Math.ceil(rawHourlyMax) : 2;
 
   // Calculate bar width and spacing
   const barCount = trendData.length || 24;
