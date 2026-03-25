@@ -50,6 +50,7 @@ import "leaflet/dist/leaflet.css";
 import axios from "axios";
 import { getCache, setCache } from "../utils/cache";
 import api from "../api"; // Import the authenticated api instance
+import { useAppContext } from "../context/AppContext";
 
 // Constants (same as FarmerDashboard)
 const BASE_URL = "https://events-cropeye.up.railway.app";
@@ -144,6 +145,9 @@ type TimePeriod = "daily" | "weekly" | "monthly" | "yearly";
 const ManagerFarmDash: React.FC = () => {
   // const center: [number, number] = [17.5789, 75.053]; // Unused - using mapCenter state instead
   const mapWrapperRef = useRef<HTMLDivElement>(null);
+
+  // Sync selected plot to global context so the chatbot can read it
+  const { setSelectedPlotName } = useAppContext();
 
   // Farmer and Plot selection state
   const [selectedFieldOfficerId, setSelectedFieldOfficerId] =
@@ -310,6 +314,12 @@ const ManagerFarmDash: React.FC = () => {
       fetchAllData();
       setPlotCoordinatesFromState(selectedPlotId); // This will now work
     }
+  }, [selectedPlotId]);
+
+  // Sync selected plot to global AppContext so the chatbot always has the
+  // currently viewed plot_id without any manual input from the manager
+  useEffect(() => {
+    setSelectedPlotName(selectedPlotId || null);
   }, [selectedPlotId]);
 
   useEffect(() => {
@@ -1618,12 +1628,12 @@ const ManagerFarmDash: React.FC = () => {
                         <p>
                           <strong>Plot:</strong> {selectedPlotId}
                         </p>
-                        <p>
+                        {/* <p>
                           <strong>Farmer:</strong> Ramesh Patil
                         </p>
                         <p>
                           <strong>Representative:</strong> Sunil Joshi
-                        </p>
+                        </p> */}
                         <p>
                           <strong>Status:</strong>{" "}
                           {metrics.growthStage ?? "Loading..."}

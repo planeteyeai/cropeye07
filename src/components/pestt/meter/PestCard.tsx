@@ -134,7 +134,7 @@ export const DetectionCard: React.FC<DetectionCardProps> = ({
         <div className="flex flex-col gap-3">
           <div className="flex-1">
             <h2 className="text-lg sm:text-xl font-bold text-black mb-2">
-              {type === 'pest' ? 'Pest Possible' : 'Disease Possible'}: {name}
+              {type === 'pest' ? 'Possible Pest' : 'Possible Disease'}: {name}
             </h2>
             <div className="text-xs sm:text-sm text-gray-800 space-y-1">
               <div><Clock className={`inline w-4 h-4 mr-1 ${styles.accentColor}`} /><span className="font-bold text-black">When:</span> {when ? when[riskLevel] : ''}</div>

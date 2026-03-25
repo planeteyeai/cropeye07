@@ -89,7 +89,7 @@ interface FarmerData {
   district: string;
   last_year_yield: string;
   documents: FileList | null;
-  aadhar_card: FileList | null;
+  aadhar_card: string;
 }
 
 interface IconVisibility {
@@ -295,7 +295,7 @@ function AddFarm() {
     district: "",
     last_year_yield: "",
     documents: null,
-    aadhar_card: null,
+    aadhar_card: "",
   });
 
   const [showIcons, setShowIcons] = useState<IconVisibility>({
@@ -1103,13 +1103,12 @@ function AddFarm() {
     }));
   };
 
-  const handleAadharFileChange = (
+  const handleAadharNumberChange = (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
-    setFormData((prev) => ({
-      ...prev,
-      aadhar_card: e.target.files,
-    }));
+    // Allow only digits, max 12 characters
+    const value = e.target.value.replace(/\D/g, "").slice(0, 12);
+    setFormData((prev) => ({ ...prev, aadhar_card: value }));
   };
 
   //   const handleSubmit = async (e: React.FormEvent) => {
@@ -1387,7 +1386,7 @@ The farmer can now login with Email credentials to access the dashboard and moni
         district: "",
         last_year_yield: "",
         documents: null,
-        aadhar_card: null,
+        aadhar_card: "",
       });
 
       // Clear plots and map
@@ -1404,7 +1403,7 @@ The farmer can now login with Email credentials to access the dashboard and moni
       // ============================================
       setTimeout(() => {
         refreshApiEndpoints();
-      }, 7000); // 7 seconds delay (you can adjust between 5000-10000ms)
+      }, 15000);// 15 seconds delay
 
       // Clear success message after 15 seconds
       setTimeout(() => {
@@ -2244,31 +2243,41 @@ The farmer can now login with Email credentials to access the dashboard and moni
                   )
                 )}
               </div>
-              {/* Aadhaar Card Upload */}
-              <div className="mt-4 sm:mt-6">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Aadhar Card
-                </label>
-                <input
-                  type="file"
-                  name="aadhar_card"
-                  accept="image/*,application/pdf"
-                  onChange={handleAadharFileChange}
-                  className="block w-full text-xs sm:text-sm text-gray-500 file:mr-2 sm:file:mr-4 file:py-1 sm:file:py-2 file:px-2 sm:file:px-4 file:rounded file:border-0 file:text-xs sm:file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                />
-              </div>
-              {/* File Upload */}
-              <div className="mt-4 sm:mt-6">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Documents
-                </label>
-                <input
-                  type="file"
-                  multiple
-                  name="documents"
-                  onChange={handleFileChange}
-                  className="block w-full text-xs sm:text-sm text-gray-500 file:mr-2 sm:file:mr-4 file:py-1 sm:file:py-2 file:px-2 sm:file:px-4 file:rounded file:border-0 file:text-xs sm:file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                />
+              {/* Aadhaar Number Input */}
+              <div className="grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2">
+                <div className="mt-4 sm:mt-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Aadhar Number
+                  </label>
+                  <input
+                    type="text"
+                    name="aadhar_card"
+                    value={formData.aadhar_card}
+                    onChange={handleAadharNumberChange}
+                    placeholder="Enter 12-digit Aadhar number"
+                    maxLength={12}
+                    inputMode="numeric"
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
+                  {formData.aadhar_card && formData.aadhar_card.length < 12 && (
+                    <p className="mt-1 text-xs text-amber-600">
+                      Aadhar number must be 12 digits ({formData.aadhar_card.length}/12)
+                    </p>
+                  )}
+                </div>
+                {/* File Upload */}
+                <div className="mt-4 sm:mt-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Documents
+                  </label>
+                  <input
+                    type="file"
+                    multiple
+                    name="documents"
+                    onChange={handleFileChange}
+                    className="block w-full text-xs sm:text-sm text-gray-500 file:mr-2 sm:file:mr-4 file:py-1 sm:file:py-2 file:px-2 sm:file:px-4 file:rounded file:border-0 file:text-xs sm:file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                  />
+                </div>
               </div>
             </div>
 
@@ -2477,12 +2486,12 @@ The farmer can now login with Email credentials to access the dashboard and moni
                                 {/* )} */}
                                 {renderPlotField(
                                   plot.id,
-                                  "flow_Rate",
+                                  "flow_Rate (liters/hour)",
                                   plot.flow_Rate
                                 )}
                                 {renderPlotField(
                                   plot.id,
-                                  "emitters",
+                                  "emitters per plant",
                                   plot.emitters
                                 )}
                               </div>
@@ -2490,17 +2499,17 @@ The farmer can now login with Email credentials to access the dashboard and moni
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                                 {renderPlotField(
                                   plot.id,
-                                  "motor_Horsepower",
+                                  "motor_Horsepower (HP)",
                                   plot.motor_Horsepower
                                 )}
                                 {renderPlotField(
                                   plot.id,
-                                  "pipe_Width",
+                                  "pipe_Width (inches)",
                                   plot.pipe_Width
                                 )}
                                 {renderPlotField(
                                   plot.id,
-                                  "distance_From_Motor",
+                                  "distance_From_Motor (m)",
                                   plot.distance_From_Motor
                                 )}
                               </div>

@@ -2059,9 +2059,12 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                                     <div className="flex items-center mb-3 sm:mb-4">
                                       <Droplets className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 mr-2" />
                                       <h4 className="text-base sm:text-lg font-semibold text-gray-900">
-                                        {irrigationForm?.irrigation_type || irrigation.irrigation_type === "Drip Irrigation" || irrigation.irrigation_type === "drip"
-                                          ? "Drip Irrigation Details"
-                                          : "Flood Irrigation Details"}
+                                      {(() => {
+                                          const type = irrigationForm?.irrigation_type || irrigation.irrigation_type;
+                                          return type === "Flood Irrigation" || type === "flood"
+                                            ? "Flood Irrigation Details"
+                                            : "Drip Irrigation Details";
+                                        })()}
                                       </h4>
                                     </div>
                                     {isViewModalEditMode && irrigationForm ? (
@@ -2125,7 +2128,7 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                                             </select>
                                           </div>
                                           <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Motor Horsepower</label>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Motor Horsepower (HP)</label>
                                             <input
                                               type="number"
                                               step="0.1"
@@ -2175,13 +2178,13 @@ export const FarmList: React.FC<FarmlistProps> = ({ users: propUsers, setUsers: 
                                       ) : irrigation.irrigation_type === "Flood Irrigation" || irrigation.irrigation_type === "flood" ? (
                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                                           <div className="space-y-2">
-                                            <p className="text-sm sm:text-base"><span className="font-medium">Motor Horsepower:</span> {irrigation?.motor_horsepower || 'N/A'}</p>
+                                            <p className="text-sm sm:text-base"><span className="font-medium">Motor Horsepower :</span> {irrigation?.motor_horsepower || 'N/A'} HP</p>
                                           </div>
                                           <div className="space-y-2">
                                             <p className="text-sm sm:text-base"><span className="font-medium">Pipe Width:</span> {irrigation?.pipe_width_inches || 'N/A'} inches</p>
                                           </div>
                                           <div className="space-y-2">
-                                            <p className="text-sm sm:text-base"><span className="font-medium">Distance from Motor:</span> {irrigation?.distance_motor_to_plot_m || 'N/A'} m</p>
+                                            <p className="text-sm sm:text-base"><span className="font-medium">Distance from Motor:</span> {irrigation?.distance_motor_to_plot_m || 'N/A'} meters</p>
                                           </div>
                                         </div>
                                       ) : null

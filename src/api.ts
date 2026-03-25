@@ -1237,13 +1237,13 @@ const convertToBulkFormat = (formData: any, plots: any[]) => {
       first_name: formData.first_name,
       last_name: formData.last_name,
       phone_number: formData.phone_number,
-      last_year_yield: formData.last_year_yield,
       address: formData.address,
-      village: formData.district, // Use district as village if not specified
+      village: formData.district,
+      taluka: formData.taluka,
       district: formData.district,
       state: formData.state,
-      taluka: formData.taluka,
-      aadhar_card_filename: formData.aadhar_card?.[0]?.name || null,
+      aadhaar_number: formData.aadhar_card || null,
+      last_year_yield: formData.last_year_yield,
     },
     plots: plotsData,
   };
@@ -1398,13 +1398,15 @@ const convertSinglePlotToAllInOneFormat = (formData: any, plot: any) => {
       first_name: formData.first_name,
       last_name: formData.last_name,
       phone_number: formData.phone_number,
-      last_year_yield: formData.last_year_yield,
       address: formData.address,
       village: plot.village || formData.district,
+      taluka: formData.taluka,
       district: formData.district,
       state: formData.state,
-      taluka: formData.taluka,
-      aadhar_card_filename: formData.aadhar_card?.[0]?.name || null,
+      role_id: 1,
+      industry_id: null,
+      aadhaar_number: formData.aadhar_card || null,
+      last_year_yield: formData.last_year_yield,
     },
     plot: {
       gat_number: plot.Group_Gat_No || plot.GroupGatNo || "",
@@ -1518,7 +1520,7 @@ export const refreshApiEndpoints = async () => {
     "https://admin-cropeye.up.railway.app/refresh-from-django",
     "https://main-cropeye.up.railway.app/refresh-from-django",
     "https://events-cropeye.up.railway.app/refresh-from-django",
-    "https://sef-cropeye.up.railway.app/refresh-from-django",
+    "https://SEF-cropeye.up.railway.app/refresh-from-django",
   ];
 
   const refreshPromises = refreshEndpoints.map((endpoint) =>

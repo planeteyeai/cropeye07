@@ -1740,12 +1740,12 @@ const OwnerFarmDash: React.FC = () => {
                         <p>
                           <strong>Plot:</strong> {selectedPlotId}
                         </p>
-                        <p>
+                        {/* <p>
                           <strong>Farmer:</strong> Ramesh Patil
                         </p>
                         <p>
                           <strong>Representative:</strong> Sunil Joshi
-                        </p>
+                        </p> */}
                         <p>
                           <strong>Status:</strong>{" "}
                           {metrics.growthStage ?? "Loading..."}

@@ -166,7 +166,7 @@ export const SingleCategoryRiskMeter: React.FC<SingleCategoryRiskMeterProps> = (
       {/* Total Count */}
       <div className="text-center pt-3 sm:pt-4 border-t-2 border-gray-200">
         <div className={`text-2xl sm:text-3xl font-extrabold ${config.textColor}`}>{totalCount}</div>
-        <div className="text-xs sm:text-sm text-gray-600 mt-1">Total Detected</div>
+        <div className="text-xs sm:text-sm text-gray-600 mt-1">Total Predicted</div>
       </div>
     </div>
   );

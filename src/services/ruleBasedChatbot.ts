@@ -24,9 +24,9 @@ export const CHATBOT_RULES: ChatRule[] = [
   {
     patterns: ['नमस्कार', 'hello', 'hi', 'hey', 'namaskar', 'namaste', 'नमस्ते', 'good morning', 'good afternoon', 'good evening'],
     responses: {
-      marathi: 'नमस्कार! मी CropEye Assistant आहे. मी तुम्हाला शेती आणि कृषी विषयी मदत करू शकतो. तुम्ही मराठी, हिंदी किंवा इंग्रजीत प्रश्न विचारू शकता. मी तुम्हाला पीक आरोग्य, कापणी, खत, माती, सिंचन, कीटक, हवामान आणि इतर विषयांवर मार्गदर्शन करू शकतो.',
-      hindi: 'नमस्ते! मैं CropEye Assistant हूं। मैं आपकी खेती और कृषि से संबंधित मदद कर सकता हूं। आप मराठी, हिंदी या अंग्रेजी में प्रश्न पूछ सकते हैं। मैं आपको फसल स्वास्थ्य, कटाई, उर्वरक, मिट्टी, सिंचाई, कीट, मौसम और अन्य विषयों पर मार्गदर्शन कर सकता हूं।',
-      english: 'Hello! I am CropEye Assistant. I can help you with farming and agriculture. You can ask questions in Marathi, Hindi, or English. I can guide you on crop health, harvest, fertilizer, soil, irrigation, pests, weather, and other topics.'
+      marathi: 'नमस्कार! मी CropEye Assistant आहे. तुमचा प्रश्न विचारा! 🌱',
+      hindi: 'नमस्ते! मैं CropEye Assistant हूं। अपना सवाल पूछें! 🌱',
+      english: 'Hello! I am CropEye Assistant. How can I help you today? 🌱'
     },
     category: 'greeting'
   },

@@ -504,7 +504,7 @@ export const PestDisease: React.FC = () => {
                     <div className="flex flex-col gap-4">
                       <div className="flex-1">
                         <h4 className="text-lg sm:text-xl font-bold text-gray-800 mb-2">
-                          Weed Possible: {weed.name}
+                        Possible Weed : {weed.name}
                         </h4>
                         <div className="text-sm text-gray-800 mb-2">
                           <span className="font-semibold text-black">

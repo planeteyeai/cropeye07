@@ -1,11 +1,21 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { MessageCircle, X, Mic, MicOff, Send, Loader2, Minimize2, Play, Pause, Trash2 } from "lucide-react";
-import { 
-  getChatbotResponse, 
+import {
+  MessageCircle, X, Mic, MicOff, Send, Loader2,
+  Minimize2, Play, Pause, Trash2, FileText, Globe, RefreshCw,
+} from "lucide-react";
+import {
+  getChatbotResponse,
   detectLanguage,
   type Language,
-  type UserRole
+  type UserRole,
 } from "../services/ruleBasedChatbot";
+import { useAppContext } from "../context/AppContext";
+import { getUserRole, getUserData } from "../utils/auth";
+
+// ── Backend API ────────────────────────────────────────────────────────────────
+const CHATBOT_API_URL = "https://cropeye-chatbot.up.railway.app";
+
+type ChatLanguage = "en" | "hi" | "mr";
 
 interface Message {
   id: string;
@@ -21,108 +31,254 @@ interface ChatbotProps {
   userRole?: UserRole;
 }
 
+// ── Component ──────────────────────────────────────────────────────────────────
 const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userRole }) => {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [inputText, setInputText] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
+  const { selectedPlotName } = useAppContext();
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  const [messages, setMessages]           = useState<Message[]>([]);
+  const [inputText, setInputText]         = useState("");
+  const [isLoading, setIsLoading]         = useState(false);
+  const [isRecording, setIsRecording]     = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isAudioPaused, setIsAudioPaused] = useState(false);
-  const lastBotMessageRef = useRef<string>("");
   const [hasAutoWelcomed, setHasAutoWelcomed] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
+  const [isMinimized, setIsMinimized]     = useState(false);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
-  
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const recognitionRef = useRef<any>(null);
-  const autoWelcomeTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Auto-welcome message after 5 seconds when chatbot opens
-  useEffect(() => {
-    if (isOpen && !hasAutoWelcomed && !isMinimized) {
-      autoWelcomeTimerRef.current = setTimeout(() => {
-        const welcomeMessage = getChatbotResponse("hello", userRole);
-        const marathiWelcome = {
-          text: welcomeMessage.text,
-          language: "marathi" as Language
-        };
-        addMessage(marathiWelcome.text, false, marathiWelcome.language);
-        speakText(marathiWelcome.text);
-        setHasAutoWelcomed(true);
-      }, 5000);
-    }
+  // API-specific state
+  const [isInitialized, setIsInitialized]   = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
+  const [initError, setInitError]           = useState<string | null>(null);
+  const [chatLanguage, setChatLanguage]     = useState<ChatLanguage>("mr");
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [showReportModal, setShowReportModal]       = useState(false);
+  const [reportContent, setReportContent]           = useState<string>("");
+  const [reportLanguage, setReportLanguage]         = useState<ChatLanguage>("mr");
 
-    return () => {
-      if (autoWelcomeTimerRef.current) {
-        clearTimeout(autoWelcomeTimerRef.current);
-      }
-    };
-  }, [isOpen, hasAutoWelcomed, userRole, isMinimized]);
+  // ── Refs ───────────────────────────────────────────────────────────────────
+  const messagesEndRef        = useRef<HTMLDivElement>(null);
+  const recognitionRef        = useRef<any>(null);
+  const autoWelcomeTimerRef   = useRef<NodeJS.Timeout | null>(null);
+  const lastBotMessageRef     = useRef<string>("");
+  const mediaRecorderRef      = useRef<MediaRecorder | null>(null);
+  const backendAudioRef       = useRef<HTMLAudioElement | null>(null);
+  // Tracks which plotId was last successfully initialized so we don't
+  // call /initialize-plot again when the chatbot is simply closed & reopened
+  const initializedPlotRef    = useRef<string | null>(null);
 
-  // Reset auto-welcome when chatbot closes
-  useEffect(() => {
-    if (!isOpen) {
-      setHasAutoWelcomed(false);
-    }
-  }, [isOpen]);
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  // Use same role detection as the auth system:
+  // prop takes precedence; if not provided fall back to localStorage ('role' key)
+  const activeRole = (userRole || getUserRole() || "farmer") as UserRole;
 
-  // Scroll to bottom when new messages arrive
+  const isFarmerRole       = activeRole === "farmer";
+  const isFieldOfficerRole = activeRole === "fieldofficer";
+  const isManagerRole      = activeRole === "manager";
+
+  // Per-role chat endpoint routing
+  const getChatEndpoint = (): string => {
+    if (isFarmerRole)       return "/chat/farmer";
+    if (isFieldOfficerRole) return "/chat/field_officer";
+    if (isManagerRole)      return "/chat/manager";
+    return "/chat/field_officer"; // owner fallback
+  };
+
+  // Fall back to localStorage so the chatbot finds the plot even if context
+  // hasn't been populated yet (profile still loading in FarmerDashboard)
+  const plotId = selectedPlotName || localStorage.getItem("selectedPlot") || null;
+
+  // ── Add message ────────────────────────────────────────────────────────────
+  const addMessage = useCallback((text: string, isUser: boolean, language?: Language) => {
+    setMessages((prev) => [
+      ...prev,
+      { id: Date.now().toString() + Math.random(), text, isUser, timestamp: new Date(), language },
+    ]);
+  }, []);
+
+  // ── Auto-scroll ────────────────────────────────────────────────────────────
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Load available voices on mount
+  // ── Load voices ────────────────────────────────────────────────────────────
   useEffect(() => {
-    const loadVoices = () => {
-      const voices = window.speechSynthesis.getVoices();
-      setAvailableVoices(voices);
-      console.log("Loaded voices:", voices.length);
-      const marathiVoices = voices.filter(v => v.lang.startsWith('mr') || v.name.toLowerCase().includes('marathi'));
-      if (marathiVoices.length > 0) {
-        console.log("Marathi voices found:", marathiVoices.map(v => `${v.name} (${v.lang})`));
-      } else {
-        console.warn("No Marathi voices found. Available Indian voices:", 
-          voices.filter(v => v.lang.includes('IN')).map(v => `${v.name} (${v.lang})`));
-      }
+    const load = () => setAvailableVoices(window.speechSynthesis.getVoices());
+    if ("speechSynthesis" in window) {
+      load();
+      window.speechSynthesis.onvoiceschanged = load;
+    }
+    return () => {
+      recognitionRef.current?.stop();
+      autoWelcomeTimerRef.current && clearTimeout(autoWelcomeTimerRef.current);
+      window.speechSynthesis.cancel();
     };
+  }, []);
 
-    if ('speechSynthesis' in window) {
-      loadVoices();
-      window.speechSynthesis.onvoiceschanged = loadVoices;
+  // ── Auto-initialize ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (!isFarmerRole) {
+      setIsInitialized(true);
+      return;
     }
 
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-      if (autoWelcomeTimerRef.current) {
-        clearTimeout(autoWelcomeTimerRef.current);
-      }
-      window.speechSynthesis.cancel();
-    };
-  }, []);
+    const currentPlot = plotId || "__no_plot__";
 
-  const addMessage = useCallback((text: string, isUser: boolean, language?: Language) => {
-    const newMessage: Message = {
-      id: Date.now().toString() + Math.random(),
-      text,
-      isUser,
-      timestamp: new Date(),
-      language,
-    };
-    setMessages((prev) => [...prev, newMessage]);
-  }, []);
+    if (initializedPlotRef.current === currentPlot) {
+      // Same plot already initialized in a previous open — skip API call
+      setIsInitialized(true);
+      return;
+    }
 
-  // Pause audio playback
-  const pauseAudio = () => {
-    if (window.speechSynthesis.speaking) {
-      window.speechSynthesis.cancel();
-      setIsPlayingAudio(false);
-      setIsAudioPaused(true);
+    // New plot or first open — call the API
+    if (!isInitializing) {
+      setIsInitialized(false);
+      initializePlot();
+    }
+  }, [isOpen, isFarmerRole, plotId]);
+
+  // ── Reset on close ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isOpen) {
+      setHasAutoWelcomed(false);
+      // Do NOT reset isInitialized — the ref already tracks which plot is
+      // initialized so the next open will skip the API call for the same plot
+      setInitError(null);
+    }
+  }, [isOpen]);
+
+  // ── Auto-welcome ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (isOpen && !hasAutoWelcomed && !isMinimized && isInitialized) {
+      autoWelcomeTimerRef.current = setTimeout(async () => {
+        const welcome = getChatbotResponse("hello", activeRole);
+        addMessage(welcome.text, false, "marathi");
+        await speakText(welcome.text);
+        setHasAutoWelcomed(true);
+      }, 3000);
+    }
+    return () => { autoWelcomeTimerRef.current && clearTimeout(autoWelcomeTimerRef.current); };
+  }, [isOpen, hasAutoWelcomed, isMinimized, isInitialized]);
+
+  // ── Plot Initialization (farmer only) ─────────────────────────────────────
+  const initializePlot = async () => {
+    const currentPlot = plotId || "__no_plot__";
+
+    if (!plotId) {
+      // No plot available — open in static fallback mode so farmer can still chat
+      initializedPlotRef.current = currentPlot;
+      setIsInitialized(true);
+      return;
+    }
+    setIsInitializing(true);
+    setInitError(null);
+    try {
+      const res = await fetch(`${CHATBOT_API_URL}/initialize-plot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plot_id: plotId }),
+      });
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      initializedPlotRef.current = currentPlot; // remember — skip next time
+      setIsInitialized(true);
+    } catch (err: any) {
+      console.error("[Chatbot] Init failed:", err);
+      setInitError(err.message || "Initialization failed. Please try again.");
+      // Still let farmer chat using static fallback; mark as initialized
+      initializedPlotRef.current = currentPlot;
+      setIsInitialized(true);
+    } finally {
+      setIsInitializing(false);
     }
   };
 
-  // Play/Resume audio playback
+  // ── Backend Audio Playback ─────────────────────────────────────────────────
+  const playBackendAudio = (audioBase64: string) => {
+    try {
+      const byteStr = atob(audioBase64);
+      const arr = new Uint8Array(byteStr.length);
+      for (let i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i);
+      const blob = new Blob([arr], { type: "audio/mpeg" });
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      backendAudioRef.current = audio;
+      setIsPlayingAudio(true);
+      audio.play().catch(() => {
+        console.warn("[Chatbot] Backend audio failed, falling back to TTS");
+        setIsPlayingAudio(false);
+      });
+      audio.addEventListener("ended", () => {
+        URL.revokeObjectURL(url);
+        setIsPlayingAudio(false);
+        backendAudioRef.current = null;
+      });
+    } catch (err) {
+      console.error("[Chatbot] Backend audio error:", err);
+      setIsPlayingAudio(false);
+    }
+  };
+
+  // ── TTS (browser fallback) ─────────────────────────────────────────────────
+  const cleanTextForTTS = (text: string): string => {
+    return text
+      .replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, "$1")
+      .replace(/^#{1,6}\s+/gm, "")
+      .replace(/^[\s]*[•\-\*]\s+/gm, "")
+      .replace(/[\u{1F300}-\u{1F9FF}]/gu, "")
+      .replace(/[\u{2600}-\u{26FF}]/gu, "")
+      .replace(/[\u{2700}-\u{27BF}]/gu, "")
+      .replace(/\n{2,}/g, " ")
+      .replace(/\n/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  };
+
+  const speakText = async (text: string): Promise<void> => {
+    if (!text?.trim() || !("speechSynthesis" in window)) return;
+    const cleaned = cleanTextForTTS(text);
+    if (!cleaned) return;
+
+    return new Promise<void>((resolve) => {
+      window.speechSynthesis.cancel();
+      setIsAudioPaused(false);
+      lastBotMessageRef.current = text.trim();
+
+      const voices = availableVoices.length ? availableVoices : window.speechSynthesis.getVoices();
+      const utterance = new SpeechSynthesisUtterance(cleaned);
+
+      let voice =
+        voices.find((v) => v.lang === "mr-IN") ||
+        voices.find((v) => v.lang.startsWith("mr-")) ||
+        voices.find((v) => v.lang === "hi-IN") ||
+        voices.find((v) => v.lang.includes("-IN"));
+
+      if (voice) { utterance.voice = voice; utterance.lang = voice.lang; }
+      else utterance.lang = "mr-IN";
+
+      utterance.rate = 0.85;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+
+      setIsPlayingAudio(true);
+      utterance.onend = () => { setIsPlayingAudio(false); setIsAudioPaused(false); resolve(); };
+      utterance.onerror = () => { setIsPlayingAudio(false); setIsAudioPaused(false); resolve(); };
+
+      setTimeout(() => window.speechSynthesis.speak(utterance), 100);
+    });
+  };
+
+  const pauseAudio = () => {
+    backendAudioRef.current?.pause();
+    window.speechSynthesis.cancel();
+    setIsPlayingAudio(false);
+    setIsAudioPaused(true);
+  };
+
   const playAudio = () => {
     if (lastBotMessageRef.current) {
       setIsAudioPaused(false);
@@ -130,9 +286,236 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userRole }) => {
     }
   };
 
-  // Clear chat completely
+  // ── Send text message via API ──────────────────────────────────────────────
+  const sendTextMessageWithText = async (message: string) => {
+    if (!message.trim() || isLoading) return;
+
+    const detectedLang = detectLanguage(message);
+    addMessage(message, true, detectedLang);
+    setIsLoading(true);
+
+    // user_id is required by field_officer endpoints
+    const userData = getUserData();
+    const userId: number | undefined = userData?.id;
+
+    try {
+      const endpoint = getChatEndpoint();
+
+      // Build payload per-role based on the API schema
+      let payload: Record<string, any>;
+      if (isFieldOfficerRole || isManagerRole) {
+        // POST /chat/field_officer  →  { message, user_id, plot_id }
+        // POST /chat/manager        →  { message, user_id, plot_id }
+        payload = { message };
+        if (userId)  payload.user_id = userId;
+        if (plotId)  payload.plot_id = plotId;
+      } else {
+        // POST /chat/farmer  →  { message, plot_id, language }
+        payload = { message, language: chatLanguage };
+        if (plotId) payload.plot_id = plotId;
+      }
+
+      const res = await fetch(`${CHATBOT_API_URL}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error(`API ${res.status}`);
+
+      // Response types differ per role:
+      //   farmer        → JSON object: { response, final_output, audio_base64, status }
+      //   field_officer → JSON object: { response, intent }
+      //   manager       → plain string
+      const rawData = await res.text();
+      let botText: string;
+      try {
+        const data = JSON.parse(rawData);
+        if (data.error) throw new Error(data.error);
+
+        // Handle "still loading" status (farmer only)
+        if (isFarmerRole && data.status && data.status !== "ready") {
+          addMessage(data.message || "Plot data still loading. Please wait a moment...", false, "english");
+          return;
+        }
+
+        botText = data.response || data.final_output || rawData || "No response received.";
+      } catch {
+        // Plain string response (manager)
+        botText = rawData.replace(/^"|"$/g, "") || "No response received.";
+      }
+
+      // ── Show message first, then speak ──────────────────────────────────
+      addMessage(botText, false);
+      lastBotMessageRef.current = botText;
+
+      // Small delay so React renders the bubble before TTS/audio starts
+      await new Promise((r) => setTimeout(r, 150));
+
+      try {
+        const data = JSON.parse(rawData);
+        if (data.audio_base64) {
+          playBackendAudio(data.audio_base64);
+        } else {
+          await speakText(botText);
+        }
+      } catch {
+        await speakText(botText);
+      }
+    } catch (err: any) {
+      console.warn("[Chatbot] API failed, using static fallback:", err.message);
+      const fallback = getChatbotResponse(message, activeRole);
+      addMessage(fallback.text, false, fallback.language);
+      await speakText(fallback.text);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const sendTextMessage = async () => {
+    if (!inputText.trim() || isLoading) return;
+    const msg = inputText.trim();
+    setInputText("");
+    await sendTextMessageWithText(msg);
+  };
+
+  // ── Voice input via browser Speech Recognition ────────────────────────────
+  // Uses browser built-in STT (most reliable) → sends transcribed text via /chat endpoint
+  const startVoiceRecording = () => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) {
+      addMessage(
+        "Voice input is not supported in this browser. Please use Chrome or Edge and try typing instead.",
+        false
+      );
+      return;
+    }
+
+    // Stop any existing session first
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch { /* ignore */ }
+      recognitionRef.current = null;
+    }
+
+    const langMap: Record<ChatLanguage, string> = { mr: "mr-IN", hi: "hi-IN", en: "en-US" };
+
+    const recognition = new SR();
+    recognition.continuous      = true;   // keep listening until user clicks stop
+    recognition.interimResults  = true;
+    recognition.maxAlternatives = 1;
+    recognition.lang            = langMap[chatLanguage] || "mr-IN";
+
+    let finalTranscript = "";
+    let silenceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const clearSilenceTimer = () => {
+      if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+    };
+
+    recognition.onstart = () => {
+      setIsRecording(true);
+      setInputText("🎤 Listening...");
+    };
+
+    recognition.onresult = (event: any) => {
+      clearSilenceTimer();
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript + " ";
+        } else {
+          interim += event.results[i][0].transcript;
+        }
+      }
+      setInputText(finalTranscript + interim);
+
+      // Auto-send 2 s after last speech detected
+      if (finalTranscript) {
+        silenceTimer = setTimeout(() => {
+          recognition.stop();
+        }, 2000);
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      clearSilenceTimer();
+      setIsRecording(false);
+      setInputText("");
+      if (event.error === "not-allowed" || event.error === "permission-denied") {
+        addMessage("Microphone permission denied. Please allow mic access in your browser settings.", false);
+      } else if (event.error === "network") {
+        addMessage("Network error during voice recognition. Please check your connection.", false);
+      } else if (event.error !== "aborted") {
+        addMessage(`Voice error: ${event.error}. Please try again or type your message.`, false);
+      }
+      recognitionRef.current = null;
+    };
+
+    recognition.onend = async () => {
+      clearSilenceTimer();
+      setIsRecording(false);
+      recognitionRef.current = null;
+      const text = finalTranscript.trim();
+      if (text) {
+        setInputText("");
+        await sendTextMessageWithText(text);
+      } else {
+        setInputText("");
+      }
+    };
+
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+    } catch (err) {
+      setIsRecording(false);
+      addMessage("Could not start voice input. Please try again.", false);
+      recognitionRef.current = null;
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch { /* ignore */ }
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try { mediaRecorderRef.current.stop(); } catch { /* ignore */ }
+      mediaRecorderRef.current = null;
+    }
+    setIsRecording(false);
+  };
+
+  // ── Report generation ──────────────────────────────────────────────────────
+  const generateReport = async () => {
+    if (!plotId) {
+      addMessage("Please select a plot first to generate a report.", false);
+      return;
+    }
+    setIsGeneratingReport(true);
+    setReportContent("");
+    setShowReportModal(true);
+
+    try {
+      const res = await fetch(`${CHATBOT_API_URL}/generate-report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plot_id: plotId, language: reportLanguage }),
+      });
+      if (!res.ok) throw new Error(`Report API ${res.status}`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setReportContent(data.report || "No report content available.");
+    } catch (err: any) {
+      setReportContent(`Error generating report: ${err.message}`);
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+
+  // ── Clear chat ─────────────────────────────────────────────────────────────
   const clearChat = () => {
     window.speechSynthesis.cancel();
+    backendAudioRef.current?.pause();
     setMessages([]);
     setInputText("");
     setHasAutoWelcomed(false);
@@ -141,280 +524,15 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userRole }) => {
     lastBotMessageRef.current = "";
   };
 
-  // Clean text for TTS - Remove markdown formatting and symbols
-  const cleanTextForTTS = (text: string): string => {
-    if (!text) return "";
-    
-    let cleaned = text;
-    
-    // Remove markdown bold: **text** → text
-    cleaned = cleaned.replace(/\*\*([^*]+)\*\*/g, '$1');
-    
-    // Remove markdown italic: *text* → text (but not if it's part of **)
-    cleaned = cleaned.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '$1');
-    
-    // Remove markdown headers: # ## ### → empty
-    cleaned = cleaned.replace(/^#{1,6}\s+/gm, '');
-    
-    // Remove markdown list markers: • - * → empty (keep the text)
-    cleaned = cleaned.replace(/^[\s]*[•\-\*]\s+/gm, '');
-    
-    // Remove emojis (they might be read as text by TTS)
-    cleaned = cleaned.replace(/[\u{1F300}-\u{1F9FF}]/gu, '');
-    cleaned = cleaned.replace(/[\u{2600}-\u{26FF}]/gu, '');
-    cleaned = cleaned.replace(/[\u{2700}-\u{27BF}]/gu, '');
-    
-    // Remove extra whitespace and newlines (replace multiple newlines with single space)
-    cleaned = cleaned.replace(/\n{2,}/g, ' ');
-    cleaned = cleaned.replace(/\n/g, ' ');
-    
-    // Remove multiple spaces
-    cleaned = cleaned.replace(/\s{2,}/g, ' ');
-    
-    // Trim
-    cleaned = cleaned.trim();
-    
-    return cleaned;
-  };
-
-  // Text-to-Speech - Always use Marathi (Indian)
-  const speakText = async (text: string): Promise<void> => {
-    if (!text || !text.trim()) return;
-
-    if (!("speechSynthesis" in window)) {
-      console.warn("Speech synthesis not supported");
-      return;
-    }
-
-    // Clean text for TTS - remove markdown formatting
-    const cleanedText = cleanTextForTTS(text);
-
-    if (!cleanedText || !cleanedText.trim()) {
-      console.warn("Text is empty after cleaning");
-      return;
-    }
-
-    return new Promise<void>((resolve) => {
-      window.speechSynthesis.cancel();
-      setIsAudioPaused(false);
-      
-      // Store the original text for replay (with formatting for display)
-      lastBotMessageRef.current = text.trim();
-      
-      // Use available voices from state or load them
-      const voices = availableVoices.length > 0 
-        ? availableVoices 
-        : window.speechSynthesis.getVoices();
-      
-      // Use cleaned text for TTS
-      const utterance = new SpeechSynthesisUtterance(cleanedText.trim());
-      
-      // Try to find Marathi voice first
-      let selectedVoice = voices.find(voice => 
-        voice.lang === 'mr-IN' || 
-        voice.lang.startsWith('mr-') ||
-        (voice.name.toLowerCase().includes('marathi') && voice.lang.includes('IN'))
-      );
-      
-      // If no Marathi, try Hindi (closest to Marathi)
-      if (!selectedVoice) {
-        selectedVoice = voices.find(voice => 
-          voice.lang === 'hi-IN' || 
-          voice.lang.startsWith('hi-')
-        );
-        if (selectedVoice) {
-          utterance.lang = "hi-IN";
-          console.log("⚠️ Using Hindi voice as fallback for Marathi:", selectedVoice.name);
-        }
-      }
-      
-      // If still no voice, try any Indian voice
-      if (!selectedVoice) {
-        selectedVoice = voices.find(voice => 
-          voice.lang.includes('-IN') && 
-          (voice.name.toLowerCase().includes('india') || 
-           voice.name.toLowerCase().includes('indian'))
-        );
-      }
-      
-      // Set voice and language
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
-        if (!utterance.lang || utterance.lang === 'mr-IN') {
-          utterance.lang = selectedVoice.lang;
-        }
-        console.log("✅ Using voice:", selectedVoice.name, "Language:", selectedVoice.lang);
-      } else {
-        // Fallback to default with Marathi language code
-        utterance.lang = "mr-IN";
-        console.warn("⚠️ No Marathi/Indian voice found, using default with mr-IN language code");
-      }
-      
-      utterance.rate = 0.80; // Slightly slower for better Marathi pronunciation
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
-
-      setIsPlayingAudio(true);
-
-      utterance.onstart = () => {
-        console.log("🔊 Speech started - Language:", utterance.lang, "Voice:", utterance.voice?.name || "default");
-      };
-
-      utterance.onend = () => {
-        console.log("✅ Speech completed");
-        setIsPlayingAudio(false);
-        setIsAudioPaused(false);
-        resolve();
-      };
-
-      utterance.onerror = (event: any) => {
-        console.error("❌ Speech error:", {
-          error: event.error,
-          type: event.type,
-          lang: utterance.lang,
-          voice: utterance.voice?.name
-        });
-        setIsPlayingAudio(false);
-        setIsAudioPaused(false);
-        
-        // Show user-friendly message
-        if (event.error === 'language-not-supported') {
-          console.warn("⚠️ Marathi language not supported by browser. Please install Marathi TTS voices.");
-        }
-        resolve();
-      };
-
-      // Small delay to ensure voices are loaded
-      setTimeout(() => {
-        window.speechSynthesis.speak(utterance);
-      }, 100);
-    });
-  };
-
-  // Speech-to-Text with Web Speech API
-  const startSpeechRecognition = () => {
-    if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
-      addMessage("Speech recognition is not supported in your browser. Please use text input.", false);
-      return;
-    }
-
-    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
-    const recognition = new SpeechRecognition();
-
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "mr-IN"; // Indian Marathi only
-
-    let finalTranscript = "";
-
-    recognition.onstart = () => {
-      setIsRecording(true);
-    };
-
-    recognition.onresult = async (event: any) => {
-      let interimTranscript = "";
-      
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript + " ";
-        } else {
-          interimTranscript += transcript;
-        }
-      }
-
-      const currentText = finalTranscript + interimTranscript;
-      setInputText(currentText);
-      
-      if (finalTranscript.trim() && !interimTranscript) {
-        setTimeout(() => {
-          if (recognitionRef.current && recognitionRef.current.state === "running") {
-            recognitionRef.current.stop();
-          }
-        }, 2000);
-      }
-    };
-
-    recognition.onerror = (event: any) => {
-      console.error("Speech recognition error:", event.error);
-      setIsRecording(false);
-      if (event.error === "no-speech") {
-        addMessage("No speech detected. Please try again.", false);
-      } else {
-        addMessage("Speech recognition error. Please try typing instead.", false);
-      }
-    };
-
-    recognition.onend = async () => {
-      setIsRecording(false);
-      
-      const transcriptToSend = finalTranscript.trim();
-      if (transcriptToSend) {
-        await sendTextMessageWithText(transcriptToSend);
-      } else {
-        addMessage("No speech detected. Please try again.", false);
-      }
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
-  };
-
-  // Send text message
-  const sendTextMessage = async () => {
-    if (!inputText.trim() || isLoading) return;
-    const message = inputText.trim();
-    setInputText("");
-    await sendTextMessageWithText(message);
-  };
-
-  const sendTextMessageWithText = async (message: string) => {
-    if (!message.trim() || isLoading) return;
-
-    const lang = detectLanguage(message);
-    addMessage(message, true, lang);
-    setIsLoading(true);
-
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    try {
-      const response = getChatbotResponse(message, userRole);
-      
-      addMessage(response.text, false, response.language);
-      
-      await speakText(response.text);
-    } catch (error: any) {
-      console.error("Chat error:", error);
-      const errorMsg = "क्षमस्व, मला त्रुटी आली. कृपया पुन्हा प्रयत्न करा.";
-      addMessage(errorMsg, false, "marathi");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const startVoiceRecording = async () => {
-    startSpeechRecognition();
-  };
-
-  const stopVoiceRecording = () => {
-    if (recognitionRef.current) {
-      const currentState = recognitionRef.current.state;
-      if (currentState === "running" || currentState === "listening") {
-        recognitionRef.current.stop();
-      }
-      setIsRecording(false);
-    }
-  };
-
+  // ── Early return ───────────────────────────────────────────────────────────
   if (!isOpen) return null;
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="fixed bottom-6 right-6 z-[99999]">
-      {/* Single Frame - Minimized or Expanded */}
       {isMinimized ? (
-        // Minimized State - Icon Only
-        <div 
-          className="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4 rounded-full shadow-2xl cursor-pointer hover:scale-110 transition-all duration-300 animate-bounce"
+        <div
+          className="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4 rounded-full shadow-2xl cursor-pointer hover:scale-110 transition-all duration-300 animate-bounce relative"
           onClick={() => setIsMinimized(false)}
           title="Expand Chatbot"
         >
@@ -426,245 +544,321 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userRole }) => {
           )}
         </div>
       ) : (
-        // Expanded State - Full Chat Panel
-        <div className="w-96 h-[650px] bg-white rounded-2xl shadow-2xl flex flex-col border border-gray-200 animate-slide-up overflow-hidden">
-          {/* Compact Header */}
-          <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-3 rounded-t-2xl flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <MessageCircle className="w-5 h-5" />
-              <h3 className="font-semibold text-sm">CropEye</h3>
-              {isRecording && (
-                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-              )}
-              {isPlayingAudio && (
-                <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
-              )}
-            </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setIsMinimized(true)}
-                className="p-1 hover:bg-white/20 rounded transition-all duration-200 hover:scale-110"
-                title="Minimize"
-              >
-                <Minimize2 className="w-4 h-4" />
-              </button>
-              <button
-                onClick={onClose}
-                className="p-1 hover:bg-white/20 rounded transition-all duration-200 hover:scale-110"
-                title="Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
+        <div className="w-96 h-[680px] bg-white rounded-2xl shadow-2xl flex flex-col border border-gray-200 overflow-hidden">
 
-          {/* Messages Area with Beautiful Agriculture Wallpaper */}
-          <div 
-            className="flex-1 overflow-y-auto p-4 space-y-3 relative"
-            style={{
-              background: `
-                linear-gradient(135deg, 
-                  rgba(34, 139, 34, 0.08) 0%, 
-                  rgba(144, 238, 144, 0.12) 25%,
-                  rgba(255, 255, 255, 0.98) 50%,
-                  rgba(255, 215, 0, 0.08) 75%,
-                  rgba(34, 139, 34, 0.08) 100%
-                ),
-                radial-gradient(ellipse 400px 300px at top left, rgba(34, 139, 34, 0.15) 0%, transparent 70%),
-                radial-gradient(ellipse 400px 300px at bottom right, rgba(255, 215, 0, 0.12) 0%, transparent 70%),
-                repeating-linear-gradient(
-                  0deg,
-                  transparent,
-                  transparent 2px,
-                  rgba(34, 139, 34, 0.02) 2px,
-                  rgba(34, 139, 34, 0.02) 4px
-                ),
-                url("data:image/svg+xml,%3Csvg width='80' height='80' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='crop' x='0' y='0' width='40' height='40' patternUnits='userSpaceOnUse'%3E%3Cpath d='M20 8 Q25 15 20 22 Q15 15 20 8' stroke='%23228B22' stroke-width='1.5' fill='none' opacity='0.2'/%3E%3Cpath d='M8 28 Q13 35 8 42 Q3 35 8 28' stroke='%23228B22' stroke-width='1.5' fill='none' opacity='0.2'/%3E%3Cpath d='M32 28 Q37 35 32 42 Q27 35 32 28' stroke='%23228B22' stroke-width='1.5' fill='none' opacity='0.2'/%3E%3Cpath d='M20 22 L18 38 L20 42 L22 38 Z' stroke='%23228B22' stroke-width='1' fill='%23228B22' opacity='0.15'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='80' height='80' fill='url(%23crop)'/%3E%3C/svg%3E")
-              `,
-              backgroundSize: 'cover, 100% 100%, 100% 100%, auto, 80px 80px',
-              backgroundPosition: 'center, top left, bottom right, center, center',
-              backgroundRepeat: 'no-repeat, no-repeat, no-repeat, repeat, repeat',
-              backgroundColor: '#f8fdf9'
-            }}
-          >
-            {/* Beautiful overlay for better readability */}
-            <div className="absolute inset-0 bg-gradient-to-b from-white/50 via-white/30 to-white/70 pointer-events-none"></div>
-            
-            {/* Decorative agriculture elements - Crop patterns */}
-            <div className="absolute top-8 left-8 w-28 h-28 opacity-8 pointer-events-none">
-              <svg viewBox="0 0 100 100" className="w-full h-full text-green-600">
-                {/* Crop plant with leaves */}
-                <path d="M50 5 L55 35 L50 45 L45 35 Z" fill="currentColor" />
-                <path d="M50 45 L48 70 L50 75 L52 70 Z" fill="currentColor" />
-                <path d="M30 25 L35 55 L30 65 L25 55 Z" fill="currentColor" />
-                <path d="M70 25 L75 55 L70 65 L65 55 Z" fill="currentColor" />
-                <circle cx="50" cy="20" r="3" fill="currentColor" />
-              </svg>
-            </div>
-            <div className="absolute bottom-16 right-8 w-24 h-24 opacity-8 pointer-events-none">
-              <svg viewBox="0 0 100 100" className="w-full h-full text-green-500">
-                {/* Grain/seed with stem */}
-                <circle cx="50" cy="25" r="12" fill="currentColor" />
-                <path d="M50 37 L45 60 L50 65 L55 60 Z" fill="currentColor" />
-                <ellipse cx="50" cy="70" rx="8" ry="4" fill="currentColor" />
-                <path d="M50 65 L50 85" stroke="currentColor" strokeWidth="2" fill="none" />
-              </svg>
-            </div>
-            <div className="absolute top-1/2 left-1/4 w-20 h-20 opacity-6 pointer-events-none transform -translate-x-1/2 -translate-y-1/2">
-              <svg viewBox="0 0 100 100" className="w-full h-full text-yellow-500">
-                {/* Sun */}
-                <circle cx="50" cy="50" r="20" fill="currentColor" />
-                <path d="M50 10 L52 30 L50 35 L48 30 Z" fill="currentColor" />
-                <path d="M90 50 L70 52 L65 50 L70 48 Z" fill="currentColor" />
-                <path d="M50 90 L52 70 L50 65 L48 70 Z" fill="currentColor" />
-                <path d="M10 50 L30 52 L35 50 L30 48 Z" fill="currentColor" />
-              </svg>
-            </div>
-            <div className="absolute top-1/3 right-1/4 w-16 h-16 opacity-7 pointer-events-none">
-              <svg viewBox="0 0 100 100" className="w-full h-full text-green-400">
-                {/* Small crop */}
-                <path d="M50 15 L52 40 L50 48 L48 40 Z" fill="currentColor" />
-                <path d="M50 48 L49 65 L50 68 L51 65 Z" fill="currentColor" />
-              </svg>
-            </div>
-            
-            <div className="relative z-10">
-              {messages.length === 0 && (
-                <div className="text-center text-gray-500 text-sm py-12 animate-fade-in">
-                  <div className="bg-white/80 backdrop-blur-sm rounded-full w-16 h-16 mx-auto mb-3 flex items-center justify-center shadow-lg">
-                    <MessageCircle className="w-8 h-8 text-green-600" />
-                  </div>
-                  <p className="font-medium">Ask me about farming!</p>
-                  <p className="text-xs mt-2 text-green-600 animate-pulse">Auto-welcome in 5s...</p>
-                </div>
-              )}
-              {messages.map((msg, index) => (
-                <div
-                  key={msg.id}
-                  className={`flex ${msg.isUser ? "justify-end" : "justify-start"} mb-3 animate-slide-in`}
-                  style={{ animationDelay: `${index * 0.05}s` }}
-                >
-                  <div
-                    className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm shadow-lg transition-all duration-300 hover:scale-105 ${
-                      msg.isUser
-                        ? "bg-gradient-to-r from-green-500 to-green-600 text-white rounded-br-sm"
-                        : "bg-white text-gray-800 rounded-bl-sm border border-gray-100"
-                    }`}
-                  >
-                    <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
-                    <span className={`text-[10px] mt-1 block ${msg.isUser ? 'text-green-100' : 'text-gray-400'}`}>
-                      {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                </div>
-              ))}
-              {isLoading && (
-                <div className="flex justify-start animate-fade-in">
-                  <div className="bg-white rounded-2xl rounded-bl-sm px-4 py-3 shadow-lg border border-gray-100">
-                    <Loader2 className="w-5 h-5 animate-spin text-green-600" />
-                  </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-          </div>
-
-          {/* Modern Input Area - Like Messaging App */}
-          <div className="border-t border-gray-200 bg-white/95 backdrop-blur-sm p-3 rounded-b-2xl">
-            <div className="flex items-end gap-2">
-              {/* Pause Button */}
-              {isPlayingAudio && !isAudioPaused && (
-                <button
-                  onClick={pauseAudio}
-                  className="p-2 text-gray-600 hover:text-orange-600 hover:bg-gray-100 rounded-full transition-all duration-200 hover:scale-110"
-                  title="Pause Audio"
-                >
-                  <Pause className="w-5 h-5" />
-                </button>
-              )}
-              
-              {/* Play Button - Show when paused or when there's a message to replay */}
-              {!isPlayingAudio && lastBotMessageRef.current && (
-                <button
-                  onClick={playAudio}
-                  className="p-2 text-gray-600 hover:text-green-600 hover:bg-gray-100 rounded-full transition-all duration-200 hover:scale-110"
-                  title="Play Audio"
-                >
-                  <Play className="w-5 h-5" />
-                </button>
-              )}
-              
-              {/* Input Field */}
-              <div className="flex-1 relative">
-                <input
-                  type="text"
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  onKeyPress={(e) => e.key === "Enter" && !e.shiftKey && sendTextMessage()}
-                  placeholder="Type a message..."
-                  className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-gray-50 hover:bg-white"
-                  disabled={isLoading || isRecording}
-                />
+          {/* ── Header ── */}
+          <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-3 rounded-t-2xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageCircle className="w-5 h-5" />
+                <h3 className="font-semibold text-sm">CropEye Assistant</h3>
+                {isRecording   && <span className="w-2 h-2 bg-red-400 rounded-full animate-pulse" title="Recording" />}
+                {isPlayingAudio && <span className="w-2 h-2 bg-blue-300 rounded-full animate-pulse" title="Speaking" />}
+                {isInitializing && <Loader2 className="w-3 h-3 animate-spin opacity-80" />}
               </div>
-              
-              {/* Microphone Button */}
-              <button
-                onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
-                disabled={isLoading}
-                className={`p-3 rounded-full transition-all duration-200 hover:scale-110 ${
-                  isRecording
-                    ? "bg-red-500 text-white animate-pulse shadow-lg"
-                    : "bg-green-600 text-white hover:bg-green-700 shadow-md"
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-                title={isRecording ? "Stop Recording" : "Voice Input"}
-              >
-                {isRecording ? (
-                  <MicOff className="w-5 h-5" />
-                ) : (
-                  <Mic className="w-5 h-5" />
+
+              <div className="flex items-center gap-1">
+                {/* Language selector */}
+                <div className="flex items-center gap-1 bg-white/20 rounded-full px-2 py-1">
+                  <Globe className="w-3 h-3" />
+                  <select
+                    value={chatLanguage}
+                    onChange={(e) => setChatLanguage(e.target.value as ChatLanguage)}
+                    className="bg-transparent text-white text-xs outline-none cursor-pointer"
+                    title="Chat Language"
+                  >
+                    <option value="mr" className="text-gray-800">मराठी</option>
+                    <option value="hi" className="text-gray-800">हिंदी</option>
+                    <option value="en" className="text-gray-800">English</option>
+                  </select>
+                </div>
+
+                {/* Report button — only if plot available */}
+                {plotId && (
+                  <button
+                    onClick={generateReport}
+                    disabled={isGeneratingReport}
+                    className="p-1 hover:bg-white/20 rounded transition-all duration-200 hover:scale-110 disabled:opacity-50"
+                    title="Generate Yield Report"
+                  >
+                    {isGeneratingReport
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : <FileText className="w-4 h-4" />
+                    }
+                  </button>
                 )}
-              </button>
-              
-              {/* Send Button - Only show when text exists */}
-              {inputText.trim() && (
-                <button
-                  onClick={sendTextMessage}
-                  disabled={isLoading || isRecording}
-                  className="p-3 bg-green-600 text-white rounded-full hover:bg-green-700 disabled:opacity-50 transition-all duration-200 hover:scale-110 shadow-md"
-                  title="Send"
-                >
-                  <Send className="w-5 h-5" />
+
+                <button onClick={() => setIsMinimized(true)} className="p-1 hover:bg-white/20 rounded transition-all" title="Minimize">
+                  <Minimize2 className="w-4 h-4" />
                 </button>
-              )}
-              
-              {/* Clear Chat Button */}
-              <button
-                onClick={clearChat}
-                disabled={isLoading || isRecording || messages.length === 0}
-                className="p-2 text-gray-600 hover:text-red-600 hover:bg-gray-100 rounded-full transition-all duration-200 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Clear Chat"
-              >
-                <Trash2 className="w-5 h-5" />
-              </button>
+                <button onClick={onClose} className="p-1 hover:bg-white/20 rounded transition-all" title="Close">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-            
-            {/* Status Indicators */}
-            {(isRecording || isPlayingAudio) && (
-              <div className="flex items-center gap-2 mt-2 text-xs">
-                {isRecording && (
-                  <span className="flex items-center gap-1 text-red-600">
-                    <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                    Recording...
-                  </span>
-                )}
-                {isPlayingAudio && (
-                  <span className="flex items-center gap-1 text-blue-600">
-                    <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
-                    Speaking...
-                  </span>
-                )}
+
+            {/* Plot info bar */}
+            {plotId && (
+              <div className="mt-1 text-[10px] text-green-100 flex items-center gap-1">
+                <span className={`w-1.5 h-1.5 rounded-full ${isInitialized ? "bg-green-300" : "bg-yellow-300"}`} />
+                Plot: {plotId} • {isInitialized ? "Ready" : "Initializing..."}
               </div>
             )}
+          </div>
+
+          {/* ── Init error banner ── */}
+          {initError && (
+            <div className="bg-amber-50 border-b border-amber-200 px-3 py-2 flex items-center justify-between">
+              <p className="text-xs text-amber-700">{initError}</p>
+              <button
+                onClick={initializePlot}
+                className="ml-2 text-xs text-amber-600 hover:text-amber-800 flex items-center gap-1"
+              >
+                <RefreshCw className="w-3 h-3" /> Retry
+              </button>
+            </div>
+          )}
+
+          {isFarmerRole && !isInitialized && isInitializing && (
+            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+              <Loader2 className="w-10 h-10 text-green-500 animate-spin mb-3" />
+              <p className="text-sm text-gray-600">Loading your plot data...</p>
+              <p className="text-xs text-gray-400 mt-1">Plot: {plotId}</p>
+            </div>
+          )}
+
+          {/* ── Messages area ── */}
+          {(isInitialized || !isFarmerRole) && (
+            <>
+              <div
+                className="flex-1 overflow-y-auto p-4 space-y-3 relative"
+                style={{
+                  background: `linear-gradient(135deg,rgba(34,139,34,.08) 0%,rgba(144,238,144,.12) 25%,rgba(255,255,255,.98) 50%,rgba(255,215,0,.08) 75%,rgba(34,139,34,.08) 100%)`,
+                  backgroundColor: "#f8fdf9",
+                }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-b from-white/50 via-white/30 to-white/70 pointer-events-none" />
+
+                <div className="relative z-10">
+                  {messages.length === 0 && (
+                    <div className="text-center text-gray-500 text-sm py-10">
+                      <div className="bg-white/80 rounded-full w-14 h-14 mx-auto mb-3 flex items-center justify-center shadow-lg">
+                        <MessageCircle className="w-7 h-7 text-green-600" />
+                      </div>
+                      <p className="font-medium">Ask me about your farm!</p>
+                      <p className="text-xs mt-1 text-green-600 animate-pulse">
+                        {chatLanguage === "mr" ? "मराठी" : chatLanguage === "hi" ? "हिंदी" : "English"} mode
+                      </p>
+                    </div>
+                  )}
+
+                  {messages.map((msg, i) => (
+                    <div
+                      key={msg.id}
+                      className={`flex ${msg.isUser ? "justify-end" : "justify-start"} mb-3`}
+                      style={{ animationDelay: `${i * 0.04}s` }}
+                    >
+                      <div
+                        className={`max-w-[78%] rounded-2xl px-4 py-2.5 text-sm shadow-md ${
+                          msg.isUser
+                            ? "bg-gradient-to-r from-green-500 to-green-600 text-white rounded-br-sm"
+                            : "bg-white text-gray-800 rounded-bl-sm border border-gray-100"
+                        }`}
+                      >
+                        <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                        <span className={`text-[10px] mt-1 block ${msg.isUser ? "text-green-100" : "text-gray-400"}`}>
+                          {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+
+                  {isLoading && (
+                    <div className="flex justify-start">
+                      <div className="bg-white rounded-2xl rounded-bl-sm px-4 py-3 shadow-md border border-gray-100">
+                        <div className="flex gap-1">
+                          {[0, 0.2, 0.4].map((d, i) => (
+                            <span
+                              key={i}
+                              className="w-2 h-2 bg-green-400 rounded-full animate-bounce"
+                              style={{ animationDelay: `${d}s` }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+              </div>
+
+              {/* ── Input area ── */}
+              <div className="border-t border-gray-200 bg-white/95 backdrop-blur-sm p-3 rounded-b-2xl">
+                <div className="flex items-end gap-2">
+                  {/* Pause / Play */}
+                  {isPlayingAudio && !isAudioPaused && (
+                    <button onClick={pauseAudio} className="p-2 text-gray-500 hover:text-orange-500 hover:bg-gray-100 rounded-full transition-all" title="Pause">
+                      <Pause className="w-4 h-4" />
+                    </button>
+                  )}
+                  {!isPlayingAudio && lastBotMessageRef.current && (
+                    <button onClick={playAudio} className="p-2 text-gray-500 hover:text-green-600 hover:bg-gray-100 rounded-full transition-all" title="Replay">
+                      <Play className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  {/* Text input */}
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      value={inputText}
+                      onChange={(e) => setInputText(e.target.value)}
+                      onKeyPress={(e) => e.key === "Enter" && !e.shiftKey && sendTextMessage()}
+                      placeholder={
+                        chatLanguage === "mr"
+                          ? "प्रश्न विचारा..."
+                          : chatLanguage === "hi"
+                          ? "प्रश्न पूछें..."
+                          : "Ask a question..."
+                      }
+                      className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50 hover:bg-white transition-all"
+                      disabled={isLoading || isRecording}
+                    />
+                  </div>
+
+                  {/* Mic */}
+                  <button
+                    onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
+                    disabled={isLoading}
+                    className={`p-2.5 rounded-full transition-all hover:scale-110 ${
+                      isRecording
+                        ? "bg-red-500 text-white animate-pulse shadow-lg"
+                        : "bg-green-600 text-white hover:bg-green-700 shadow-md"
+                    } disabled:opacity-50`}
+                    title={isRecording ? "Stop Recording" : "Voice Input"}
+                  >
+                    {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                  </button>
+
+                  {/* Send */}
+                  {inputText.trim() && (
+                    <button
+                      onClick={sendTextMessage}
+                      disabled={isLoading || isRecording}
+                      className="p-2.5 bg-green-600 text-white rounded-full hover:bg-green-700 disabled:opacity-50 transition-all hover:scale-110 shadow-md"
+                      title="Send"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  {/* Clear */}
+                  <button
+                    onClick={clearChat}
+                    disabled={isLoading || messages.length === 0}
+                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-gray-100 rounded-full transition-all disabled:opacity-30"
+                    title="Clear Chat"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Status bar */}
+                {(isRecording || isPlayingAudio) && (
+                  <div className="flex items-center gap-3 mt-1.5 text-xs px-1">
+                    {isRecording && (
+                      <span className="flex items-center gap-1 text-red-500">
+                        <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" /> Recording...
+                      </span>
+                    )}
+                    {isPlayingAudio && (
+                      <span className="flex items-center gap-1 text-blue-500">
+                        <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" /> Speaking...
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Report Modal ── */}
+      {showReportModal && (
+        <div className="fixed inset-0 bg-black/50 z-[100000] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+            {/* Modal header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-green-600" />
+                <h2 className="font-semibold text-gray-800">Yield Improvement Report</h2>
+                {plotId && <span className="text-xs text-gray-400">— {plotId}</span>}
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Report language */}
+                <select
+                  value={reportLanguage}
+                  onChange={(e) => setReportLanguage(e.target.value as ChatLanguage)}
+                  className="text-sm border border-gray-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  <option value="mr">मराठी</option>
+                  <option value="hi">हिंदी</option>
+                  <option value="en">English</option>
+                </select>
+                <button
+                  onClick={generateReport}
+                  disabled={isGeneratingReport}
+                  className="text-sm bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
+                >
+                  {isGeneratingReport ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                  Regenerate
+                </button>
+                <button
+                  onClick={() => setShowReportModal(false)}
+                  className="p-1 hover:bg-gray-100 rounded-lg transition-all"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal content */}
+            <div className="flex-1 overflow-y-auto p-5">
+              {isGeneratingReport ? (
+                <div className="flex flex-col items-center justify-center py-16 text-gray-500">
+                  <Loader2 className="w-10 h-10 animate-spin text-green-500 mb-3" />
+                  <p className="text-sm">Generating report...</p>
+                </div>
+              ) : (
+                <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed whitespace-pre-wrap text-sm">
+                  {reportContent || "No report content yet."}
+                </div>
+              )}
+            </div>
+
+            {/* Modal footer */}
+            <div className="border-t border-gray-200 p-3 flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  const blob = new Blob([reportContent], { type: "text/plain;charset=utf-8" });
+                  const a = document.createElement("a");
+                  a.href = URL.createObjectURL(blob);
+                  a.download = `CropEye_Report_${plotId}_${new Date().toISOString().split("T")[0]}.txt`;
+                  a.click();
+                }}
+                disabled={!reportContent || isGeneratingReport}
+                className="text-sm border border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-all"
+              >
+                📄 Download
+              </button>
+              <button
+                onClick={() => setShowReportModal(false)}
+                className="text-sm bg-gray-100 text-gray-700 px-4 py-1.5 rounded-lg hover:bg-gray-200 transition-all"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

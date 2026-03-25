@@ -52,6 +52,7 @@ import axios from "axios";
 import { getCache, setCache } from "../utils/cache";
 import { getRecentFarmers, getFieldOfficerAgroStats } from "../api";
 import { getUserData } from "../utils/auth";
+import { useAppContext } from "../context/AppContext";
 
 // Constants (same as FarmerDashboard)
 const BASE_URL = "https://events-cropeye.up.railway.app";
@@ -146,6 +147,9 @@ type TimePeriod = "daily" | "weekly" | "monthly" | "yearly";
 const OfficerDashboard: React.FC = () => {
   // const center: [number, number] = [17.5789, 75.053]; // Unused - using mapCenter state instead
   const mapWrapperRef = useRef<HTMLDivElement>(null);
+
+  // Sync selected plot to global context so the chatbot can read it
+  const { setSelectedPlotName } = useAppContext();
 
   // Farmer and Plot selection state
   const [selectedFarmerId, setSelectedFarmerId] = useState<string>("");
@@ -297,6 +301,12 @@ const OfficerDashboard: React.FC = () => {
       fetchAllData();
       setPlotCoordinatesFromState(selectedPlotId);
     }
+  }, [selectedPlotId]);
+
+  // Sync selected plot to global AppContext so the chatbot always has the
+  // currently viewed plot_id without any manual input from the field officer
+  useEffect(() => {
+    setSelectedPlotName(selectedPlotId || null);
   }, [selectedPlotId]);
 
   useEffect(() => {
