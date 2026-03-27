@@ -75,6 +75,8 @@ interface Plot {
   isSaved?: boolean;
 }
 
+type SugarcaneType = "old" | "new";
+
 interface FarmerData {
   first_name: string;
   last_name: string;
@@ -87,6 +89,7 @@ interface FarmerData {
   taluka: string;
   state: string;
   district: string;
+  sugarcane_type: SugarcaneType;
   last_year_yield: string;
   documents: FileList | null;
   aadhar_card: string;
@@ -133,6 +136,15 @@ const PLANTATION_TYPE_ORDER = ["Adsali", "Suru", "pre_seasonal", "Ratoon"];
 
 // Only underscore (API) format for method - no "1 bud" / "1_bud" duplicates
 const PLANTATION_METHOD_OPTIONS = ["3_bud", "2_bud", "1_bud", "1_bud_stip"];
+
+/** Human-readable labels for plot detail keys (must match Plot interface field names). */
+const PLOT_FIELD_LABELS: Record<string, string> = {
+  flow_Rate: "Flow Rate (Liters/Hour)",
+  emitters: "Emitters Per Plant",
+  motor_Horsepower: "Motor Horsepower (HP)",
+  pipe_Width: "Pipe Width (Inches)",
+  distance_From_Motor: "Distance From Motor (M)",
+};
 
 const SQUARE_METERS_PER_ACRE = 4046.8564224;
 
@@ -293,6 +305,7 @@ function AddFarm() {
     taluka: "",
     state: "",
     district: "",
+    sugarcane_type: "old",
     last_year_yield: "",
     documents: null,
     aadhar_card: "",
@@ -1297,15 +1310,17 @@ function AddFarm() {
     }
 
     // Validate required fields
-    const requiredFields = [
+    const requiredFields: (keyof FarmerData)[] = [
       "first_name",
       "last_name",
       "username",
       "password",
       "email",
       "phone_number",
-      "last_year_yield",
     ];
+    if (formData.sugarcane_type === "old") {
+      requiredFields.push("last_year_yield");
+    }
     const missingFields = requiredFields.filter(
       (field) => !formData[field as keyof FarmerData]
     );
@@ -1384,6 +1399,7 @@ The farmer can now login with Email credentials to access the dashboard and moni
         taluka: "",
         state: "",
         district: "",
+        sugarcane_type: "old",
         last_year_yield: "",
         documents: null,
         aadhar_card: "",
@@ -1713,9 +1729,11 @@ The farmer can now login with Email credentials to access the dashboard and moni
       <div key={key} className="relative">
         <label className="block text-sm font-medium text-gray-700 capitalize mb-1">
           {key === "last_year_yield"
-            ? "Last Year Yield"
+            ? "Last Year Yield (tons)"
             : key.replace("_", " ").replace("number", "Number")}{" "}
-          <span className="text-red-500">*</span>
+          {(key !== "last_year_yield" || formData.sugarcane_type === "old") && (
+            <span className="text-red-500">*</span>
+          )}
         </label>
         <div className="relative">
           {isSelectField ? (
@@ -2093,7 +2111,9 @@ The farmer can now login with Email credentials to access the dashboard and moni
         fieldName.includes("spacing") ||
         fieldName.includes("motor") ||
         fieldName.includes("pipe") ||
-        fieldName.includes("distance")
+        fieldName.includes("distance") ||
+        fieldName.includes("flow_Rate") ||
+        fieldName === "emitters"
       )
         return <Ruler size={16} />;
       return <User size={16} />;
@@ -2115,11 +2135,16 @@ The farmer can now login with Email credentials to access the dashboard and moni
     const options = getFieldOptions(key);
     const isSelectField = options !== null && Array.isArray(options);
     const isCropTypeField = key === "crop_type";
+    const labelText =
+      PLOT_FIELD_LABELS[key] ||
+      key.replace(/_/g, " ").replace("number", "Number");
 
     return (
       <div key={key} className="relative">
-        <label className="block text-sm font-medium text-gray-700 capitalize mb-1">
-          {key.replace("_", " ").replace("number", "Number")}{" "}
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          <span className={PLOT_FIELD_LABELS[key] ? "" : "capitalize"}>
+            {labelText}
+          </span>{" "}
           <span className="text-red-500">*</span>
         </label>
         <div className="relative">
@@ -2135,7 +2160,7 @@ The farmer can now login with Email credentials to access the dashboard and moni
               }
               className="block w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm"
             >
-              <option value="">Select {key.replace("_", " ")}</option>
+              <option value="">Select {labelText}</option>
               {options.filter((opt) => opt != null && opt !== "" && typeof opt === "string").map((option, index) => (
                 <option key={`${option}-${index}`} value={option}>
                   {option}
@@ -2145,7 +2170,7 @@ The farmer can now login with Email credentials to access the dashboard and moni
           ) : (
             <input
               type={key === "plantation_Date" ? "date" : "text"}
-              placeholder={`Enter ${key.replace("_", " ")}`}
+              placeholder={`Enter ${labelText.toLowerCase()}`}
               value={value}
               onChange={(e) =>
                 handlePlotDetailChange(plotId, key, e.target.value)
@@ -2181,7 +2206,6 @@ The farmer can now login with Email credentials to access the dashboard and moni
     "state",
     "district",
     "taluka",
-    "last_year_yield",
   ];
 
   return (
@@ -2243,7 +2267,7 @@ The farmer can now login with Email credentials to access the dashboard and moni
                   )
                 )}
               </div>
-              {/* Aadhaar Number Input */}
+                {/* Aadhaar Number Input */}
               <div className="grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2">
                 <div className="mt-4 sm:mt-6">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -2274,11 +2298,73 @@ The farmer can now login with Email credentials to access the dashboard and moni
                     type="file"
                     multiple
                     name="documents"
+                    accept=".pdf,image/*,.png,.jpg,.jpeg,.webp"
                     onChange={handleFileChange}
                     className="block w-full text-xs sm:text-sm text-gray-500 file:mr-2 sm:file:mr-4 file:py-1 sm:file:py-2 file:px-2 sm:file:px-4 file:rounded file:border-0 file:text-xs sm:file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
                   />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Uploaded as <code className="text-gray-700">farm_document</code> on submit
+                    (first file only if you select several; sent with the first plot request).
+                  </p>
                 </div>
               </div>
+
+              <div className="mt-4 sm:mt-6 grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2 sm:items-start">
+                <div
+                  className={
+                    formData.sugarcane_type === "new" ? "sm:col-span-2" : ""
+                  }
+                >
+                  <span className="block text-sm font-medium text-gray-700 mb-2">
+                    Sugarcane type <span className="text-red-500">*</span>
+                  </span>
+                  <div className="flex flex-wrap gap-6">
+                    <label className="inline-flex items-center gap-2 cursor-pointer text-sm text-gray-800">
+                      <input
+                        type="radio"
+                        name="sugarcane_type"
+                        checked={formData.sugarcane_type === "old"}
+                        onChange={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            sugarcane_type: "old",
+                          }))
+                        }
+                        className="h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500"
+                      />
+                      Old
+                    </label>
+                    <label className="inline-flex items-center gap-2 cursor-pointer text-sm text-gray-800">
+                      <input
+                        type="radio"
+                        name="sugarcane_type"
+                        checked={formData.sugarcane_type === "new"}
+                        onChange={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            sugarcane_type: "new",
+                            last_year_yield: "",
+                          }))
+                        }
+                        className="h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500"
+                      />
+                      New
+                    </label>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Select &quot;New&quot; if there is no previous season yield to report.
+                  </p>
+                </div>
+                <div className="min-w-0">
+                  {formData.sugarcane_type === "old" &&
+                    renderFormField(
+                      "last_year_yield",
+                      formData.last_year_yield
+                    )}
+                </div>
+              </div>
+
+              
             </div>
 
             {/* Map Location and Plots Section */}
@@ -2486,12 +2572,12 @@ The farmer can now login with Email credentials to access the dashboard and moni
                                 {/* )} */}
                                 {renderPlotField(
                                   plot.id,
-                                  "flow_Rate (liters/hour)",
+                                  "flow_Rate",
                                   plot.flow_Rate
                                 )}
                                 {renderPlotField(
                                   plot.id,
-                                  "emitters per plant",
+                                  "emitters",
                                   plot.emitters
                                 )}
                               </div>
@@ -2499,17 +2585,17 @@ The farmer can now login with Email credentials to access the dashboard and moni
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                                 {renderPlotField(
                                   plot.id,
-                                  "motor_Horsepower (HP)",
+                                  "motor_Horsepower",
                                   plot.motor_Horsepower
                                 )}
                                 {renderPlotField(
                                   plot.id,
-                                  "pipe_Width (inches)",
+                                  "pipe_Width",
                                   plot.pipe_Width
                                 )}
                                 {renderPlotField(
                                   plot.id,
-                                  "distance_From_Motor (m)",
+                                  "distance_From_Motor",
                                   plot.distance_From_Motor
                                 )}
                               </div>

@@ -48,7 +48,11 @@ import {
 import "leaflet/dist/leaflet.css";
 import axios from "axios";
 import { getCache, setCache } from "../utils/cache";
-import api from "../api"; // Import the authenticated api instance
+import api, {
+  getCurrentUser,
+  getFarmersByFieldOfficer,
+  getTeamConnect,
+} from "../api"; // Import the authenticated api instance + hierarchy helpers
 import CommonSpinner from "./CommanSpinner";
 
 // Constants (same as FarmerDashboard)
@@ -150,8 +154,11 @@ const OwnerFarmDash: React.FC = () => {
     useState<string>("");
   const [selectedFarmerId, setSelectedFarmerId] = useState<string>("");
   const [selectedPlotId, setSelectedPlotId] = useState<string>(""); // Start empty, will be set based on farmer selection
+  const selectedPlotIdRef = useRef<string>("");
   const [managers, setManagers] = useState<any[]>([]);
   const [fieldOfficers, setFieldOfficers] = useState<any[]>([]);
+  // Raw field officers list (used to filter per selected manager).
+  const [teamFieldOfficersRaw, setTeamFieldOfficersRaw] = useState<any[]>([]);
   const [farmersForSelectedOfficer, setFarmersForSelectedOfficer] = useState<
     any[]
   >([]);
@@ -224,76 +231,136 @@ const OwnerFarmDash: React.FC = () => {
   const [plotCoordinatesCache, setPlotCoordinatesCache] = useState<
     Map<string, [number, number][]>
   >(new Map());
+  const hierarchyRequestIdRef = useRef<number>(0);
 
   // Fetch farmers list on component mount
   useEffect(() => {
     fetchOwnerHierarchy();
   }, []);
 
+  // Keep a ref so background retries can verify they're updating the latest plot.
+  useEffect(() => {
+    selectedPlotIdRef.current = selectedPlotId;
+  }, [selectedPlotId]);
+
   // NEW: Function to set plot coordinates from existing state
   const setPlotCoordinatesFromState = (plotId: string): void => {
-    // Find the selected farmer and their plot
-    const manager = managers.find((m) => String(m.id) === selectedManagerId);
-    const fieldOfficer = manager?.field_officers?.find(
-      (fo: any) => String(fo.id) === selectedFieldOfficerId,
-    );
-    const farmer = farmersForSelectedOfficer.find(
-      (f) => String(f.id) === selectedFarmerId,
-    );
-    const plot = farmer?.plots?.find((p: any) => p.fastapi_plot_id === plotId);
+    // Only rely on the currently loaded farmers list.
+    const farmer = farmersForSelectedOfficer.find((f: any) => {
+      const farmerId =
+        f?.id ?? f?.farmer_id ?? f?.farmerId ?? f?.user_id ?? null;
+      return farmerId != null && String(farmerId) === String(selectedFarmerId);
+    });
 
-    if (plot && plot.boundary?.coordinates) {
-      const geom = plot.boundary.coordinates[0];
+    const plot =
+      farmer?.plots?.find((p: any) => {
+        const pid = p?.fastapi_plot_id ?? p?.plot_id ?? p?.id;
+        return pid != null && String(pid) === String(plotId);
+      }) ?? null;
+
+    const boundary = plot?.boundary;
+    const coordsList = boundary?.coordinates;
+
+    if (coordsList && Array.isArray(coordsList) && coordsList.length > 0) {
+      const geom = coordsList[0];
       if (geom) {
         // The API gives [lng, lat], Leaflet needs [lat, lng]
-        const coords = geom.map(([lng, lat]: [number, number]) => [lat, lng]);
+        const coords = geom.map(
+          ([lng, lat]: [number, number]) => [lat, lng],
+        );
         setPlotCoordinates(coords);
 
         // Calculate and set map center
         const center = calculateCenter(coords);
         setMapCenter(center);
         setMapKey((prev) => prev + 1); // Force map re-render
-      } else {
-        setPlotCoordinates([]);
+        return;
       }
-    } else {
-      setPlotCoordinates([]);
     }
+
+    setPlotCoordinates([]);
   };
 
   // Update field officers dropdown when manager changes
   useEffect(() => {
-    if (selectedManagerId) {
-      const manager = managers.find((m) => String(m.id) === selectedManagerId);
-      const officersList = manager ? manager.field_officers : [];
-      setFieldOfficers(officersList);
-      if (officersList.length > 0) {
-        setSelectedFieldOfficerId(String(officersList[0].id));
-      } else {
-        setSelectedFieldOfficerId("");
-        setFarmersForSelectedOfficer([]);
-        setSelectedFarmerId("");
-      }
+    if (!selectedManagerId) {
+      setFieldOfficers([]);
+      setSelectedFieldOfficerId("");
+      setFarmersForSelectedOfficer([]);
+      setSelectedFarmerId("");
+      setPlots([]);
+      setSelectedPlotId("");
+      return;
     }
-  }, [selectedManagerId, managers]);
+
+    // teamFieldOfficersRaw is flattened; filter officers by manager_id.
+    const filtered = teamFieldOfficersRaw.filter((fo: any) => {
+      const mid =
+        fo?.manager_id ??
+        fo?.manager?.id ??
+        fo?.managerId ??
+        fo?.manager_id;
+      return mid != null && String(mid) === String(selectedManagerId);
+    });
+
+    setFieldOfficers(filtered);
+    // Step-by-step: do not auto-select field officer
+    setSelectedFieldOfficerId("");
+    setFarmersForSelectedOfficer([]);
+    setSelectedFarmerId("");
+    setPlots([]);
+    setSelectedPlotId("");
+  }, [selectedManagerId, teamFieldOfficersRaw]);
 
   // Update farmers dropdown when field officer changes
   useEffect(() => {
-    if (selectedFieldOfficerId) {
-      const officer = fieldOfficers.find(
-        // This now correctly uses the filtered list of FOs
-        (fo) => String(fo.id) === selectedFieldOfficerId,
-      );
-      const farmersList = officer ? officer.farmers : [];
-      setFarmersForSelectedOfficer(farmersList);
-      if (farmersList.length > 0) {
-        setSelectedFarmerId(String(farmersList[0].id));
-      } else {
-        setSelectedFarmerId("");
-        setPlots([]);
-        setSelectedPlotId("");
-      }
+    if (!selectedFieldOfficerId) {
+      setFarmersForSelectedOfficer([]);
+      setSelectedFarmerId("");
+      setPlots([]);
+      setSelectedPlotId("");
+      return;
     }
+
+    let cancelled = false;
+
+    // Step-by-step: load farmers only when an officer is selected.
+    // Primary: API call via /users/farmers-by-field-officer/<id>/
+    (async () => {
+      setFarmersForSelectedOfficer([]);
+      setSelectedFarmerId("");
+      setPlots([]);
+      setSelectedPlotId("");
+
+      try {
+        const res = await getFarmersByFieldOfficer(
+          selectedFieldOfficerId as unknown as number,
+        );
+        const data = res?.data;
+        const farmers =
+          (data && (data.results || data.farmers)) ??
+          data ??
+          [];
+        if (!cancelled) {
+          setFarmersForSelectedOfficer(Array.isArray(farmers) ? farmers : []);
+        }
+      } catch (err) {
+        // Fallback: use any nested farmers that might exist on the filtered FO object.
+        const officer = fieldOfficers.find(
+          (fo) => String(fo.id) === String(selectedFieldOfficerId),
+        );
+        const fallbackFarmers = officer?.farmers ?? [];
+        if (!cancelled) {
+          setFarmersForSelectedOfficer(
+            Array.isArray(fallbackFarmers) ? fallbackFarmers : [],
+          );
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedFieldOfficerId, fieldOfficers]);
 
   // Fetch plots when farmer is selected
@@ -455,7 +522,13 @@ const OwnerFarmDash: React.FC = () => {
   const fetchAllData = async (): Promise<void> => {
     if (!selectedPlotId) return;
 
-    setLoadingData(true);
+    // Don't block the UI with a long spinner; cards will show "-" until data updates.
+    setLoadingData(false);
+    // Optimistic guard: avoid dashboard staying on spinner forever
+    // if one backend endpoint is slow. UI will still update when data arrives.
+    const optimisticSpinnerTimeout = window.setTimeout(() => {
+      setLoadingData(false);
+    }, 2500);
     try {
       const tzOffsetMs = new Date().getTimezoneOffset() * 60000;
       const endDate = new Date(Date.now() - tzOffsetMs)
@@ -463,131 +536,208 @@ const OwnerFarmDash: React.FC = () => {
         .slice(0, 10);
       const today = endDate; // For compatibility with existing code
 
-      // Step 1: Fetch harvest status first to determine yieldDataDate
+      // Step 1: Harvest status (do NOT block dashboard render)
+      // We show the dashboard using endDate first, then update growthStage when harvest status arrives.
       const harvestCacheKey = `harvest_${selectedPlotId}_${endDate}`;
-      let harvestStatus = null;
+      let harvestStatus: string | null = null;
       let harvestData = getCache(harvestCacheKey);
-      let harvestDate = null;
+      let harvestDate: string | null = null;
       let isHarvested = false;
 
-      if (!harvestData) {
-        try {
-          const harvestRes = await axios.post(
-            `${BASE_URL}/sugarcane-harvest?plot_name=${selectedPlotId}&end_date=${endDate}`,
-          );
-          harvestData = harvestRes.data;
-          setCache(harvestCacheKey, harvestData);
-        } catch (harvestErr) {
-          console.error("Error fetching harvest status:", harvestErr);
-        }
-      }
-
-      // Extract harvest_status and harvest_date from response
-      if (harvestData) {
+      const parseHarvest = (data: any) => {
         const harvestProperties =
-          harvestData?.features?.[0]?.properties ||
-          harvestData?.harvest_summary;
-        
-        harvestStatus =
+          data?.features?.[0]?.properties || data?.harvest_summary;
+        const parsedHarvestStatus =
           harvestProperties?.harvest_status ||
-          harvestData?.harvest_summary?.harvest_status ||
+          data?.harvest_summary?.harvest_status ||
           null;
-        
-        harvestDate = harvestProperties?.harvest_date || null;
-        isHarvested =
+        const parsedHarvestDate = harvestProperties?.harvest_date || null;
+        const parsedIsHarvested =
           harvestProperties?.has_harvest === true &&
           harvestProperties?.harvest_status === "harvested";
+        return {
+          harvestStatus: parsedHarvestStatus,
+          harvestDate: parsedHarvestDate,
+          isHarvested: parsedIsHarvested,
+        };
+      };
+
+      if (harvestData) {
+        const parsed = parseHarvest(harvestData);
+        harvestStatus = parsed.harvestStatus;
+        harvestDate = parsed.harvestDate;
+        isHarvested = parsed.isHarvested;
       }
 
-      // Step 2: Determine which date to use for fetching yield data
-      // For harvested plots, use harvest_date; for others, use end_date
-      const yieldDataDate = isHarvested && harvestDate ? harvestDate : endDate;
+      const harvestPromise = harvestData
+        ? Promise.resolve({ harvestStatus, harvestDate, isHarvested })
+        : axios
+            .post(
+              `${BASE_URL}/sugarcane-harvest?plot_name=${selectedPlotId}&end_date=${endDate}`,
+            )
+            .then((harvestRes) => {
+              const data = harvestRes.data;
+              setCache(harvestCacheKey, data);
+              const parsed = parseHarvest(data);
+              return parsed;
+            })
+            .catch((harvestErr) => {
+              console.error("Error fetching harvest status:", harvestErr);
+              return { harvestStatus: null, harvestDate: null, isHarvested: false };
+            });
+
+      // Step 2: Use endDate immediately for agroStats/indices/stress/irrigation.
+      // If we later find a harvested plot, we will still update growthStage,
+      // but we avoid blocking the first paint waiting for harvest.
+      const yieldDataDate = endDate;
 
       // Step 3: Fetch critical data (agroStats) with versioned caching
-      const agroStatsCacheKey = `agroStats_v3_${yieldDataDate}`;
-      const plotSpecificCacheKey = `plot_v3_${selectedPlotId}_${yieldDataDate}`;
-      
-      let allPlotsData = getCache(agroStatsCacheKey);
-      let currentPlotData = getCache(plotSpecificCacheKey);
+      // Optimization: prefer the faster single-plot endpoint (analyzeSinglePlot),
+      // avoid downloading agroStats for ALL plots on owner dashboard load.
+      const singlePlotCacheKey = `agroSingle_v1_${selectedPlotId}_${yieldDataDate}`;
+      let currentPlotData = getCache(singlePlotCacheKey);
 
-      if (!allPlotsData || !currentPlotData) {
-        try {
-          // Fetch agroStats with shorter timeout for faster failure/recovery
-          const agroStatsRes = await makeRequestWithRetry(
-            `https://events-cropeye.up.railway.app/plots/agroStats?end_date=${yieldDataDate}`,
-            1,
-            12000, // Reduced timeout for faster retrieval
-          );
-          allPlotsData = agroStatsRes;
-          setCache(agroStatsCacheKey, allPlotsData);
+      const applyPlotStatsToState = (plot: any) => {
+        const toNumberOrNull = (v: any): number | null => {
+          if (v === null || v === undefined) return null;
+          const n = Number(v);
+          return Number.isFinite(n) ? n : null;
+        };
 
-          // Extract and cache plot-specific data
-          const quotedPlotId = `"${selectedPlotId.replace("_", '"_"')}"`;
-          currentPlotData =
-            allPlotsData[selectedPlotId] || allPlotsData[quotedPlotId] || null;
-          if (currentPlotData) {
-            setCache(plotSpecificCacheKey, currentPlotData);
-          }
-        } catch (error: any) {
-          console.error("Error fetching agroStats:", error);
-          if (!allPlotsData) allPlotsData = null;
-          // Try to recover plot data from partial allPlotsData if available
-          if (!currentPlotData && allPlotsData) {
-            const quotedPlotId = `"${selectedPlotId.replace("_", '"_"')}"`;
-            currentPlotData =
-              allPlotsData[selectedPlotId] || allPlotsData[quotedPlotId] || null;
-          }
+        const expectedYieldValue = toNumberOrNull(
+          plot?.brix_sugar?.sugar_yield?.mean ??
+            plot?.brix_sugar?.sugar_yield?.avg ??
+            plot?.brix_sugar?.sugar_yield?.average ??
+            plot?.brix_sugar?.sugar_yield_mean ??
+            plot?.sugar_yield_mean ??
+            plot?.expected_yield,
+        );
+
+        let calculatedBiomass = null;
+        let totalBiomassForMetric = null;
+
+        if (expectedYieldValue !== null && expectedYieldValue !== undefined) {
+          const totalBiomass = expectedYieldValue * 1.27;
+          const underGroundBiomassInTons = totalBiomass * 0.12;
+          calculatedBiomass = underGroundBiomassInTons;
+          totalBiomassForMetric = totalBiomass;
         }
-      } else {
-        // Use cached plot data if available, otherwise try to extract from allPlotsData
-        if (!currentPlotData && allPlotsData) {
-           const quotedPlotId = `"${selectedPlotId.replace("_", '"_"')}"`;
-           currentPlotData =
-            allPlotsData[selectedPlotId] ||
-            allPlotsData[quotedPlotId] ||
-            null;
-        }
-      }
 
-      // Step 4: Calculate biomass from expectedYield (matching FarmerDashboard)
-      const expectedYieldValue =
-        currentPlotData?.brix_sugar?.sugar_yield?.mean ?? null;
-
-      let calculatedBiomass = null;
-      let totalBiomassForMetric = null;
-
-      if (expectedYieldValue !== null) {
-        const totalBiomass = expectedYieldValue * 1.27;
-        const underGroundBiomassInTons = totalBiomass * 0.12;
-        calculatedBiomass = underGroundBiomassInTons;
-        totalBiomassForMetric = totalBiomass;
-      }
-
-      // Step 5: Update metrics immediately with available data for faster UI response
-      if (currentPlotData) {
         setMetrics((prev) => ({
           ...prev,
-          brix: currentPlotData?.brix_sugar?.brix?.mean ?? null,
-          brixMin: currentPlotData?.brix_sugar?.brix?.min ?? null,
-          brixMax: currentPlotData?.brix_sugar?.brix?.max ?? null,
-          recovery: currentPlotData?.brix_sugar?.recovery?.mean ?? null,
-          area: currentPlotData?.area_acres ?? null,
+          brix: toNumberOrNull(plot?.brix_sugar?.brix?.mean),
+          brixMin: toNumberOrNull(plot?.brix_sugar?.brix?.min),
+          brixMax: toNumberOrNull(plot?.brix_sugar?.brix?.max),
+          recovery: toNumberOrNull(plot?.brix_sugar?.recovery?.mean),
+          area:
+            plot?.area_acres ??
+            plot?.area ??
+            plot?.area_ha ??
+            null,
           biomass: calculatedBiomass,
           totalBiomass: totalBiomassForMetric,
           expectedYield: expectedYieldValue,
-          daysToHarvest: currentPlotData?.days_to_harvest ?? null,
-          growthStage:
-            harvestStatus || currentPlotData?.Sugarcane_Status || null,
-          soilPH: currentPlotData?.soil?.phh2o ?? null,
+          daysToHarvest: plot?.days_to_harvest ?? null,
+          growthStage: plot?.Sugarcane_Status ?? plot?.sugarcane_status ?? null,
+          soilPH:
+            toNumberOrNull(plot?.soil?.phh2o) ??
+            toNumberOrNull(plot?.soil?.ph_h2o) ??
+            null,
           organicCarbonDensity:
-            currentPlotData?.soil?.organic_carbon_stock != null
-              ? parseFloat(currentPlotData.soil.organic_carbon_stock.toFixed(2))
+            plot?.soil?.organic_carbon_stock != null
+              ? toNumberOrNull(plot.soil.organic_carbon_stock)
+                ? parseFloat(plot.soil.organic_carbon_stock.toFixed(2))
+                : null
               : null,
-          actualYield: currentPlotData?.brix_sugar?.sugar_yield?.mean ?? null,
-          sugarYieldMax: currentPlotData?.brix_sugar?.sugar_yield?.max ?? null,
-          sugarYieldMin: currentPlotData?.brix_sugar?.sugar_yield?.min ?? null,
+          actualYield: toNumberOrNull(
+            plot?.brix_sugar?.sugar_yield?.mean ??
+              plot?.brix_sugar?.sugar_yield_mean,
+          ),
+          sugarYieldMax: toNumberOrNull(
+            plot?.brix_sugar?.sugar_yield?.max ??
+              plot?.sugar_yield_max,
+          ),
+          sugarYieldMin: toNumberOrNull(
+            plot?.brix_sugar?.sugar_yield?.min ??
+              plot?.sugar_yield_min,
+          ),
         }));
+      };
+
+      // Step 5: Update metrics immediately with cached data.
+      // If missing, fetch plot stats in the background (no abort controller timeouts)
+      // because the events endpoints can be slow.
+      if (currentPlotData) {
+        applyPlotStatsToState(currentPlotData);
+      } else {
+        const plotIdAtStart = selectedPlotId;
+        void (async () => {
+          try {
+            // Re-check cache (might be filled while this async started).
+            let plotData = getCache(singlePlotCacheKey);
+            if (!plotData) {
+              // Prefer single-plot endpoint.
+              const singleRes = await axios.get(
+                `https://events-cropeye.up.railway.app/plots/analyzeSinglePlot?plot_id=${plotIdAtStart}`,
+              );
+              plotData = singleRes?.data ?? null;
+              if (plotData) setCache(singlePlotCacheKey, plotData);
+            }
+
+            // Fallback: use all-plots agroStats only if single-plot has no usable data.
+            if (!plotData) {
+              const agroStatsCacheKey = `agroStats_v3_${yieldDataDate}`;
+              let allPlotsData = getCache(agroStatsCacheKey);
+              if (!allPlotsData) {
+                const agroStatsRes = await axios.get(
+                  `https://events-cropeye.up.railway.app/plots/agroStats?end_date=${yieldDataDate}`,
+                );
+                allPlotsData = agroStatsRes?.data ?? null;
+                if (allPlotsData) setCache(agroStatsCacheKey, allPlotsData);
+              }
+
+              const keys = Object.keys(allPlotsData || {});
+              const keyCandidate =
+                keys.find(
+                  (k) =>
+                    k === plotIdAtStart ||
+                    k === `"${plotIdAtStart}"` ||
+                    k.replace(/^"|"$/g, "") === plotIdAtStart,
+                ) ?? null;
+              plotData = keyCandidate ? (allPlotsData as any)[keyCandidate] : null;
+              if (plotData) setCache(singlePlotCacheKey, plotData);
+            }
+
+            if (
+              plotData &&
+              selectedPlotIdRef.current === plotIdAtStart
+            ) {
+              if (import.meta.env.DEV) {
+                console.log("[OwnerFarmDash] plot stats loaded:", {
+                  plotId: plotIdAtStart,
+                  expectedYield: plotData?.brix_sugar?.sugar_yield?.mean ?? null,
+                });
+              }
+              applyPlotStatsToState(plotData);
+            }
+          } catch (e) {
+            console.error("[OwnerFarmDash] plot stats fetch failed:", e);
+          }
+        })();
       }
+
+      // Turn off the big dashboard spinner as soon as the main plot stats are ready.
+      // Stress/irrigation/indices are loaded afterwards and will update cards/charts when ready.
+      setLoadingData(false);
+
+      // When harvest status arrives, update growthStage without blocking render.
+      harvestPromise.then(({ harvestStatus: hs }) => {
+        if (!hs) return;
+        setMetrics((prev) => ({
+          ...prev,
+          growthStage: hs || prev.growthStage,
+        }));
+      });
 
       // Step 6: Fetch additional data in parallel with shorter timeouts
       // Check cache first for each endpoint
@@ -599,139 +749,362 @@ const OwnerFarmDash: React.FC = () => {
       let cachedStress = getCache(stressCacheKey);
       let cachedIrrigation = getCache(irrigationCacheKey);
 
-      // Only fetch what's not cached, with shorter timeouts
-      const fetchPromises = [];
-
-      if (!cachedIndices) {
-        fetchPromises.push(
-          makeRequestWithRetry(
-            `${BASE_URL}/plots/${selectedPlotId}/indices`,
-            1,
-            10000, // Shorter timeout for indices
-          )
-            .then((data) => {
-              const processed = data.map((item: any) => ({
-                date: new Date(item.date).toISOString().split("T")[0],
-                growth: item.NDVI,
-                stress: item.NDMI,
-                water: item.NDWI,
-                moisture: item.NDRE,
-              }));
-              setCache(indicesCacheKey, processed);
-              return { type: "indices", data: processed };
-            })
-            .catch(() => ({ type: "indices", data: null })),
-        );
+      // Fetch indices first (chart), then fetch stress/irrigation in the background.
+      // This reduces the perceived "dashboard load time".
+      if (cachedIndices) {
+        // Cached indices are already in LineChartData[] format.
+        setLineChartData(cachedIndices as LineChartData[]);
       } else {
-        fetchPromises.push(
-          Promise.resolve({ type: "indices", data: cachedIndices }),
-        );
+        // Don't block dashboard further on indices (chart can render later).
+        setLineChartData([]);
+        makeRequestWithRetry(
+          `${BASE_URL}/plots/${selectedPlotId}/indices`,
+          1,
+          10000,
+        )
+          .then((data) => {
+            const mapped = (data || []).map((item: any) => ({
+              date: new Date(item.date).toISOString().split("T")[0],
+              growth: item.NDVI,
+              stress: item.NDMI,
+              water: item.NDWI,
+              moisture: item.NDRE,
+            }));
+            setCache(indicesCacheKey, mapped);
+            setLineChartData(mapped);
+          })
+          .catch(() => {
+            setLineChartData([]);
+          });
       }
 
+      // Stress (NDRE events) - background
       if (!cachedStress) {
-        fetchPromises.push(
-          makeRequestWithRetry(
-            `${BASE_URL}/plots/${selectedPlotId}/stress?index_type=NDRE&threshold=0.15`,
-            1,
-            10000,
-          )
-            .then((data) => {
-              setCache(stressCacheKey, data);
-              return { type: "stress", data };
-            })
-            .catch(() => ({
-              type: "stress",
-              data: { events: [], total_events: 0 },
-            })),
-        );
+        makeRequestWithRetry(
+          `${BASE_URL}/plots/${selectedPlotId}/stress?index_type=NDRE&threshold=0.15`,
+          1,
+          10000,
+        )
+          .then((data) => {
+            setCache(stressCacheKey, data);
+            const events = data?.events ?? [];
+            setStressEvents(events);
+            setNdreStressEvents(events);
+            setMetrics((prev) => ({
+              ...prev,
+              stressCount: data?.total_events ?? 0,
+              cnRatio: null,
+            }));
+          })
+          .catch(() => {
+            const events: any[] = [];
+            setStressEvents(events);
+            setNdreStressEvents(events);
+            setMetrics((prev) => ({
+              ...prev,
+              stressCount: 0,
+              cnRatio: null,
+            }));
+          });
       } else {
-        fetchPromises.push(
-          Promise.resolve({ type: "stress", data: cachedStress }),
-        );
+        const events = cachedStress?.events ?? [];
+        setStressEvents(events);
+        setNdreStressEvents(events);
+        setMetrics((prev) => ({
+          ...prev,
+          stressCount: cachedStress?.total_events ?? 0,
+          cnRatio: null,
+        }));
       }
 
+      // Irrigation events - background
       if (!cachedIrrigation) {
-        fetchPromises.push(
-          makeRequestWithRetry(
-            `${BASE_URL}/plots/${selectedPlotId}/irrigation?threshold_ndmi=0.05&threshold_ndwi=0.05&min_days_between_events=10`,
-            1,
-            10000,
-          )
-            .then((data) => {
-              setCache(irrigationCacheKey, data);
-              return { type: "irrigation", data };
-            })
-            .catch(() => ({
-              type: "irrigation",
-              data: { total_events: null },
-            })),
-        );
+        makeRequestWithRetry(
+          `${BASE_URL}/plots/${selectedPlotId}/irrigation?threshold_ndmi=0.05&threshold_ndwi=0.05&min_days_between_events=10`,
+          1,
+          10000,
+        )
+          .then((data) => {
+            setCache(irrigationCacheKey, data);
+            setMetrics((prev) => ({
+              ...prev,
+              irrigationEvents: data?.total_events ?? null,
+            }));
+          })
+          .catch(() => {
+            setMetrics((prev) => ({
+              ...prev,
+              irrigationEvents: null,
+            }));
+          });
       } else {
-        fetchPromises.push(
-          Promise.resolve({ type: "irrigation", data: cachedIrrigation }),
-        );
+        setMetrics((prev) => ({
+          ...prev,
+          irrigationEvents: cachedIrrigation?.total_events ?? null,
+        }));
       }
-
-      // Execute all fetches in parallel
-      const results = await Promise.allSettled(fetchPromises);
-
-      let rawIndices: LineChartData[] = [];
-      let stressData: any = { events: [], total_events: 0 };
-      let irrigationData: any = { total_events: null };
-
-      results.forEach((result) => {
-        if (result.status === "fulfilled" && result.value) {
-          const { type, data } = result.value;
-          if (type === "indices") rawIndices = data || [];
-          if (type === "stress")
-            stressData = data || { events: [], total_events: 0 };
-          if (type === "irrigation")
-            irrigationData = data || { total_events: null };
-        }
-      });
-
-      // Update state with fetched data
-      setLineChartData(rawIndices);
-      setStressEvents(stressData?.events ?? []);
-      setNdreStressEvents(stressData?.events ?? []);
-
-      // Update metrics with complete data
-      setMetrics((prev) => ({
-        ...prev,
-        stressCount: stressData?.total_events ?? 0,
-        irrigationEvents: irrigationData?.total_events ?? null,
-        cnRatio: null,
-      }));
     } catch (err: any) {
       // You could add a toast notification here to inform the user
       // For now, we'll just log the error and continue with partial data
     } finally {
+      clearTimeout(optimisticSpinnerTimeout);
       setLoadingData(false);
     }
   };
 
   // Fetch farmers from API - using authenticated endpoint
   const fetchOwnerHierarchy = async (): Promise<void> => {
-    setLoadingHierarchy(true);
-    try {
-      // Use authenticated API call from api.ts
-      const response = await api.get(
-        `${import.meta.env.VITE_API_BASE_URL || "https://cropeye-backend.up.railway.app/api"}/users/owner-hierarchy/`,
+    const HIERARCHY_CACHE_KEY = "ownerTeamConnect_v3";
+    const HIERARCHY_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+    // Fast path: hydrate managers/field officers from cache immediately
+    const cached = getCache(HIERARCHY_CACHE_KEY, HIERARCHY_TTL_MS);
+    if (cached?.managers && Array.isArray(cached.managers)) {
+      const cachedManagers = cached.managers;
+      const hasAnyFieldOfficer = cachedManagers.some(
+        (m: any) => (m?.field_officers_count ?? 0) > 0,
       );
-      const responseData = response.data;
-      const managersData = responseData.managers || [];
+      const looksIncomplete = cachedManagers.length <= 1 && !hasAnyFieldOfficer;
 
-      setManagers(managersData);
-
-      // Auto-select first manager if available
-      if (managersData.length > 0) {
-        setSelectedManagerId(String(managersData[0].id));
+      if (!looksIncomplete) {
+        setManagers(cachedManagers);
+        setTeamFieldOfficersRaw(
+          Array.isArray(cached.fieldOfficers) ? cached.fieldOfficers : [],
+        );
+        setLoadingHierarchy(false);
+        return;
       }
+    }
+
+    const requestId = ++hierarchyRequestIdRef.current;
+    setLoadingHierarchy(true);
+
+    const normalizeRole = (u: any) => {
+      const roleId = u?.role_id ?? u?.role?.id ?? u?.role?.role_id ?? null;
+      const roleNameRaw =
+        u?.role?.name ?? u?.role_name ?? u?.roleName ?? u?.type ?? u?.user_type ?? "";
+      const roleName = `${roleNameRaw}`.toLowerCase();
+      return { roleId, roleName };
+    };
+
+    try {
+      let managersTmp: any[] = [];
+      let fieldOfficersTmp: any[] = [];
+
+      // Prefer team-connect for lighter payload (if possible)
+      const meRes = await getCurrentUser();
+      const me = meRes?.data;
+      const industryId =
+        me?.industry_id ??
+        me?.industry?.id ??
+        me?.industry?.industry_id ??
+        me?.industryId;
+
+      if (industryId) {
+        const teamRes = await getTeamConnect(industryId);
+        const d = teamRes?.data;
+
+        // Format: { users_by_role: { managers: [], field_officers: [] } }
+        if (d?.users_by_role) {
+          managersTmp = Array.isArray(d.users_by_role.managers)
+            ? d.users_by_role.managers
+            : [];
+          fieldOfficersTmp = Array.isArray(d.users_by_role.field_officers)
+            ? d.users_by_role.field_officers
+            : [];
+        }
+
+        // Format: { managers: [], field_officers: [] }
+        if ((!managersTmp || managersTmp.length === 0) && Array.isArray(d?.managers)) {
+          managersTmp = d.managers;
+        }
+        if ((!fieldOfficersTmp || fieldOfficersTmp.length === 0) && Array.isArray(d?.field_officers)) {
+          fieldOfficersTmp = d.field_officers;
+        }
+
+        // Format: { results: [...] } (role detection per item)
+        if ((!managersTmp || managersTmp.length === 0) && Array.isArray(d?.results)) {
+          d.results.forEach((u: any) => {
+            const { roleId, roleName } = normalizeRole(u);
+            if (roleId === 3 || roleName.includes("manager")) managersTmp.push(u);
+            if (roleId === 2 || (roleName.includes("field") && roleName.includes("officer")))
+              fieldOfficersTmp.push(u);
+          });
+        }
+      }
+
+      // If team-connect gives managers but no flat field-officers array,
+      // try deriving field officers from nested manager objects.
+      if (
+        Array.isArray(managersTmp) &&
+        managersTmp.length > 0 &&
+        (!Array.isArray(fieldOfficersTmp) || fieldOfficersTmp.length === 0)
+      ) {
+        fieldOfficersTmp = managersTmp.flatMap((m: any) => {
+          const mid = m?.id ?? m?.user_id ?? null;
+          const nestedFos = m?.field_officers ?? m?.fieldOfficers ?? m?.fo_list ?? [];
+          if (!Array.isArray(nestedFos)) return [];
+          return nestedFos.map((fo: any) => ({
+            ...fo,
+            manager_id: fo?.manager_id ?? fo?.manager?.id ?? fo?.managerId ?? mid,
+          }));
+        });
+      }
+
+      // Fallback to owner-hierarchy if team-connect doesn't provide managers
+      if (
+        !Array.isArray(managersTmp) ||
+        managersTmp.length === 0 ||
+        !Array.isArray(fieldOfficersTmp) ||
+        fieldOfficersTmp.length === 0
+      ) {
+        const response = await api.get(
+          `${import.meta.env.VITE_API_BASE_URL || "https://cropeye-backend.up.railway.app/api"}/users/owner-hierarchy/`,
+        );
+        const responseData = response.data;
+
+        managersTmp = Array.isArray(responseData?.managers)
+          ? responseData.managers
+          : Array.isArray(responseData?.results)
+            ? responseData.results
+            : [];
+
+        // Flatten managers -> field_officers and attach manager_id for filtering.
+        if (Array.isArray(managersTmp)) {
+          fieldOfficersTmp = managersTmp.flatMap((m: any) =>
+            (Array.isArray(m?.field_officers) ? m.field_officers : []).map((fo: any) => ({
+              ...fo,
+              manager_id: fo?.manager_id ?? fo?.manager?.id ?? m?.id,
+            })),
+          );
+        }
+      }
+
+      // Ensure each field officer has manager_id for filtering.
+      fieldOfficersTmp = (fieldOfficersTmp || []).map((fo: any) => ({
+        ...fo,
+        manager_id:
+          fo?.manager_id ??
+          fo?.manager?.id ??
+          fo?.managerId ??
+          fo?.manager_id_number ??
+          null,
+      }));
+
+      // Compute field_officers_count for each manager (used in the dropdown UI).
+      const managersNormalized = (managersTmp || []).map((m: any) => {
+        const mid = m?.id ?? m?.user_id ?? null;
+        const count = (fieldOfficersTmp || []).filter((fo: any) => {
+          const foMid = fo?.manager_id ?? fo?.manager?.id ?? fo?.managerId ?? null;
+          return mid != null && foMid != null && String(foMid) === String(mid);
+        }).length;
+        return {
+          ...m,
+          field_officers_count:
+            m?.field_officers_count ??
+            m?.fieldOfficersCount ??
+            count,
+        };
+      });
+
+      // If the team-connect parsing produced an incomplete tree (common issue:
+      // only 1 manager with 0 field officers), force-fetch the heavier
+      // owner-hierarchy endpoint to ensure the managers dropdown is correct.
+      const managersCount = managersNormalized.length;
+      const hasAnyFieldOfficer =
+        managersNormalized.some(
+          (m: any) => (m.field_officers_count ?? 0) > 0,
+        );
+
+      let finalManagers = managersNormalized;
+      let finalFieldOfficers = fieldOfficersTmp;
+
+      if (managersCount <= 1 && !hasAnyFieldOfficer) {
+        // IMPORTANT: Don't block UI. Run the heavy fallback in background.
+        void (async () => {
+          try {
+            const response = await api.get(
+              `${import.meta.env.VITE_API_BASE_URL || "https://cropeye-backend.up.railway.app/api"}/users/owner-hierarchy/`,
+            );
+            if (hierarchyRequestIdRef.current !== requestId) return;
+
+            const responseData = response.data;
+            const fallbackManagersTmp = Array.isArray(responseData?.managers)
+              ? responseData.managers
+              : Array.isArray(responseData?.results)
+                ? responseData.results
+                : [];
+
+            const fallbackFieldOfficersTmp = (
+              fallbackManagersTmp || []
+            ).flatMap((m: any) =>
+              (Array.isArray(m?.field_officers) ? m.field_officers : []).map(
+                (fo: any) => ({
+                  ...fo,
+                  manager_id: fo?.manager_id ?? fo?.manager?.id ?? m?.id,
+                }),
+              ),
+            );
+
+            const fallbackManagersNormalized = (fallbackManagersTmp || []).map(
+              (m: any) => {
+                const mid = m?.id ?? m?.user_id ?? null;
+                const count = (fallbackFieldOfficersTmp || []).filter(
+                  (fo: any) => {
+                    const foMid =
+                      fo?.manager_id ?? fo?.manager?.id ?? fo?.managerId ?? null;
+                    return (
+                      mid != null &&
+                      foMid != null &&
+                      String(foMid) === String(mid)
+                    );
+                  },
+                ).length;
+                return {
+                  ...m,
+                  field_officers_count:
+                    m?.field_officers_count ?? count,
+                };
+              },
+            );
+
+            setManagers(fallbackManagersNormalized);
+            setTeamFieldOfficersRaw(fallbackFieldOfficersTmp);
+            setCache(HIERARCHY_CACHE_KEY, {
+              managers: fallbackManagersNormalized,
+              fieldOfficers: fallbackFieldOfficersTmp,
+            });
+          } catch {
+            // Keep whatever we already computed.
+          }
+        })();
+      }
+
+      if (import.meta.env.DEV) {
+        console.log("[OwnerFarmDash] hierarchy final:", {
+          managersCount: finalManagers.length,
+          managersPreview: finalManagers.slice(0, 5).map((m: any) => ({
+            id: m?.id ?? m?.user_id,
+            name: `${m?.first_name ?? ""} ${m?.last_name ?? ""}`.trim(),
+            foCount: m?.field_officers_count ?? 0,
+          })),
+          fieldOfficersCount: (finalFieldOfficers || []).length,
+        });
+      }
+
+      setManagers(finalManagers);
+      setTeamFieldOfficersRaw(finalFieldOfficers);
+      setCache(HIERARCHY_CACHE_KEY, {
+        managers: finalManagers,
+        fieldOfficers: finalFieldOfficers,
+      });
+
+      // Manager-first loading: do not auto-select manager on first load.
+      setSelectedManagerId("");
     } catch (error: any) {
-      // Show user-friendly error message
-      if (error.response?.status === 401) {
-      } else if (error.response?.status === 403) {
-      }
+      console.error("Owner hierarchy load failed:", error?.message || error);
+      setManagers([]);
+      setTeamFieldOfficersRaw([]);
     } finally {
       setLoadingHierarchy(false);
     }
@@ -1211,14 +1584,9 @@ const OwnerFarmDash: React.FC = () => {
     );
   };
 
-  // Show loading spinner while fetching initial farmers data
-  if (loadingHierarchy && managers.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center">
-        <CommonSpinner />
-      </div>
-    );
-  }
+  // IMPORTANT: Do not block the whole UI on hierarchy loading.
+  // Dropdowns will show "Loading..." until data arrives.
+  // This avoids long full-screen spinners for Owner dashboard.
 
   // const totalFarmers = fieldOfficers.reduce(
   //   (acc, officer) => acc + (officer.farmers?.length || 0),
@@ -1302,7 +1670,10 @@ const OwnerFarmDash: React.FC = () => {
                             value={manager.id}
                           >
                             {manager.first_name} {manager.last_name} (
-                            {manager.field_officers_count} FOs)
+                            {manager.field_officers_count ??
+                              manager.field_officers?.length ??
+                              (manager.field_officers_count === 0 ? 0 : "—")}{" "}
+                            FOs)
                           </option>
                         ))}
                       </>
