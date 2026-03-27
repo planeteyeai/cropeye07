@@ -440,7 +440,7 @@ const Map: React.FC<MapProps> = ({
       // ? '/api/dev-plot' 
       // : 'https://admin-cropeye.up.railway.app';
     const baseUrl='https://admin-cropeye.up.railway.app';
-    const url = `${baseUrl}/analyze_Growth?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`;
+    const url = `${baseUrl}/analyze_Growth?plot_name=${plotName}&end_date=${currentEndDate}&days_back=15`;
     
     try {
       
@@ -532,7 +532,7 @@ const Map: React.FC<MapProps> = ({
     //   ? '/api/dev-plot' 
     //   : 'https://admin-cropeye.up.railway.app';
     const baseUrl = 'https://admin-cropeye.up.railway.app';
-    const url = `${baseUrl}/wateruptake?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`;
+    const url = `${baseUrl}/wateruptake?plot_name=${plotName}&end_date=${currentEndDate}&days_back=15`;
 
     try {
       
