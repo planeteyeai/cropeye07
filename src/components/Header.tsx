@@ -23,7 +23,7 @@ import {
 import { useAppContext } from "../context/AppContext";
 import { getUserRole, getUserData } from "../utils/auth";
 import { useFarmerProfile } from "../hooks/useFarmerProfile";
-import { GoogleTranslateWidget } from "./GoogleTranslateWidget.tsx";
+import GoogleTranslateWidget from "./GoogleTranslateWidget";
 
 interface HeaderProps {
   toggleSidebar: () => void;

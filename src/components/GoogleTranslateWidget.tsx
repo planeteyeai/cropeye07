@@ -126,15 +126,76 @@ const hideGoogleTranslateTopBar = () => {
   protectNumericTextNodes();
 };
 
-const setGoogTransAndReload = (from: string, to: string) => {
+const GOOGTRANS = "googtrans";
+
+/** Remove googtrans so the next value sticks (fixes 2nd+ language change on HTTPS / hosted). */
+const clearGoogTransCookies = () => {
+  const expire = "max-age=0";
+  const path = "path=/";
+  const same = "SameSite=Lax";
+  const secure =
+    typeof window !== "undefined" && window.location.protocol === "https:"
+      ? ";Secure"
+      : "";
+
+  const trySet = (fragment: string) => {
+    document.cookie = `${GOOGTRANS}=;${path};${expire};${same}${secure}${fragment}`;
+  };
+
+  // Host-only cookie
+  trySet("");
+  // Common hosted pattern: cookie was set with explicit domain
+  const host = typeof window !== "undefined" ? window.location.hostname : "";
+  if (host) {
+    trySet(`;domain=${host}`);
+    // Parent domain (e.g. .railway.app) when API is on a subdomain
+    const segments = host.split(".").filter(Boolean);
+    if (segments.length >= 2) {
+      trySet(`;domain=.${segments.slice(-2).join(".")}`);
+    }
+  }
+};
+
+const setGoogTransAndReload = (from: string, to: GtLang) => {
+  clearGoogTransCookies();
+
+  // Show original English: no googtrans cookie
+  if (to === "en") {
+    window.location.reload();
+    return;
+  }
+
   const maxAge = 60 * 60 * 24 * 365;
-  document.cookie = `googtrans=/${from}/${to};path=/;max-age=${maxAge}`;
+  const sameSite = "SameSite=Lax";
+  const secure =
+    typeof window !== "undefined" && window.location.protocol === "https:"
+      ? ";Secure"
+      : "";
+
+  const pair = `/${from}/${to}`;
+  document.cookie = `${GOOGTRANS}=${pair};path=/;max-age=${maxAge};${sameSite}${secure}`;
   window.location.reload();
 };
 
+/** Last googtrans=/src/target in document.cookie (handles ordering / duplicates). */
 const getCurrentGoogTransTo = (): string | null => {
-  const m = document.cookie.match(/(?:^|;\s*)googtrans=\/[^/]+\/([^;]+)/);
-  return m?.[1] ?? null;
+  if (typeof document === "undefined") return null;
+  let last: string | null = null;
+  for (const part of document.cookie.split(";")) {
+    const s = part.trim();
+    if (!s.toLowerCase().startsWith(`${GOOGTRANS}=`)) continue;
+    const v = s.slice(GOOGTRANS.length + 1).trim();
+    const decoded = (() => {
+      try {
+        return decodeURIComponent(v);
+      } catch {
+        return v;
+      }
+    })();
+    const m = decoded.match(/^\/[^/]+\/([^/]+)$/);
+    if (m?.[1]) last = m[1].trim();
+  }
+  return last;
 };
 
 export const GoogleTranslateWidget: React.FC = () => {
