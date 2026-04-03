@@ -23,6 +23,7 @@ import {
 import { useAppContext } from "../context/AppContext";
 import { getUserRole, getUserData } from "../utils/auth";
 import { useFarmerProfile } from "../hooks/useFarmerProfile";
+import { GoogleTranslateWidget } from "./GoogleTranslateWidget.tsx";
 
 interface HeaderProps {
   toggleSidebar: () => void;
@@ -393,8 +394,9 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Right side - Fixed Logo */}
+          {/* Right side - Google Translate + Logo */}
           <div className="logo-container">
+            <GoogleTranslateWidget />
             <img src="/icons/Cropeye-new.png" alt="CropEye Logo" className="logo-image" />
           </div>
         </div>
