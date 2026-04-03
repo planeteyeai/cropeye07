@@ -1533,7 +1533,7 @@
 /* Map legend bottom styles - positioned at bottom of map container */
 .map-legend-bottom {
   position: absolute !important;
-  bottom: 45px;
+  bottom: 120px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 10000 !important;
@@ -1635,7 +1635,7 @@
   font-weight: 500;
   color: #ffffff;
   text-align: center;
-  margin-bottom: 50px;
+  /* margin-bottom: 50px; */
   line-height: 1.2;
   height: 32px;
   display: flex !important;

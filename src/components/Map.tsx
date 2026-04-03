@@ -134,6 +134,25 @@ const LAYER_LABELS: Record<string, string> = {
   PEST: "Pest",
 };
 
+/** Legend % for Water Uptake "Very Healthy": API sends `very_healthy_pixel_count` (derive from total) or `very_healthy_pixel_percentage`. */
+function waterUptakeVeryHealthyPercent(pixelSummary: Record<string, unknown>): number {
+  const ps = pixelSummary as Record<string, number | undefined>;
+  const pct = ps.very_healthy_pixel_percentage;
+  if (typeof pct === "number" && !Number.isNaN(pct)) return Math.round(pct);
+  const count = Number(ps.very_healthy_pixel_count) || 0;
+  const total = Number(ps.total_pixel_count) || 0;
+  if (total > 0) return Math.round((count / total) * 100);
+  return 0;
+}
+
+function waterUptakeVeryHealthyCoordinates(pixelSummary: Record<string, unknown>): number[][] {
+  const ps = pixelSummary as Record<string, unknown>;
+  const v = ps.very_healthy_pixel_coordinates;
+  if (Array.isArray(v) && v.length) return v as number[][];
+  const legacy = ps.excess_pixel_coordinates;
+  return Array.isArray(legacy) ? (legacy as number[][]) : [];
+}
+
 // Set fixed zoom level component
 const SetFixedZoom: React.FC<{ coordinates: number[][] }> = ({ coordinates }) => {
   const map = useMap();
@@ -208,7 +227,7 @@ const CustomTileLayer: React.FC<{
   );
 };
 
-const Map: React.FC<MapProps> = ({
+const CropEyeMap: React.FC<MapProps> = ({
   onHealthDataChange,
   onSoilDataChange,
   onFieldAnalysisChange,
@@ -1029,7 +1048,7 @@ const Map: React.FC<MapProps> = ({
         { label: "Less", color: "#87CEEB", percentage: Math.round(pixelSummary.less_pixel_percentage || 0), description: "weak roots" },
         { label: "Adequate", color: "#4682B4", percentage: Math.round(pixelSummary.adequat_pixel_percentage || 0), description: "healthy roots" },
         { label: "Excellent", color: "#1E90FF", percentage: Math.round(pixelSummary.excellent_pixel_percentage || 0), description: "healthy roots" },
-        { label: "Excess", color: "#000080", percentage: Math.round(pixelSummary.excess_pixel_percentage || 0), description: "root logging" }
+        { label: "Very Healthy", color: "#000080", percentage: waterUptakeVeryHealthyPercent(pixelSummary), description: "very healthy roots" }
       ];
     }
 
@@ -1151,9 +1170,9 @@ const Map: React.FC<MapProps> = ({
       } else if (selectedLegendClass === "Excellent") {
         coordinates = pixelSummary.excellent_pixel_coordinates || [];
         categoryType = "Excellent";
-      } else if (selectedLegendClass === "Excess") {
-        coordinates = pixelSummary.excess_pixel_coordinates || [];
-        categoryType = "Excess";
+      } else if (selectedLegendClass === "Very Healthy") {
+        coordinates = waterUptakeVeryHealthyCoordinates(pixelSummary);
+        categoryType = "Very Healthy";
       }
 
       if (!coordinates || !Array.isArray(coordinates)) {
@@ -1306,7 +1325,14 @@ const Map: React.FC<MapProps> = ({
       
       for (const legendItem of legendItems) {
         const coordsKey = getCoordinatesKey(layerName, legendItem.label);
-        const coordinates = layerData.pixel_summary[coordsKey] || [];
+        let coordinates = layerData.pixel_summary[coordsKey] || [];
+        if (
+          layerName === "Water Uptake" &&
+          legendItem.label === "Very Healthy" &&
+          (!Array.isArray(coordinates) || coordinates.length === 0)
+        ) {
+          coordinates = waterUptakeVeryHealthyCoordinates(layerData.pixel_summary);
+        }
         
         const found = coordinates.find((coord: number[]) => 
           Math.abs(coord[0] - coords[0]) < tolerance && 
@@ -1331,6 +1357,7 @@ const Map: React.FC<MapProps> = ({
         return `${label.toLowerCase()}_pixel_coordinates`;
       } else if (layerName === 'Water Uptake') {
         if (label === 'Adequate') return 'adequat_pixel_coordinates';
+        if (label === 'Very Healthy') return 'very_healthy_pixel_coordinates';
         return `${label.toLowerCase()}_pixel_coordinates`;
       } else if (layerName === 'Soil Moisture') {
         if (label === 'Shallow') return 'shallow_water_pixel_coordinates';
@@ -1363,7 +1390,7 @@ const Map: React.FC<MapProps> = ({
         { label: "Less", description: "weak roots", percentage: Math.round(waterUptakeData.pixel_summary?.less_pixel_percentage || 0) },
         { label: "Adequate", description: "healthy roots", percentage: Math.round(waterUptakeData.pixel_summary?.adequat_pixel_percentage || 0) },
         { label: "Excellent", description: "healthy roots", percentage: Math.round(waterUptakeData.pixel_summary?.excellent_pixel_percentage || 0) },
-        { label: "Excess", description: "root logging", percentage: Math.round(waterUptakeData.pixel_summary?.excess_pixel_percentage || 0) }
+        { label: "Very Healthy", description: "very healthy roots", percentage: waterUptakeVeryHealthyPercent(waterUptakeData.pixel_summary || {}) }
       ];
       const waterResult = findCategoryInLayer(waterUptakeData, 'Water Uptake', waterLegend);
       if (waterResult) allLayerData.push(waterResult);
@@ -1814,4 +1841,4 @@ const Map: React.FC<MapProps> = ({
   );
 };
 
-export default Map;
+export default CropEyeMap;
