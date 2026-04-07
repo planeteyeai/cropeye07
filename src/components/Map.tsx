@@ -1,12 +1,19 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import { MapContainer, TileLayer, Polygon, useMap, Circle } from "react-leaflet";
-import { LatLngTuple, LeafletMouseEvent } from "leaflet";
+import { LatLngTuple, LeafletMouseEvent, LatLngBounds } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./Map.css";
 import { useFarmerProfile } from "../hooks/useFarmerProfile";
 import { useAppContext } from "../context/AppContext";
 import { FaExpand } from 'react-icons/fa';
 import { ArrowLeft, Loader2 } from 'lucide-react';
+import { AnalysisTimelineRibbon } from "./AnalysisTimelineRibbon";
+import {
+  fetchAnalysisTimeline,
+  sortedRebinDatesForLayer,
+  latestRebinDateAcrossAllLayers,
+  type AnalysisTimelineResponse,
+} from "../services/analysisTimeline";
 
 // Add custom styles for the enhanced tooltip
 const tooltipStyles = `
@@ -127,6 +134,13 @@ if (typeof document !== 'undefined' && !document.querySelector('#map-tooltip-sty
 // Unified legend circle color (orange)
 const LEGEND_CIRCLE_COLOR = '#F57C00';
 
+const LAYER_FETCH_ROTATION_MESSAGES = [
+  "Fetching growth data…",
+  "Fetching water uptake data…",
+  "Fetching soil moisture data…",
+  "Fetching pest data…",
+] as const;
+
 const LAYER_LABELS: Record<string, string> = {
   Growth: "Growth",
   "Water Uptake": "Water Uptake",
@@ -153,8 +167,15 @@ function waterUptakeVeryHealthyCoordinates(pixelSummary: Record<string, unknown>
   return Array.isArray(legacy) ? (legacy as number[][]) : [];
 }
 
-// Set fixed zoom level component
-const SetFixedZoom: React.FC<{ coordinates: number[][] }> = ({ coordinates }) => {
+/** Overview framing: wider context like satellite overview (~zoom ≤16); refit when date changes. */
+const PLOT_VIEW_MAX_ZOOM = 16;
+const PLOT_FIT_PADDING_PX = 56;
+
+const SetPlotOverviewZoom: React.FC<{
+  coordinates: number[][];
+  /** Bumps effect when user picks another date so the map re-frames even if boundary coords match. */
+  refitKey?: string;
+}> = ({ coordinates, refitKey }) => {
   const map = useMap();
 
   useEffect(() => {
@@ -165,12 +186,15 @@ const SetFixedZoom: React.FC<{ coordinates: number[][] }> = ({ coordinates }) =>
       .map(([lng, lat]) => [lat, lng] as LatLngTuple)
       .filter((tuple: LatLngTuple) => !isNaN(tuple[0]) && !isNaN(tuple[1]));
 
-    if (latlngs.length) {
-      const centerLat = latlngs.reduce((sum, coord) => sum + coord[0], 0) / latlngs.length;
-      const centerLng = latlngs.reduce((sum, coord) => sum + coord[1], 0) / latlngs.length;
-      map.setView([centerLat, centerLng], 18, { animate: true, duration: 1.5 });
-    }
-  }, [coordinates, map]);
+    if (!latlngs.length) return;
+
+    const bounds = new LatLngBounds(latlngs as LatLngTuple[]);
+    map.fitBounds(bounds, {
+      padding: [PLOT_FIT_PADDING_PX, PLOT_FIT_PADDING_PX],
+      maxZoom: PLOT_VIEW_MAX_ZOOM,
+      animate: true,
+    });
+  }, [coordinates, map, refitKey]);
 
   return null;
 };
@@ -238,11 +262,14 @@ const CropEyeMap: React.FC<MapProps> = ({
   const { getCached, setCached } = useAppContext();
   const mapWrapperRef = useRef<HTMLDivElement>(null);
   const initialFetchDoneRef = useRef<boolean>(false); // Track if initial fetch is done
+  /** In-memory tile responses: key = `growth|plot|YYYY-MM-DD` etc. Avoids refetch when switching layer tab only. */
+  const layerTilesCacheRef = useRef<Map<string, unknown>>(new Map());
 
   const [plotData, setPlotData] = useState<any>(null);
   const [plotBoundary, setPlotBoundary] = useState<any>(null); // Separate state for plot boundary that persists
   const [loading, setLoading] = useState(false);
   const [dateNavigationLoading, setDateNavigationLoading] = useState(false); // Loading state for date navigation
+  const [fetchRotationIndex, setFetchRotationIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [mapCenter] = useState<LatLngTuple>([17.842832246588202, 74.91558702408217]);
   const [selectedPlotName, setSelectedPlotName] = useState("");
@@ -272,11 +299,58 @@ const CropEyeMap: React.FC<MapProps> = ({
   const [popupSide, setPopupSide] = useState<'left' | 'right' | null>(null);
   const DAYS_STEP = 5;
 
+  const [timelinePayload, setTimelinePayload] = useState<AnalysisTimelineResponse | null>(null);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const mapRebinSnapKeyRef = useRef<string>("");
+
+  useEffect(() => {
+    let cancelled = false;
+    const plot = selectedPlotName?.trim();
+    if (!plot) {
+      setTimelinePayload(null);
+      setTimelineLoading(false);
+      mapRebinSnapKeyRef.current = "";
+      layerTilesCacheRef.current.clear();
+      return;
+    }
+    setTimelinePayload(null);
+    setTimelineLoading(true);
+    mapRebinSnapKeyRef.current = "";
+    layerTilesCacheRef.current.clear();
+    fetchAnalysisTimeline(plot).then((data) => {
+      if (!cancelled) {
+        setTimelinePayload(data);
+        setTimelineLoading(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPlotName]);
+
+  const mapRebinDates = useMemo(
+    () => sortedRebinDatesForLayer(timelinePayload?.timeline, activeLayer),
+    [timelinePayload, activeLayer],
+  );
+
+  const latestRebinOverall = useMemo(
+    () => latestRebinDateAcrossAllLayers(timelinePayload?.timeline),
+    [timelinePayload],
+  );
+
+  /** Snap once per plot/timeline to global latest rebin date — not on layer tab change (avoids redundant fetches). */
+  useEffect(() => {
+    if (!selectedPlotName?.trim() || !latestRebinOverall) return;
+    const snapKey = `${selectedPlotName}|${latestRebinOverall}`;
+    if (mapRebinSnapKeyRef.current === snapKey) return;
+    mapRebinSnapKeyRef.current = snapKey;
+    setCurrentEndDate(latestRebinOverall);
+  }, [selectedPlotName, latestRebinOverall]);
+
   useEffect(() => {
     setLayerChangeKey(prev => prev + 1);
-    // Don't reset date when switching layers - keep the same date across all 4 layers
-    // This ensures Growth, Water Uptake, Soil Moisture, and Pest all use the same synchronized date
-    
+    // Layer tabs only switch the displayed tile; same `currentEndDate` and cached layer responses are reused.
+
     // Ensure plotBoundary is preserved when switching layers
     // Try to extract from current layer data if plotBoundary is missing
     if (!plotBoundary && selectedPlotName) {
@@ -322,6 +396,19 @@ const CropEyeMap: React.FC<MapProps> = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentEndDate, selectedPlotName]);
+
+  useEffect(() => {
+    if (!dateNavigationLoading) {
+      setFetchRotationIndex(0);
+      return;
+    }
+    setFetchRotationIndex(0);
+    const tickMs = 1400;
+    const id = window.setInterval(() => {
+      setFetchRotationIndex((i) => (i + 1) % LAYER_FETCH_ROTATION_MESSAGES.length);
+    }, tickMs);
+    return () => window.clearInterval(id);
+  }, [dateNavigationLoading]);
 
   const getCurrentDate = () => {
     const today = new Date();
@@ -388,6 +475,19 @@ const CropEyeMap: React.FC<MapProps> = ({
     return date >= today;
   };
 
+  const mapRebinDateIndex = useMemo(() => {
+    if (!mapRebinDates.length) return -1;
+    return mapRebinDates.indexOf(currentEndDate);
+  }, [mapRebinDates, currentEndDate]);
+
+  const timeSeriesNavLeftDisabled =
+    dateNavigationLoading || (mapRebinDates.length > 0 && mapRebinDateIndex === 0);
+  const timeSeriesNavRightDisabled =
+    dateNavigationLoading ||
+    (mapRebinDates.length > 0
+      ? mapRebinDateIndex >= 0 && mapRebinDateIndex === mapRebinDates.length - 1
+      : isAtOrAfterCurrentDate(currentEndDate));
+
   const adjustDate = (days: number) => {
     const current = new Date(currentEndDate);
     current.setDate(current.getDate() + days);
@@ -401,43 +501,57 @@ const CropEyeMap: React.FC<MapProps> = ({
   };
 
   const onLeftArrowClick = () => {
-    setPopupSide('left');
+    setPopupSide("left");
+    setShowDatePopup(true);
+    if (mapRebinDates.length > 0) {
+      const i = mapRebinDates.indexOf(currentEndDate);
+      if (i > 0) setCurrentEndDate(mapRebinDates[i - 1]);
+      else if (i === -1) setCurrentEndDate(mapRebinDates[mapRebinDates.length - 1]);
+      return;
+    }
     adjustDate(-DAYS_STEP);
   };
 
   const onRightArrowClick = () => {
-    // Only allow forward navigation if we're not at or past the current date
+    setPopupSide("right");
+    setShowDatePopup(true);
+    if (mapRebinDates.length > 0) {
+      const i = mapRebinDates.indexOf(currentEndDate);
+      if (i >= 0 && i < mapRebinDates.length - 1) {
+        setCurrentEndDate(mapRebinDates[i + 1]);
+      } else if (i === -1) {
+        setCurrentEndDate(mapRebinDates[mapRebinDates.length - 1]);
+      }
+      return;
+    }
     const today = getCurrentDate();
     const currentDate = new Date(currentEndDate);
     const todayDate = new Date(today);
-    
-    // Set both to midnight for accurate comparison
     currentDate.setHours(0, 0, 0, 0);
     todayDate.setHours(0, 0, 0, 0);
-    
-    // If current date is before today, allow forward navigation
     if (currentDate < todayDate) {
       const nextDate = new Date(currentEndDate);
       nextDate.setDate(nextDate.getDate() + DAYS_STEP);
-      
-      // Don't go beyond today
       if (nextDate <= todayDate) {
-        setPopupSide('right');
         adjustDate(DAYS_STEP);
       } else {
-        // If next date would be beyond today, go to today instead
-        setPopupSide('right');
         setCurrentEndDate(today);
-        setShowDatePopup(true);
       }
-    } else {
-      // Already at or past current date, do nothing
-      return;
     }
   };
 
   const fetchGrowthData = async (plotName: string) => {
     if (!plotName) return;
+
+    const memKey = `growth:${plotName}:${currentEndDate}`;
+    if (layerTilesCacheRef.current.has(memKey)) {
+      const hit = layerTilesCacheRef.current.get(memKey) as any;
+      setGrowthData(hit ?? null);
+      if (!plotBoundary && hit?.features?.[0]?.geometry) {
+        setPlotBoundary(hit.features[0]);
+      }
+      return;
+    }
 
     // Check cache first (only for today's date to ensure freshness)
     const today = new Date().toISOString().split('T')[0];
@@ -489,6 +603,7 @@ const CropEyeMap: React.FC<MapProps> = ({
       }
 
       const data = await resp.json();
+      layerTilesCacheRef.current.set(memKey, data);
       setGrowthData(data);
       
       // Cache the data if it's for today's date
@@ -501,6 +616,7 @@ const CropEyeMap: React.FC<MapProps> = ({
         setPlotBoundary(data.features[0]);
       }
     } catch (err: any) {
+      layerTilesCacheRef.current.delete(memKey);
       console.error("Error fetching growth data:", {
         error: err,
         message: err?.message,
@@ -530,6 +646,16 @@ const CropEyeMap: React.FC<MapProps> = ({
 
   const fetchWaterUptakeData = async (plotName: string) => {
     if (!plotName) return;
+
+    const memKey = `water:${plotName}:${currentEndDate}`;
+    if (layerTilesCacheRef.current.has(memKey)) {
+      const hit = layerTilesCacheRef.current.get(memKey) as any;
+      setWaterUptakeData(hit ?? null);
+      if (!plotBoundary && hit?.features?.[0]?.geometry) {
+        setPlotBoundary(hit.features[0]);
+      }
+      return;
+    }
 
     // Check cache first (only for today's date to ensure freshness)
     const today = new Date().toISOString().split('T')[0];
@@ -581,6 +707,7 @@ const CropEyeMap: React.FC<MapProps> = ({
       }
 
       const data = await resp.json();
+      layerTilesCacheRef.current.set(memKey, data);
       setWaterUptakeData(data);
       
       // Cache the data if it's for today's date
@@ -593,6 +720,7 @@ const CropEyeMap: React.FC<MapProps> = ({
         setPlotBoundary(data.features[0]);
       }
     } catch (err: any) {
+      layerTilesCacheRef.current.delete(memKey);
       console.error("Error fetching water uptake data:", {
         error: err,
         message: err?.message,
@@ -622,6 +750,16 @@ const CropEyeMap: React.FC<MapProps> = ({
 
   const fetchSoilMoistureData = async (plotName: string) => {
     if (!plotName) return;
+
+    const memKey = `soil:${plotName}:${currentEndDate}`;
+    if (layerTilesCacheRef.current.has(memKey)) {
+      const hit = layerTilesCacheRef.current.get(memKey) as any;
+      setSoilMoistureData(hit ?? null);
+      if (!plotBoundary && hit?.features?.[0]?.geometry) {
+        setPlotBoundary(hit.features[0]);
+      }
+      return;
+    }
 
     // Check cache first (only for today's date to ensure freshness)
     const today = new Date().toISOString().split('T')[0];
@@ -674,6 +812,7 @@ const CropEyeMap: React.FC<MapProps> = ({
       }
 
       const data = await resp.json();
+      layerTilesCacheRef.current.set(memKey, data);
       setSoilMoistureData(data);
       
       // Cache the data if it's for today's date
@@ -686,6 +825,7 @@ const CropEyeMap: React.FC<MapProps> = ({
         setPlotBoundary(data.features[0]);
       }
     } catch (err: any) {
+      layerTilesCacheRef.current.delete(memKey);
       console.error("Error fetching soil moisture data:", {
         error: err,
         message: err?.message,
@@ -859,6 +999,40 @@ const CropEyeMap: React.FC<MapProps> = ({
       return;
     }
 
+    const memKey = `pest:${plotName}:${currentEndDate}`;
+    if (layerTilesCacheRef.current.has(memKey)) {
+      const hit = layerTilesCacheRef.current.get(memKey) as any;
+      setPestData(hit ?? null);
+      if (!plotBoundary && hit?.features?.[0]?.geometry) {
+        setPlotBoundary(hit.features[0]);
+      }
+      if (hit?.pixel_summary && onPestDataChange) {
+        const ps = hit.pixel_summary;
+        const chewingPestPercentage = ps.chewing_affected_pixel_percentage || 0;
+        const suckingPercentage = ps.sucking_affected_pixel_percentage || 0;
+        const fungiPercentage = ps.fungi_affected_pixel_percentage || 0;
+        const soilBornePercentage = ps.SoilBorn_affected_pixel_percentage || 0;
+        const totalAffectedPercentage =
+          chewingPestPercentage + suckingPercentage + fungiPercentage + soilBornePercentage;
+        onPestDataChange({
+          plotName,
+          pestPercentage: totalAffectedPercentage,
+          healthyPercentage: 100 - totalAffectedPercentage,
+          totalPixels: ps.total_pixel_count || 0,
+          pestAffectedPixels:
+            (ps.chewing_affected_pixel_count || 0) +
+            (ps.sucking_affected_pixel_count || 0) +
+            (ps.fungi_affected_pixel_count || 0) +
+            (ps.SoilBorn_pixel_count || 0),
+          chewingPestPercentage,
+          chewingPestPixels: ps.chewing_affected_pixel_count || 0,
+          suckingPercentage,
+          suckingPixels: ps.sucking_affected_pixel_count || 0,
+        });
+      }
+      return;
+    }
+
     // Check cache first (only for today's date to ensure freshness)
     const today = new Date().toISOString().split('T')[0];
     if (currentEndDate === today) {
@@ -905,6 +1079,7 @@ const CropEyeMap: React.FC<MapProps> = ({
       }
 
       const data = await resp.json();
+      layerTilesCacheRef.current.set(memKey, data);
       setPestData(data);
       
       // Cache the data if it's for today's date
@@ -941,6 +1116,7 @@ const CropEyeMap: React.FC<MapProps> = ({
         });
       }
     } catch (err: any) {
+      layerTilesCacheRef.current.delete(memKey);
       console.error("Error in fetchPestData:", {
         error: err,
         message: err?.message,
@@ -1633,6 +1809,23 @@ const CropEyeMap: React.FC<MapProps> = ({
       )}
 
       <div className="map-container" ref={mapWrapperRef}>
+        {(activeLayer === "Growth" ||
+          activeLayer === "Water Uptake" ||
+          activeLayer === "Soil Moisture" ||
+          activeLayer === "PEST") &&
+          !!selectedPlotName && (
+            <AnalysisTimelineRibbon
+              plotName={selectedPlotName}
+              activeLayer={activeLayer}
+              selectedDate={currentEndDate}
+              onSelectDate={(iso) => {
+                setCurrentEndDate(iso);
+                setShowDatePopup(true);
+              }}
+              externalTimeline={{ payload: timelinePayload, loading: timelineLoading }}
+            />
+          )}
+
         {/* Loading Spinner Overlay - Shows when fetching map data */}
         {dateNavigationLoading && (
           <div 
@@ -1660,13 +1853,20 @@ const CropEyeMap: React.FC<MapProps> = ({
               }}
             >
               <Loader2 className="w-10 h-10 animate-spin" style={{ color: '#3B82F6' }} />
-              <p style={{ 
-                fontSize: '14px', 
-                color: '#374151', 
-                fontWeight: 500,
-                margin: 0
-              }}>
-                Loading map data...
+              <p
+                key={fetchRotationIndex}
+                className="map-layer-fetch-status-text"
+                style={{
+                  fontSize: "24px",
+                  color: "#374151",
+                  fontWeight: 700,
+                  margin: 0,
+                  textAlign: "center",
+                  maxWidth: "min(90vw, 320px)",
+                  lineHeight: 1.4,
+                }}
+              >
+                {LAYER_FETCH_ROTATION_MESSAGES[fetchRotationIndex]}
               </p>
             </div>
           </div>
@@ -1718,13 +1918,23 @@ const CropEyeMap: React.FC<MapProps> = ({
             <button
               className="timeseries-nav-arrow-left"
               onClick={onLeftArrowClick}
-              aria-label="Previous date (-5 days)"
-              title={dateNavigationLoading ? "Loading..." : "Previous (-5 days)"}
-              disabled={dateNavigationLoading}
+              aria-label={
+                mapRebinDates.length
+                  ? "Previous analysis date on timeline"
+                  : "Previous date"
+              }
+              title={
+                dateNavigationLoading
+                  ? "Loading..."
+                  : mapRebinDates.length
+                    ? "Previous timeline date"
+                    : `Previous (${DAYS_STEP} days)`
+              }
+              disabled={timeSeriesNavLeftDisabled}
               style={{
-                opacity: dateNavigationLoading ? 0.7 : 1,
-                cursor: dateNavigationLoading ? 'not-allowed' : 'pointer',
-                pointerEvents: dateNavigationLoading ? 'none' : 'auto'
+                opacity: timeSeriesNavLeftDisabled ? 0.7 : 1,
+                cursor: timeSeriesNavLeftDisabled ? "not-allowed" : "pointer",
+                pointerEvents: timeSeriesNavLeftDisabled ? "none" : "auto",
               }}
             >
               {dateNavigationLoading ? (
@@ -1736,13 +1946,23 @@ const CropEyeMap: React.FC<MapProps> = ({
             <button
               className="timeseries-nav-arrow-right"
               onClick={onRightArrowClick}
-              aria-label="Next date (+5 days)"
-              title={dateNavigationLoading ? "Loading..." : "Next (+5 days)"}
-              disabled={isAtOrAfterCurrentDate(currentEndDate) || dateNavigationLoading}
+              aria-label={
+                mapRebinDates.length
+                  ? "Next analysis date on timeline"
+                  : "Next date"
+              }
+              title={
+                dateNavigationLoading
+                  ? "Loading..."
+                  : mapRebinDates.length
+                    ? "Next timeline date"
+                    : `Next (${DAYS_STEP} days)`
+              }
+              disabled={timeSeriesNavRightDisabled}
               style={{
-                opacity: (isAtOrAfterCurrentDate(currentEndDate) || dateNavigationLoading) ? 0.7 : 1,
-                cursor: (isAtOrAfterCurrentDate(currentEndDate) || dateNavigationLoading) ? 'not-allowed' : 'pointer',
-                pointerEvents: (isAtOrAfterCurrentDate(currentEndDate) || dateNavigationLoading) ? 'none' : 'auto'
+                opacity: timeSeriesNavRightDisabled ? 0.7 : 1,
+                cursor: timeSeriesNavRightDisabled ? "not-allowed" : "pointer",
+                pointerEvents: timeSeriesNavRightDisabled ? "none" : "auto",
               }}
             >
               {dateNavigationLoading ? (
@@ -1773,7 +1993,7 @@ const CropEyeMap: React.FC<MapProps> = ({
 
         <MapContainer
           center={mapCenter}
-          zoom={18}
+          zoom={PLOT_VIEW_MAX_ZOOM}
           style={{ height: "90%", width: "100%" }}
           zoomControl={true}
           maxZoom={22}
@@ -1787,7 +2007,10 @@ const CropEyeMap: React.FC<MapProps> = ({
 
           {(plotBoundary || currentPlotFeature)?.geometry?.coordinates?.[0] &&
             Array.isArray((plotBoundary || currentPlotFeature).geometry.coordinates[0]) && (
-            <SetFixedZoom coordinates={(plotBoundary || currentPlotFeature).geometry.coordinates[0]} />
+            <SetPlotOverviewZoom
+              coordinates={(plotBoundary || currentPlotFeature).geometry.coordinates[0]}
+              refitKey={currentEndDate}
+            />
           )}
 
           {activeUrl && (

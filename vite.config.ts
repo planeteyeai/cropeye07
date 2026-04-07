@@ -65,6 +65,11 @@ export default defineConfig({
     },
     // Proxy API requests to avoid CORS issues in development
     proxy: {
+      '/api/analysis-timeline': {
+        target: 'https://cropeye-database-production.up.railway.app',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/analysis-timeline/, ''),
+      },
       '/api/dev-plot': {
         target: 'https://admin-cropeye.up.railway.app',
         changeOrigin: true,

@@ -257,12 +257,12 @@ export const GoogleTranslateWidget: React.FC = () => {
     >
       <div className="google-translate-widget__label">
         <Languages className="google-translate-widget__icon" size={16} aria-hidden />
-        <span
-          className="google-translate-widget__text notranslate"
-          translate="no"
-        >
-          Translate…
-        </span>
+          {/* <span
+            className="google-translate-widget__text notranslate"
+            translate="no"
+          >
+            Translate…
+          </span> */}
       </div>
 
       <div

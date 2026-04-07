@@ -138,6 +138,8 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userRole }) => {
   const [isInitialized, setIsInitialized]   = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [initError, setInitError]           = useState<string | null>(null);
+  /** Farmer only: true only after `/initialize-plot` succeeds for the current plot (backend requires this before /chat and /voicebot). */
+  const [farmerBackendReady, setFarmerBackendReady] = useState(false);
   const [chatLanguage, setChatLanguage]     = useState<ChatLanguage | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [showReportModal, setShowReportModal]       = useState(false);
@@ -157,6 +159,11 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userRole }) => {
   // Tracks which plotId was last successfully initialized so we don't
   // call /initialize-plot again when the chatbot is simply closed & reopened
   const initializedPlotRef    = useRef<string | null>(null);
+  /** Latest plot id each render — avoids stale closure when profile/context updates right after open. */
+  const latestPlotIdRef       = useRef<string | null>(null);
+  /** Bumped on each init start; completions with an older seq are ignored (plot changed or superseded). */
+  const plotInitSeqRef        = useRef(0);
+  const plotInitAbortRef      = useRef<AbortController | null>(null);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   // Use same role detection as the auth system:
@@ -198,6 +205,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userRole }) => {
   // Fall back to localStorage so the chatbot finds the plot even if context
   // hasn't been populated yet (profile still loading in FarmerDashboard)
   const plotId = selectedPlotName || localStorage.getItem("selectedPlot") || null;
+  latestPlotIdRef.current = plotId;
 
   // ── Add message ────────────────────────────────────────────────────────────
   const addMessage = useCallback((text: string, isUser: boolean, language?: Language) => {
@@ -231,22 +239,30 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userRole }) => {
 
     if (!isFarmerRole) {
       setIsInitialized(true);
+      setFarmerBackendReady(true);
       return;
     }
 
-    const currentPlot = plotId || "__no_plot__";
-
-    if (initializedPlotRef.current === currentPlot) {
-      // Same plot already initialized in a previous open — skip API call
+    if (plotId && initializedPlotRef.current === plotId) {
+      // Same plot already initialized successfully — skip API call
       setIsInitialized(true);
+      setFarmerBackendReady(true);
       return;
     }
 
-    // New plot or first open — call the API
-    if (!isInitializing) {
-      setIsInitialized(false);
-      initializePlot();
+    if (!plotId && initializedPlotRef.current === "__no_plot__") {
+      setIsInitialized(true);
+      setFarmerBackendReady(false);
+      return;
     }
+
+    // New plot or first open — call the API (dedupe / stale handling is inside initializePlot)
+    setIsInitialized(false);
+    initializePlot();
+
+    return () => {
+      plotInitAbortRef.current?.abort();
+    };
   }, [isOpen, isFarmerRole, plotId]);
 
   // ── Reset on close ─────────────────────────────────────────────────────────
@@ -272,35 +288,76 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userRole }) => {
 
   // ── Plot Initialization (farmer only) ─────────────────────────────────────
   const initializePlot = async () => {
-    const currentPlot = plotId || "__no_plot__";
+    const pid =
+      (latestPlotIdRef.current || localStorage.getItem("selectedPlot") || "").trim() || null;
 
-    if (!plotId) {
-      // No plot available — open in static fallback mode so farmer can still chat
-      initializedPlotRef.current = currentPlot;
+    if (!pid) {
+      plotInitAbortRef.current?.abort();
+      plotInitSeqRef.current += 1;
+      initializedPlotRef.current = "__no_plot__";
+      setFarmerBackendReady(false);
+      setInitError(null);
       setIsInitialized(true);
+      setIsInitializing(false);
       return;
     }
+
+    plotInitSeqRef.current += 1;
+    const seq = plotInitSeqRef.current;
+    plotInitAbortRef.current?.abort();
+    const ac = new AbortController();
+    plotInitAbortRef.current = ac;
+
+    setFarmerBackendReady(false);
     setIsInitializing(true);
     setInitError(null);
-    try {
+
+    const runOnce = async (): Promise<void> => {
       const res = await fetch(`${CHATBOT_API_URL}/initialize-plot`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plot_id: plotId }),
+        body: JSON.stringify({ plot_id: pid }),
+        signal: ac.signal,
       });
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      initializedPlotRef.current = currentPlot; // remember — skip next time
+      if (data.error) throw new Error(String(data.error));
+    };
+
+    try {
+      try {
+        await runOnce();
+      } catch (firstErr: any) {
+        if (firstErr?.name === "AbortError") throw firstErr;
+        const msg = String(firstErr?.message || "");
+        const retryable =
+          /Server error: 502|Server error: 503|Server error: 504|Failed to fetch|NetworkError/i.test(
+            msg,
+          );
+        if (retryable) {
+          await new Promise((r) => setTimeout(r, 700));
+          if (seq !== plotInitSeqRef.current || ac.signal.aborted) return;
+          await runOnce();
+        } else {
+          throw firstErr;
+        }
+      }
+
+      if (seq !== plotInitSeqRef.current) return;
+      initializedPlotRef.current = pid;
+      setFarmerBackendReady(true);
       setIsInitialized(true);
     } catch (err: any) {
+      if (err?.name === "AbortError") return;
+      if (seq !== plotInitSeqRef.current) return;
       console.error("[Chatbot] Init failed:", err);
       setInitError(err.message || "Initialization failed. Please try again.");
-      // Still let farmer chat using static fallback; mark as initialized
-      initializedPlotRef.current = currentPlot;
+      setFarmerBackendReady(false);
       setIsInitialized(true);
     } finally {
-      setIsInitializing(false);
+      if (seq === plotInitSeqRef.current) {
+        setIsInitializing(false);
+      }
     }
   };
 
@@ -469,6 +526,25 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userRole }) => {
       return;
     }
 
+    if (isFarmerRole) {
+      if (!plotId) {
+        addMessage(
+          "Please select a farm plot from the dashboard first. The assistant needs your plot to load farm data.",
+          false,
+          "english",
+        );
+        return;
+      }
+      if (!farmerBackendReady) {
+        addMessage(
+          "Farm context is not ready. Wait for the plot to finish loading, or tap Retry in the bar above.",
+          false,
+          "english",
+        );
+        return;
+      }
+    }
+
     const detectedLang = detectLanguage(message);
     addMessage(message, true, detectedLang);
     setIsLoading(true);
@@ -512,7 +588,24 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userRole }) => {
       try {
         const data = JSON.parse(rawData) as Record<string, unknown>;
         parsedForAudio = data;
-        if (data.error) throw new Error(String(data.error));
+        if (data.error) {
+          const errStr = String(data.error);
+          if (
+            isFarmerRole &&
+            /initialize-plot|farm context|not initialized/i.test(errStr)
+          ) {
+            setFarmerBackendReady(false);
+            initializedPlotRef.current = null;
+            setInitError(errStr);
+            addMessage(
+              "Farm context was lost or not loaded. Tap Retry above to run plot setup again, then send your message.",
+              false,
+              "english",
+            );
+            return;
+          }
+          throw new Error(errStr);
+        }
 
         // Handle "still loading" status (farmer only)
         if (isFarmerRole && data.status && data.status !== "ready") {
@@ -564,6 +657,25 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userRole }) => {
       return;
     }
 
+    if (isFarmerRole) {
+      if (!plotId) {
+        addMessage(
+          "Please select a farm plot from the dashboard first. The assistant needs your plot to load farm data.",
+          false,
+          "english",
+        );
+        return;
+      }
+      if (!farmerBackendReady) {
+        addMessage(
+          "Farm context is not ready. Wait for the plot to finish loading, or tap Retry in the bar above.",
+          false,
+          "english",
+        );
+        return;
+      }
+    }
+
     const detectedLang = detectLanguage(message);
     addMessage(message, true, detectedLang);
     releaseDictationMic();
@@ -594,7 +706,24 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userRole }) => {
       if (!res.ok) throw new Error(`Voice API ${res.status}`);
 
       const data = (await res.json()) as Record<string, unknown>;
-      if (data.error) throw new Error(String(data.error));
+      if (data.error) {
+        const errStr = String(data.error);
+        if (
+          isFarmerRole &&
+          /initialize-plot|farm context|not initialized/i.test(errStr)
+        ) {
+          setFarmerBackendReady(false);
+          initializedPlotRef.current = null;
+          setInitError(errStr);
+          addMessage(
+            "Farm context was lost or not loaded. Tap Retry above to run plot setup again.",
+            false,
+            "english",
+          );
+          return;
+        }
+        throw new Error(errStr);
+      }
 
       if (isFarmerRole && data.status && data.status !== "ready") {
         addMessage(
@@ -874,11 +1003,36 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userRole }) => {
               </div>
             </div>
 
-            {/* Plot info bar */}
+            {/* Plot info bar — farmers need /initialize-plot success (farmerBackendReady) */}
             {plotId && (
               <div className="mt-1 text-[10px] text-green-100 flex items-center gap-1">
-                <span className={`w-1.5 h-1.5 rounded-full ${isInitialized ? "bg-green-300" : "bg-yellow-300"}`} />
-                Plot: {plotId} • {isInitialized ? "Ready" : "Initializing..."}
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    isInitializing
+                      ? "bg-yellow-300 animate-pulse"
+                      : isFarmerRole
+                        ? farmerBackendReady
+                          ? "bg-green-300"
+                          : initError
+                            ? "bg-orange-300"
+                            : "bg-yellow-300"
+                        : isInitialized
+                          ? "bg-green-300"
+                          : "bg-yellow-300"
+                  }`}
+                />
+                Plot: {plotId} •{" "}
+                {isInitializing
+                  ? "Initializing…"
+                  : isFarmerRole
+                    ? farmerBackendReady
+                      ? "Ready"
+                      : initError
+                        ? "Setup failed — Retry"
+                        : "Syncing plot…"
+                    : isInitialized
+                      ? "Ready"
+                      : "Initializing…"}
               </div>
             )}
           </div>
