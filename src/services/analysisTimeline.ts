@@ -47,6 +47,18 @@ export async function fetchAnalysisTimeline(
       headers: { Accept: "application/json" },
     });
     if (!res.ok) return null;
+    const ct = res.headers.get("content-type") || "";
+    // If production routing returns the SPA HTML (index.html), don't treat it as a valid timeline.
+    if (!ct.toLowerCase().includes("application/json")) {
+      // Read a small snippet to help debugging in the UI error state.
+      const snippet = await res.text().catch(() => "");
+      throw new Error(
+        `Timeline endpoint returned non-JSON (content-type: ${ct || "unknown"}). ` +
+          `This usually means your production host is serving index.html for "${TIMELINE_PATH}" ` +
+          `because a proxy/rewrite is missing or VITE_ANALYSIS_TIMELINE_BASE_URL is wrong. ` +
+          (snippet ? `First bytes: ${JSON.stringify(snippet.slice(0, 120))}` : ""),
+      );
+    }
     const data = (await res.json()) as AnalysisTimelineResponse;
     if (data?.timeline && Array.isArray(data.timeline)) return data;
     return null;

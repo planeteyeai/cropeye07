@@ -29,7 +29,7 @@ export interface AnalysisTimelineRibbonProps {
    * When set, Map owns fetching and passes data here (avoids duplicate GET).
    * Omit to fetch inside the ribbon (standalone).
    */
-  externalTimeline?: { payload: AnalysisTimelineResponse | null; loading: boolean };
+  externalTimeline?: { payload: AnalysisTimelineResponse | null; loading: boolean; error?: string | null };
 }
 
 export const AnalysisTimelineRibbon: React.FC<AnalysisTimelineRibbonProps> = ({
@@ -94,7 +94,30 @@ export const AnalysisTimelineRibbon: React.FC<AnalysisTimelineRibbonProps> = ({
     );
   }
 
-  if (!days.length) return null;
+  const timelineError = controlled ? externalTimeline?.error : null;
+  if (timelineError) {
+    return (
+      <div className="analysis-timeline-ribbon-wrap">
+        <div className="analysis-timeline-ribbon analysis-timeline-ribbon--loading" role="status">
+          <span className="analysis-timeline-ribbon__loading-text">
+            Timeline unavailable: {timelineError}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!days.length) {
+    return (
+      <div className="analysis-timeline-ribbon-wrap">
+        <div className="analysis-timeline-ribbon analysis-timeline-ribbon--loading" role="status">
+          <span className="analysis-timeline-ribbon__loading-text">
+            No rebin dates available for this layer.
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="analysis-timeline-ribbon-wrap">

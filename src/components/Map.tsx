@@ -286,6 +286,7 @@ const CropEyeMap: React.FC<MapProps> = ({
   const [selectedLegendClass, setSelectedLegendClass] = useState<string | null>(null);
   const [layerChangeKey, setLayerChangeKey] = useState(0);
   const [pixelTooltip, setPixelTooltip] = useState<{layers: Array<{layer: string, label: string, description: string, percentage: number}>, x: number, y: number} | null>(null);
+  const [plotAreaAcres, setPlotAreaAcres] = useState<number | null>(null);
   
   // Date navigation state (similar to Streamlit logic)
   const [currentEndDate, setCurrentEndDate] = useState<string>(() => {
@@ -301,6 +302,7 @@ const CropEyeMap: React.FC<MapProps> = ({
 
   const [timelinePayload, setTimelinePayload] = useState<AnalysisTimelineResponse | null>(null);
   const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelineError, setTimelineError] = useState<string | null>(null);
   const mapRebinSnapKeyRef = useRef<string>("");
 
   useEffect(() => {
@@ -309,20 +311,31 @@ const CropEyeMap: React.FC<MapProps> = ({
     if (!plot) {
       setTimelinePayload(null);
       setTimelineLoading(false);
+      setTimelineError(null);
       mapRebinSnapKeyRef.current = "";
       layerTilesCacheRef.current.clear();
       return;
     }
     setTimelinePayload(null);
     setTimelineLoading(true);
+    setTimelineError(null);
     mapRebinSnapKeyRef.current = "";
     layerTilesCacheRef.current.clear();
-    fetchAnalysisTimeline(plot).then((data) => {
-      if (!cancelled) {
-        setTimelinePayload(data);
-        setTimelineLoading(false);
-      }
-    });
+    fetchAnalysisTimeline(plot)
+      .then((data) => {
+        if (!cancelled) setTimelinePayload(data);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          const msg =
+            err instanceof Error ? err.message : "Failed to load analysis timeline";
+          setTimelineError(msg);
+          setTimelinePayload(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setTimelineLoading(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -1200,6 +1213,16 @@ const CropEyeMap: React.FC<MapProps> = ({
   // Use plotBoundary if available (persists across layer changes), otherwise fall back to plotData
   const currentPlotFeature = plotBoundary || plotData?.features?.[0];
 
+  // Persist the last known non-zero plot area so it doesn't flash to 0 during refetches
+  useEffect(() => {
+    const area =
+      (plotBoundary?.properties?.area_acres ??
+        plotData?.features?.[0]?.properties?.area_acres) as number | undefined;
+    if (typeof area === "number" && Number.isFinite(area) && area > 0) {
+      setPlotAreaAcres(area);
+    }
+  }, [plotBoundary, plotData]);
+
   const legendData = useMemo(() => {
     if (activeLayer === "PEST") {
       const chewingPestPercentage = pestData?.pixel_summary?.chewing_affected_pixel_percentage || 0;
@@ -1822,7 +1845,7 @@ const CropEyeMap: React.FC<MapProps> = ({
                 setCurrentEndDate(iso);
                 setShowDatePopup(true);
               }}
-              externalTimeline={{ payload: timelinePayload, loading: timelineLoading }}
+              externalTimeline={{ payload: timelinePayload, loading: timelineLoading, error: timelineError }}
             />
           )}
 
@@ -1903,9 +1926,14 @@ const CropEyeMap: React.FC<MapProps> = ({
             <div className="plot-info">
               <div className="plot-area">
                 <span className="plot-area-value">
-                  {(plotBoundary || currentPlotFeature).properties?.area_acres 
-                    ? (plotBoundary || currentPlotFeature).properties.area_acres.toFixed(2) 
-                    : '0.00'} acre
+                  {(() => {
+                    const raw =
+                      (plotBoundary || currentPlotFeature)?.properties?.area_acres ??
+                      plotAreaAcres;
+                    const n = Number(raw);
+                    return Number.isFinite(n) && n > 0 ? n.toFixed(2) : "0.00";
+                  })()}{" "}
+                  acre
                 </span>
               </div>
             </div>
