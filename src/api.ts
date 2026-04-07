@@ -866,6 +866,8 @@ export const calculatePolygonArea = (
 };
 
 // Get farmer profile using the dedicated my-profile endpoint
+let farmerMyProfileInFlight: ReturnType<typeof api.get> | null = null;
+
 export const getFarmerMyProfile = () => {
   // Check if token exists and is valid before making the call
   const token = getAuthToken();
@@ -879,7 +881,13 @@ export const getFarmerMyProfile = () => {
     (error as any).isSilent = true; // Mark as silent to prevent console logging
     return Promise.reject(error);
   }
-  return api.get("/farms/my-profile/");
+  if (farmerMyProfileInFlight) {
+    return farmerMyProfileInFlight;
+  }
+  farmerMyProfileInFlight = api.get("/farms/my-profile/").finally(() => {
+    farmerMyProfileInFlight = null;
+  });
+  return farmerMyProfileInFlight;
 };
 
 // Farmer profile API function - uses existing endpoints
@@ -1427,7 +1435,7 @@ export const refreshApiEndpoints = async () => {
     "https://main-cropeye.up.railway.app/refresh-from-django",
     "https://events-cropeye.up.railway.app/refresh-from-django",
     "https://SEF-cropeye.up.railway.app/refresh-from-django",
-    "https://web-production-c6788.up.railway.app/trigger-new-plot"
+    "https://incredible-magic-production-9dc3.up.railway.app/trigger-new-plot"
   ];
 
   const refreshPromises = refreshEndpoints.map((endpoint) =>
