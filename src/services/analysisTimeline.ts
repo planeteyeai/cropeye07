@@ -23,10 +23,16 @@ const LAYER_TO_KEY: Record<MapAnalysisLayer, keyof TimelineBucket> = {
   PEST: "pest_detection_dates",
 };
 
+/**
+ * Dev: Vite proxies `/api/analysis-timeline` → cropeye-database (no CORS).
+ * Prod: browser calls this URL directly — the database host must allow your site’s origin (CORS),
+ * or set `VITE_ANALYSIS_TIMELINE_BASE_URL` to a same-origin path your host proxies (e.g. `/api/analysis-timeline`).
+ */
 export function getAnalysisTimelineBaseUrl(): string {
-  return import.meta.env.DEV
-    ? "/api/analysis-timeline"
-    : "https://cropeye-database-production.up.railway.app";
+  const fromEnv = (import.meta.env.VITE_ANALYSIS_TIMELINE_BASE_URL as string | undefined)?.trim();
+  if (fromEnv) return fromEnv.replace(/\/$/, "");
+  if (import.meta.env.DEV) return "/api/analysis-timeline";
+  return "https://cropeye-database-production.up.railway.app";
 }
 
 export async function fetchAnalysisTimeline(
