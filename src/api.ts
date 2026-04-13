@@ -1434,8 +1434,9 @@ export const refreshApiEndpoints = async () => {
     "https://admin-cropeye.up.railway.app/refresh-from-django",
     "https://main-cropeye.up.railway.app/refresh-from-django",
     "https://events-cropeye.up.railway.app/refresh-from-django",
-    "https://SEF-cropeye.up.railway.app/refresh-from-django",
-    "https://incredible-magic-production-9dc3.up.railway.app/trigger-new-plot"
+    "https://sef-cropeye.up.railway.app/refresh-from-django",
+    "https://cropeye-database-production.up.railway.app/refresh-from-django",
+    "https://incredible-magic-production-bd49.up.railway.app/trigger-new-plot"
   ];
 
   const refreshPromises = refreshEndpoints.map((endpoint) =>
