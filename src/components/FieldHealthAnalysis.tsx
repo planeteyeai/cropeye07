@@ -148,7 +148,7 @@ export const FieldHealthAnalysis: React.FC<FieldHealthAnalysisProps> = ({
             </div>
 
             {/* Status box with consistent colors */}
-            <div className="mt-6 flex justify-center">
+            {/* <div className="mt-6 flex justify-center">
               <div className={`px-6 py-3 rounded-lg shadow text-center w-full max-w-xs ${colors.box}`}>
                 <div className="font-bold text-xl mb-1">
                   Status: {computedStatus}
@@ -157,7 +157,7 @@ export const FieldHealthAnalysis: React.FC<FieldHealthAnalysisProps> = ({
                   Optimal range: 60-80
                 </div>
               </div>
-            </div>
+            </div> */}
           </>
         ) : (
           <div className="text-gray-500 text-center py-10">

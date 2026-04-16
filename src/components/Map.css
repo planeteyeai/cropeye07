@@ -222,6 +222,182 @@
   transform: scale(1.05);
 }
 
+/* Split Screen Button */
+.splitscreen-btn {
+  position: absolute;
+  top: 10px;
+  right: 54px;
+  z-index: 1001;
+  background: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 18px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, transform 0.2s;
+  color: #444;
+}
+
+.splitscreen-btn:hover {
+  background: #e8f4ff;
+  color: #007bff;
+  transform: scale(1.05);
+}
+
+/* Split Screen Overlay */
+.splitscreen-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #111827;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+}
+
+.splitscreen-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #1f2937;
+  border-bottom: 2px solid #374151;
+  flex-shrink: 0;
+  min-height: 44px;
+}
+
+.splitscreen-header-title {
+  color: #f9fafb;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.3px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.splitscreen-header-title svg {
+  opacity: 0.8;
+}
+
+.splitscreen-close-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #f9fafb;
+  border-radius: 6px;
+  padding: 5px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.splitscreen-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.splitscreen-panels {
+  display: flex;
+  flex: 1;
+  height: 0; /* flex-child trick: forces 100% of remaining space */
+  overflow: hidden;
+  gap: 0;
+}
+
+.splitscreen-panel {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /* Create a local stacking context so the panel label can reliably stay above Leaflet panes/controls */
+  isolation: isolate;
+}
+
+.splitscreen-panel-label {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.55);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: 10px;
+  /* Must beat Leaflet panes + custom controls that use very high z-index in this codebase */
+  z-index: 200000 !important;
+  letter-spacing: 0.5px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.splitscreen-divider {
+  width: 3px;
+  background: #374151;
+  flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------
+   Split-screen: prevent layout jump on Leaflet interaction
+
+   The normal map page is designed as a full-page view (100vh and large
+   min-heights). When rendered inside split-screen panels, those rules can
+   overflow the panel and cause the content to "jump" when Leaflet updates
+   sizing on click/drag/zoom. These scoped overrides make the map fill the
+   panel height instead of the viewport and remove oversized min-heights.
+------------------------------------------------------------ */
+.splitscreen-overlay .map-page {
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  gap: 8px;
+  overflow: hidden !important;
+}
+
+.splitscreen-overlay .map-wrapper {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.splitscreen-overlay .map-container {
+  height: 100%;
+  overflow: hidden;
+}
+
+.splitscreen-overlay .leaflet-container {
+  min-height: 0 !important;
+  height: 100% !important;
+}
+
+/* Prevent the controls header from being clipped when Leaflet recalculates size */
+.splitscreen-overlay .layer-controls {
+  flex: 0 0 auto !important;
+}
+
+/* Ensure Leaflet panes/controls never cover the panel label in split-screen */
+.splitscreen-overlay .leaflet-pane,
+.splitscreen-overlay .leaflet-map-pane,
+.splitscreen-overlay .leaflet-tile-pane,
+.splitscreen-overlay .leaflet-overlay-pane,
+.splitscreen-overlay .leaflet-shadow-pane,
+.splitscreen-overlay .leaflet-marker-pane,
+.splitscreen-overlay .leaflet-tooltip-pane,
+.splitscreen-overlay .leaflet-popup-pane,
+.splitscreen-overlay .leaflet-control {
+  z-index: 1000 !important;
+}
+
 /* Custom zoom controls */
 .custom-zoom-controls {
   position: absolute;
@@ -479,7 +655,7 @@
 .timeseries-nav-arrow-left,
 .timeseries-nav-arrow-right {
   position: absolute;
-  bottom: 500px;
+  bottom: 50%;
   z-index: 2000;
   background: #3B82F6;
   border: none;
@@ -579,7 +755,7 @@
   left: 15px;
   right: auto;
   transform: none;
-  bottom: 430px !important; /* higher than legend circles */
+  bottom: 400px !important; /* higher than legend circles */
 }
 
 .timeseries-date-popup-right {
@@ -671,7 +847,7 @@
 /* Leaflet overrides */
 .leaflet-container {
   width: 100% !important;
-  height: 0% !important;
+  /* height: 0% !important; */
   min-height: 800px;
   min-width: 0 !important;
   max-width: 100% !important;
@@ -1533,7 +1709,7 @@
 /* Map legend bottom styles - positioned at bottom of map container */
 .map-legend-bottom {
   position: absolute !important;
-  bottom: 120px;
+  bottom: 150px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 10000 !important;
@@ -1603,7 +1779,7 @@
   justify-content: center;
   position: relative;
   transition: all 0.2s ease;
-  margin-bottom: 8px;
+  margin-bottom: 0px;
   flex-shrink: 0;
 }
 
@@ -2092,7 +2268,7 @@
 /* ── Analysis timeline ribbon (cropeye-database /analysis_timeline) ─────────── */
 .analysis-timeline-ribbon-wrap {
   position: absolute;
-  bottom: 78px;
+  bottom:110px;
   left: 1px;
   right: 1px;
   z-index: 1003;
@@ -2235,4 +2411,54 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* ============================================================
+   Split-screen FINAL overrides (must be last in file)
+
+   Map was designed for full-page use with large min-heights and 100vh rules.
+   In split-screen panels those cause overflow; Leaflet reflow on click/drag
+   can then "jump" the layout. These end-of-file overrides win against any
+   later media-query rules.
+============================================================ */
+.splitscreen-overlay .map-wrapper {
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  /* Split screen must be a stable column layout: controls on top, map fills rest */
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.splitscreen-overlay .map-container {
+  min-height: 0 !important;
+  /* Fill remaining height below controls */
+  flex: 1 1 auto !important;
+  height: auto !important;
+  overflow: hidden !important;
+  position: relative !important; /* anchor absolute overlays inside the map panel */
+}
+
+.splitscreen-overlay .leaflet-container {
+  min-height: 0 !important;
+  height: 100% !important;
+}
+
+/* The timeline and legend are absolute/fixed-style overlays; keep them visible */
+.splitscreen-overlay .analysis-timeline-ribbon-wrap,
+.splitscreen-overlay .map-legend-bottom {
+  max-width: 100% !important;
+}
+
+/* Split-screen: keep the rebin date ribbon at the bottom of the MAP */
+.splitscreen-overlay .analysis-timeline-ribbon-wrap {
+  top: auto !important;
+  bottom: 1px !important;
+  left: 4px !important;
+  right: 4px !important;
+}
+
+/* Split-screen: legend sits above the ribbon */
+.splitscreen-overlay .map-legend-bottom {
+  bottom: 35px !important;
 }

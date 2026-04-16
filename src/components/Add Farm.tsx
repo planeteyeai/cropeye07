@@ -191,6 +191,315 @@ function calculateAreaMetricsFromGeometry(geometry: any) {
   };
 }
 
+/** API (snake_case) → form field keys for farmer profile */
+const API_FARMER_TO_FORM: Record<string, string> = {
+  username: "username",
+  email: "email",
+  password: "password",
+  first_name: "first_name",
+  last_name: "last_name",
+  phone_number: "phone_number",
+  address: "address",
+  taluka: "taluka",
+  district: "district",
+  state: "state",
+  aadhaar_number: "aadhar_card",
+  sugarcane_type: "sugarcane_type",
+  last_year_yield: "last_year_yield",
+};
+
+const API_PLOT_TO_FORM: Record<string, string> = {
+  gat_number: "Group_Gat_No",
+  plot_number: "Gat_No_Id",
+  village: "village",
+  pin_code: "pin_code",
+};
+
+const API_FARM_TO_FORM: Record<string, string> = {
+  plantation_date: "plantation_Date",
+  spacing_a: "spacing_A",
+  spacing_b: "spacing_B",
+  crop_variety: "crop_variety",
+  planting_method: "plantation_Method",
+  plantation_type: "plantation_Type",
+};
+
+const API_IRRIGATION_TO_FORM: Record<string, string> = {
+  irrigation_type_name: "irrigation_Type",
+  flow_rate_lph: "flow_Rate",
+  emitters_count: "emitters",
+  motor_horsepower: "motor_Horsepower",
+  pipe_width_inches: "pipe_Width",
+  distance_motor_to_plot_m: "distance_From_Motor",
+};
+
+type RegistrationParseAccumulator = {
+  profile: Record<string, string>;
+  plotById: Record<string, Record<string, string>>;
+  nonField: string[];
+};
+
+function asJoinedMessages(val: unknown): string {
+  if (val == null) return "";
+  if (typeof val === "string") return val.trim();
+  if (Array.isArray(val)) {
+    return val
+      .map((x) => {
+        if (typeof x === "string") return x;
+        if (x && typeof x === "object") {
+          const o = x as Record<string, unknown>;
+          if (typeof o.string === "string") return o.string;
+          if (typeof o.message === "string") return o.message;
+        }
+        try {
+          return JSON.stringify(x);
+        } catch {
+          return String(x);
+        }
+      })
+      .filter(Boolean)
+      .join(" ");
+  }
+  return String(val).trim();
+}
+
+function setProfileError(acc: RegistrationParseAccumulator, formKey: string, msg: string) {
+  if (!formKey || !msg) return;
+  acc.profile[formKey] = acc.profile[formKey] ? `${acc.profile[formKey]} · ${msg}` : msg;
+}
+
+function setPlotError(
+  acc: RegistrationParseAccumulator,
+  plotId: string | undefined,
+  formKey: string,
+  msg: string,
+) {
+  if (!plotId || !formKey || !msg) return;
+  if (!acc.plotById[plotId]) acc.plotById[plotId] = {};
+  const cur = acc.plotById[plotId][formKey];
+  acc.plotById[plotId][formKey] = cur ? `${cur} · ${msg}` : msg;
+}
+
+function mergeApiPath(
+  acc: RegistrationParseAccumulator,
+  path: string,
+  message: string,
+  defaultPlotId: string | undefined,
+) {
+  const parts = path.split(".").filter((p) => p && !["body", "query", "path"].includes(p.toLowerCase()));
+  if (!parts.length || !message) return;
+
+  if (parts[0] === "non_field_errors") {
+    acc.nonField.push(message);
+    return;
+  }
+
+  if (parts[0] === "farmer" && parts[1] && API_FARMER_TO_FORM[parts[1]]) {
+    setProfileError(acc, API_FARMER_TO_FORM[parts[1]], message);
+    return;
+  }
+  if (parts[0] === "plot" && parts[1] && API_PLOT_TO_FORM[parts[1]]) {
+    setPlotError(acc, defaultPlotId, API_PLOT_TO_FORM[parts[1]], message);
+    return;
+  }
+  if (parts[0] === "farm" && parts[1] && API_FARM_TO_FORM[parts[1]]) {
+    setPlotError(acc, defaultPlotId, API_FARM_TO_FORM[parts[1]], message);
+    return;
+  }
+  if (parts[0] === "irrigation" && parts[1] && API_IRRIGATION_TO_FORM[parts[1]]) {
+    setPlotError(acc, defaultPlotId, API_IRRIGATION_TO_FORM[parts[1]], message);
+    return;
+  }
+
+  const top = parts[0];
+  if (API_FARMER_TO_FORM[top]) {
+    setProfileError(acc, API_FARMER_TO_FORM[top], message);
+    return;
+  }
+  if (API_PLOT_TO_FORM[top]) {
+    setPlotError(acc, defaultPlotId, API_PLOT_TO_FORM[top], message);
+    return;
+  }
+  if (API_FARM_TO_FORM[top]) {
+    setPlotError(acc, defaultPlotId, API_FARM_TO_FORM[top], message);
+    return;
+  }
+  if (API_IRRIGATION_TO_FORM[top]) {
+    setPlotError(acc, defaultPlotId, API_IRRIGATION_TO_FORM[top], message);
+    return;
+  }
+}
+
+function walkDrfStyleErrors(
+  obj: unknown,
+  prefix: string,
+  acc: RegistrationParseAccumulator,
+  defaultPlotId: string | undefined,
+) {
+  if (obj == null || typeof obj !== "object") return;
+  if (Array.isArray(obj)) {
+    const msg = asJoinedMessages(obj);
+    if (msg && prefix) mergeApiPath(acc, prefix, msg, defaultPlotId);
+    return;
+  }
+  for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+    const next = prefix ? `${prefix}.${k}` : k;
+    if (v != null && typeof v === "object" && !Array.isArray(v)) {
+      walkDrfStyleErrors(v, next, acc, defaultPlotId);
+    } else {
+      const msg = asJoinedMessages(v);
+      if (msg) mergeApiPath(acc, next, msg, defaultPlotId);
+    }
+  }
+}
+
+function parseFastApiLocArray(
+  detail: unknown[],
+  acc: RegistrationParseAccumulator,
+  defaultPlotId: string | undefined,
+) {
+  for (const item of detail) {
+    if (!item || typeof item !== "object") continue;
+    const loc = (item as { loc?: unknown }).loc;
+    const msg = String(
+      (item as { msg?: string; message?: string }).msg ||
+        (item as { message?: string }).message ||
+        "",
+    ).trim();
+    if (!msg) continue;
+    if (!Array.isArray(loc) || loc.length === 0) continue;
+    const path = loc.map(String).join(".");
+    mergeApiPath(acc, path, msg, defaultPlotId);
+  }
+}
+
+function extractErrorDetailStrings(detail: string): string[] {
+  const out: string[] = [];
+  const re = /ErrorDetail\(string=['"]([^'"]+)['"]/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(detail)) !== null) {
+    if (m[1]?.trim()) out.push(m[1].trim());
+  }
+  if (out.length === 0) {
+    const re2 = /\(string=['"]([^'"]+)['"]/gi;
+    while ((m = re2.exec(detail)) !== null) {
+      if (m[1]?.trim()) out.push(m[1].trim());
+    }
+  }
+  return out;
+}
+
+function inferFormFieldFromMessage(text: string): { profile?: string; plot?: string } | null {
+  const t = text.toLowerCase();
+  if (/e-?mail|email\s+address/.test(t)) return { profile: "email" };
+  if (/user\s*name|username/.test(t)) return { profile: "username" };
+  if (/phone|mobile|contact\s*number/.test(t)) return { profile: "phone_number" };
+  if (/password/.test(t)) return { profile: "password" };
+  if (/first\s*name/.test(t)) return { profile: "first_name" };
+  if (/last\s*name/.test(t)) return { profile: "last_name" };
+  if (/aadhaar|aadhar/.test(t)) return { profile: "aadhar_card" };
+  if (/\bgat\b|gat\s*number/.test(t)) return { plot: "Group_Gat_No" };
+  if (/plot\s*number|survey\s*number/.test(t)) return { plot: "Gat_No_Id" };
+  if (/village/.test(t)) return { plot: "village" };
+  if (/pin\s*code|postal/.test(t)) return { plot: "pin_code" };
+  if (/plantation\s*date|planting\s*date/.test(t)) return { plot: "plantation_Date" };
+  if (/plantation\s*type/.test(t)) return { plot: "plantation_Type" };
+  if (/planting\s*method|\bbud\b/.test(t)) return { plot: "plantation_Method" };
+  if (/irrigation/.test(t)) return { plot: "irrigation_Type" };
+  if (/\btaluka\b/.test(t)) return { profile: "taluka" };
+  if (/\bdistrict\b/.test(t)) return { profile: "district" };
+  if (/\bstate\b/.test(t)) return { profile: "state" };
+  if (/yield/.test(t)) return { profile: "last_year_yield" };
+  return null;
+}
+
+function applyStringDetailHeuristics(
+  detail: string,
+  acc: RegistrationParseAccumulator,
+  defaultPlotId: string | undefined,
+) {
+  const snippets = extractErrorDetailStrings(detail);
+  const toScan = snippets.length > 0 ? snippets : [detail];
+
+  for (const raw of toScan) {
+    const inf = inferFormFieldFromMessage(raw);
+    if (inf?.profile) {
+      setProfileError(acc, inf.profile, raw);
+    } else if (inf?.plot && defaultPlotId) {
+      setPlotError(acc, defaultPlotId, inf.plot, raw);
+    }
+  }
+
+  if (
+    snippets.length === 0 &&
+    Object.keys(acc.profile).length === 0 &&
+    (!defaultPlotId || !acc.plotById[defaultPlotId] || Object.keys(acc.plotById[defaultPlotId] || {}).length === 0)
+  ) {
+    const inf = inferFormFieldFromMessage(detail);
+    if (inf?.profile) setProfileError(acc, inf.profile, detail.trim());
+    else if (inf?.plot && defaultPlotId) setPlotError(acc, defaultPlotId, inf.plot, detail.trim());
+  }
+}
+
+function parseRegistrationApiErrors(
+  errorData: unknown,
+  plots: Plot[],
+): { profileFields: Record<string, string>; plotFields: Record<string, Record<string, string>>; banner: string } {
+  const acc: RegistrationParseAccumulator = { profile: {}, plotById: {}, nonField: [] };
+  const defaultPlotId = plots[0]?.id;
+
+  if (!errorData || typeof errorData !== "object") {
+    return {
+      profileFields: {},
+      plotFields: {},
+      banner: "Registration failed. Please check your inputs and try again.",
+    };
+  }
+
+  const data = errorData as Record<string, unknown>;
+
+  if (Array.isArray(data.detail)) {
+    parseFastApiLocArray(data.detail as unknown[], acc, defaultPlotId);
+  }
+
+  const clone = { ...data };
+  if (Array.isArray(clone.detail) || typeof clone.detail === "string") {
+    delete clone.detail;
+  }
+  walkDrfStyleErrors(clone, "", acc, defaultPlotId);
+
+  if (data.detail && typeof data.detail === "object" && !Array.isArray(data.detail)) {
+    walkDrfStyleErrors(data.detail, "", acc, defaultPlotId);
+  }
+
+  if (typeof data.detail === "string" && data.detail.trim()) {
+    applyStringDetailHeuristics(data.detail, acc, defaultPlotId);
+  }
+
+  const hasFieldErrors =
+    Object.keys(acc.profile).length > 0 ||
+    Object.values(acc.plotById).some((p) => p && Object.keys(p).length > 0);
+
+  const nonFieldBlock =
+    acc.nonField.length > 0 ? ` ${acc.nonField.join(" · ")}` : "";
+
+  let banner = "";
+  if (hasFieldErrors) {
+    banner =
+      `Please fix the fields marked below.${nonFieldBlock ? ` Note: ${nonFieldBlock.trim()}` : ""}`.trim();
+  } else if (typeof data.detail === "string" && data.detail.trim()) {
+    banner = data.detail.trim() + (nonFieldBlock ? ` ${nonFieldBlock}` : "");
+  } else if (typeof data.message === "string" && data.message.trim()) {
+    banner = data.message.trim();
+  } else if (nonFieldBlock) {
+    banner = nonFieldBlock.trim();
+  } else {
+    banner = "Registration failed. Please check your inputs and try again.";
+  }
+
+  return { profileFields: acc.profile, plotFields: acc.plotById, banner };
+}
+
 /** Recenters only when `latlng` changes — avoids resetting the view on every parent re-render (e.g. after finishing a draw). */
 function RecenterMap({ latlng }: { latlng: [number, number] }) {
   const map = useMap();
@@ -365,6 +674,12 @@ function AddFarm() {
   // Email validation state
   const [emailError, setEmailError] = useState("");
   const [showEmailTooltip, setShowEmailTooltip] = useState(false);
+
+  /** Server-side validation messages (400/422) keyed by form field */
+  const [serverFieldErrors, setServerFieldErrors] = useState<Record<string, string>>({});
+  const [serverPlotErrors, setServerPlotErrors] = useState<
+    Record<string, Record<string, string>>
+  >({});
 
   // Phone number validation pattern
   const phonePattern = /^[0-9]{10}$/;
@@ -556,6 +871,13 @@ function AddFarm() {
       ...(name === "district" && { taluka: "" }),
     }));
 
+    setServerFieldErrors((prev) => {
+      if (!prev[name]) return prev;
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
+
     setShowIcons((prev) => ({
       ...prev,
       [name]: value === "",
@@ -600,6 +922,13 @@ function AddFarm() {
       ...prev,
       phone_number: limitedValue,
     }));
+
+    setServerFieldErrors((prev) => {
+      if (!prev.phone_number) return prev;
+      const next = { ...prev };
+      delete next.phone_number;
+      return next;
+    });
 
     setShowIcons((prev) => ({
       ...prev,
@@ -655,6 +984,13 @@ function AddFarm() {
       ...prev,
       email: value,
     }));
+
+    setServerFieldErrors((prev) => {
+      if (!prev.email) return prev;
+      const next = { ...prev };
+      delete next.email;
+      return next;
+    });
 
     setShowIcons((prev) => ({
       ...prev,
@@ -1023,6 +1359,16 @@ function AddFarm() {
     field: string,
     value: string
   ) => {
+    setServerPlotErrors((prev) => {
+      const pe = prev[plotId];
+      if (!pe || !pe[field]) return prev;
+      const nextPlot = { ...pe };
+      delete nextPlot[field];
+      const next = { ...prev };
+      if (Object.keys(nextPlot).length === 0) delete next[plotId];
+      else next[plotId] = nextPlot;
+      return next;
+    });
     setPlots((prev) =>
       prev.map((plot) => {
         if (plot.id !== plotId) return plot;
@@ -1134,163 +1480,12 @@ function AddFarm() {
     setFormData((prev) => ({ ...prev, aadhar_card: value }));
   };
 
-  //   const handleSubmit = async (e: React.FormEvent) => {
-  //     e.preventDefault();
-
-  //     // Validate password confirmation
-  //     if (formData.password !== formData.confirm_password) {
-  //       setSubmitStatus("error");
-  //       setSubmitMessage("Passwords do not match.");
-  //       return;
-  //     }
-
-  //     // Validate phone number
-  //     if (!validatePhoneNumber(formData.phone_number)) {
-  //       setSubmitStatus("error");
-  //       setSubmitMessage("Please enter a valid 10-digit phone number.");
-  //       setShowPhoneTooltip(true);
-  //       return;
-  //     }
-
-  //     // Validate email (if provided)
-  //     if (formData.email && !validateEmail(formData.email)) {
-  //       setSubmitStatus("error");
-  //       setSubmitMessage("Please enter a valid email address.");
-  //       setShowEmailTooltip(true);
-  //       return;
-  //     }
-
-  //     // Validate required fields
-  //     const requiredFields = [
-  //       "first_name",
-  //       "last_name",
-  //       "username",
-  //       "password",
-  //       "email",
-  //       "phone_number",
-  //     ];
-  //     const missingFields = requiredFields.filter(
-  //       (field) => !formData[field as keyof FarmerData]
-  //     );
-
-  //     if (missingFields.length > 0) {
-  //       setSubmitStatus("error");
-  //       setSubmitMessage(
-  //         `Please fill in all required fields: ${missingFields.join(", ")}`
-  //       );
-  //       return;
-  //     }
-
-  //     if (plots.length === 0) {
-  //       setSubmitStatus("error");
-  //       setSubmitMessage("Please add at least one plot to your farm.");
-  //       return;
-  //     }
-
-  //     // Validate that all plots have GAT and plot numbers
-  //     const plotsWithMissingData = plots.filter(plot =>
-  //       !plot.Group_Gat_No || !plot.Gat_No_Id ||
-  //       plot.Group_Gat_No.trim() === "" || plot.Gat_No_Id.trim() === ""
-  //     );
-
-  //     if (plotsWithMissingData.length > 0) {
-  //       setSubmitStatus("error");
-  //       setSubmitMessage("❌ GAT Number and Plot Number are required for all plots. Please fill in these fields with actual values (e.g., GAT: '123', Plot: '456').");
-  //       return;
-  //     }
-
-  //     if (areaError) {
-  //       setSubmitStatus("error");
-  //       setSubmitMessage(areaError);
-  //       return;
-  //     }
-
-  //     setIsSubmitting(true);
-  //     setSubmitStatus("idle");
-  //     setSubmitMessage("");
-
-  //     try {
-  //       console.log("🚀 Starting farmer registration process");
-  //       console.log(
-  //         `📊 Registering farmer with ${plots.length} plot${
-  //           plots.length !== 1 ? "s" : ""
-  //         }`
-  //       );
-
-  //       // Debug: Log plot data before submission
-  //       console.log("📋 Plot data being submitted:", plots.map(plot => ({
-  //         id: plot.id,
-  //         Group_Gat_No: plot.Group_Gat_No,
-  //         Gat_No_Id: plot.Gat_No_Id,
-  //         village: plot.village,
-  //         "Group_Gat_No type": typeof plot.Group_Gat_No,
-  //         "Gat_No_Id type": typeof plot.Gat_No_Id,
-  //         "Group_Gat_No length": plot.Group_Gat_No?.length,
-  //         "Gat_No_Id length": plot.Gat_No_Id?.length
-  //       })));
-
-  //       // Use all-in-one registration API for all users
-  //       const registrationResult = await registerFarmerAllInOneOnly(
-  //         formData,
-  //         plots
-  //       );
-
-  //       console.log(
-  //         "✅ Registration completed successfully:",
-  //         registrationResult
-  //       );
-
-  //       // SUCCESS: Registration completed
-  //       const totalArea = getTotalArea();
-  //       setSubmitStatus("success");
-
-  //       // Success message for all-in-one API
-  //       setSubmitMessage(`🎉 Farmer Registration Completed Successfully!
-  // 🎯 Next Steps:
-  // The farmer can now login with Emailcredentials to access the dashboard and monitor their crops!`);
-
-  //       // Reset form after successful submission
-  //       setFormData({
-  //         first_name: "",
-  //         last_name: "",
-  //         username: "",
-  //         password: "",
-  //         confirm_password: "",
-  //         email: "",
-  //         phone_number: "",
-  //         address: "",
-  //         taluka: "",
-  //         state: "",
-  //         district: "",
-  //         documents: null,
-  //       });
-
-  //       // Clear plots and map
-  //       setPlots([]);
-  //       if (featureGroupRef.current) {
-  //         featureGroupRef.current.clearLayers();
-  //       }
-  //       setLat("");
-  //       setLng("");
-  //       setLocationPin(null); // Clear location pin
-  //       setLocationPin(null); // Clear location pin
-  //     } catch (error: any) {
-  //       console.error("❌ Unexpected error:", error);
-  //       setSubmitStatus("error");
-  //       setSubmitMessage(
-  //         `An unexpected error occurred: ${
-  //           error.message || "Please try again."
-  //         }`
-  //       );
-  //     } finally {
-  //       setIsSubmitting(false);
-  //     }
-  //   };
-
   // Helper function to render form fields
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setServerFieldErrors({});
+    setServerPlotErrors({});
 
     // ============================================
     // VALIDATION SECTION
@@ -1390,6 +1585,8 @@ function AddFarm() {
 
       // SUCCESS: Registration completed
       setSubmitStatus("success");
+      setServerFieldErrors({});
+      setServerPlotErrors({});
 
       // Success message for all-in-one API
       setSubmitMessage(`🎉 Farmer Registration Completed Successfully!
@@ -1447,18 +1644,35 @@ The farmer can now login with Email credentials to access the dashboard and moni
       
       // Handle authentication and authorization errors with specific messages
       if (status === 401 || error.requiresAuth) {
+        setServerFieldErrors({});
+        setServerPlotErrors({});
         // 401: Not authenticated (no token or invalid token)
         errorMessage = errorData?.detail || 
                       errorData?.message || 
                       error.message ||
                       "❌ Authentication Required: Please login to register farmers. The registration endpoint requires authentication.";
       } else if (status === 403) {
+        setServerFieldErrors({});
+        setServerPlotErrors({});
         // 403: Authenticated but not authorized (wrong role)
         errorMessage = errorData?.detail || 
                       errorData?.message || 
                       error.message ||
                       "❌ Access Denied: Only Field Officers, Managers, and Admins can register farmers. Please login with an authorized account.";
-      } else if (status === 400) {
+      } else if (status === 400 || status === 422) {
+        const parsed = parseRegistrationApiErrors(errorData, plots);
+        const hasFieldErrors =
+          Object.keys(parsed.profileFields).length > 0 ||
+          Object.values(parsed.plotFields).some(
+            (p) => p && Object.keys(p).length > 0,
+          );
+        if (hasFieldErrors) {
+          setServerFieldErrors(parsed.profileFields);
+          setServerPlotErrors(parsed.plotFields);
+          errorMessage = parsed.banner;
+        } else {
+          setServerFieldErrors({});
+          setServerPlotErrors({});
         // Parse nested error structure from backend
         const detail = errorData?.detail || errorData?.message || errorData?.error || "";
         
@@ -1673,6 +1887,7 @@ The farmer can now login with Email credentials to access the dashboard and moni
         } else {
           errorMessage = "❌ Validation Error: Please check all required fields are filled correctly.";
         }
+        }
       } else if (status === 500) {
         errorMessage = "❌ Server Error: The server encountered an issue. Please try again later.";
       } else if (error.message) {
@@ -1734,6 +1949,7 @@ The farmer can now login with Email credentials to access the dashboard and moni
 
     const options = getFieldOptions(key);
     const isSelectField = options !== null && Array.isArray(options);
+    const serverErr = serverFieldErrors[key];
 
     return (
       <div key={key} className="relative">
@@ -1751,7 +1967,9 @@ The farmer can now login with Email credentials to access the dashboard and moni
               name={key}
               value={value}
               onChange={handleInputChange}
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm"
+              className={`block w-full pl-10 pr-3 py-2 border rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm ${
+                serverErr ? "border-red-500 bg-red-50" : "border-gray-300"
+              }`}
             >
               <option value="">Select {key.replace("_", " ")}</option>
               {options.filter((opt) => opt != null && opt !== "" && typeof opt === "string").map((option) => (
@@ -1801,6 +2019,7 @@ The farmer can now login with Email credentials to access the dashboard and moni
               }
               maxLength={key === "phone_number" ? 10 : undefined}
               className={`block w-full pl-10 pr-3 py-2 border rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm transition-colors ${
+                serverErr ||
                 (key === "phone_number" && phoneError) ||
                 (key === "email" && emailError)
                   ? "border-red-500 bg-red-50"
@@ -2056,6 +2275,11 @@ The farmer can now login with Email credentials to access the dashboard and moni
             </>
           )}
         </div>
+        {serverErr && (
+          <p className="mt-1 text-sm text-red-600 font-medium" role="alert">
+            {serverErr}
+          </p>
+        )}
       </div>
     );
   };
@@ -2145,6 +2369,7 @@ The farmer can now login with Email credentials to access the dashboard and moni
     const options = getFieldOptions(key);
     const isSelectField = options !== null && Array.isArray(options);
     const isCropTypeField = key === "crop_type";
+    const plotServerErr = serverPlotErrors[plotId]?.[key];
     const labelText =
       PLOT_FIELD_LABELS[key] ||
       key.replace(/_/g, " ").replace("number", "Number");
@@ -2168,7 +2393,9 @@ The farmer can now login with Email credentials to access the dashboard and moni
               onChange={(e) =>
                 handlePlotDetailChange(plotId, key, e.target.value)
               }
-              className="block w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm"
+              className={`block w-full pl-8 pr-3 py-2 border rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm ${
+                plotServerErr ? "border-red-500 bg-red-50" : "border-gray-300"
+              }`}
             >
               <option value="">Select {labelText}</option>
               {options.filter((opt) => opt != null && opt !== "" && typeof opt === "string").map((option, index) => (
@@ -2185,7 +2412,9 @@ The farmer can now login with Email credentials to access the dashboard and moni
               onChange={(e) =>
                 handlePlotDetailChange(plotId, key, e.target.value)
               }
-              className="block w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm"
+              className={`block w-full pl-8 pr-3 py-2 border rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm ${
+                plotServerErr ? "border-red-500 bg-red-50" : "border-gray-300"
+              }`}
             />
           )}
           <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400">
@@ -2195,6 +2424,11 @@ The farmer can now login with Email credentials to access the dashboard and moni
         {(key === "Group_Gat_No" || key === "Gat_No_Id") && (
           <p className="mt-1 text-xs text-yellow-600 font-medium">
             ⚠️ REQUIRED: Enter GAT/Plot number (e.g., "123", "456")
+          </p>
+        )}
+        {plotServerErr && (
+          <p className="mt-1 text-sm text-red-600 font-medium" role="alert">
+            {plotServerErr}
           </p>
         )}
       </div>

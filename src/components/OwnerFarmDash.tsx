@@ -57,6 +57,9 @@ import CommonSpinner from "./CommanSpinner";
 
 // Constants (same as FarmerDashboard)
 const BASE_URL = "https://events-cropeye.up.railway.app";
+
+/** indices / stress / irrigation on this host are often slow; 10s caused AbortController + axios to cancel (Network shows "(canceled)" ~10s). */
+const OWNER_EVENTS_SLOW_ENDPOINT_TIMEOUT_MS = 90_000;
 const OPTIMAL_BIOMASS = 150;
 const SOIL_API_URL = "https://main-cropeye.up.railway.app";
 const SOIL_DATE = "2025-10-03";
@@ -166,6 +169,28 @@ const OwnerFarmDash: React.FC = () => {
   const [loadingHierarchy, setLoadingHierarchy] = useState<boolean>(true);
   const [loadingData, setLoadingData] = useState<boolean>(false);
   const [showDebugInfo, setShowDebugInfo] = useState(false);
+  const [loadingSections, setLoadingSections] = useState<{
+    plotStats: boolean;
+    indices: boolean;
+    stress: boolean;
+    irrigation: boolean;
+  }>({
+    plotStats: false,
+    indices: false,
+    stress: false,
+    irrigation: false,
+  });
+
+  const isFarmerDataLoading =
+    loadingSections.plotStats ||
+    loadingSections.indices ||
+    loadingSections.stress ||
+    loadingSections.irrigation;
+
+  // Keep existing UI bindings (cards already check `loadingData`)
+  useEffect(() => {
+    setLoadingData(isFarmerDataLoading);
+  }, [isFarmerDataLoading]);
 
   const lineStyles: LineStyles = {
     growth: { color: "#22c55e", label: "Growth Index" },
@@ -232,6 +257,20 @@ const OwnerFarmDash: React.FC = () => {
     Map<string, [number, number][]>
   >(new Map());
   const hierarchyRequestIdRef = useRef<number>(0);
+
+  const selectedFarmerForUi =
+    farmersForSelectedOfficer.find((f: any) => {
+      const farmerId =
+        f?.id ?? f?.farmer_id ?? f?.farmerId ?? f?.user_id ?? null;
+      return farmerId != null && String(farmerId) === String(selectedFarmerId);
+    }) ?? null;
+
+  const selectedFarmerNameForUi =
+    selectedFarmerForUi?.name ??
+    selectedFarmerForUi?.full_name ??
+    selectedFarmerForUi?.fullName ??
+    selectedFarmerForUi?.username ??
+    (selectedFarmerId ? `Farmer ${selectedFarmerId}` : "Farmer");
 
   // Fetch farmers list on component mount
   useEffect(() => {
@@ -398,6 +437,13 @@ const OwnerFarmDash: React.FC = () => {
 
   useEffect(() => {
     if (selectedPlotId) {
+      // When switching plot/farmer, show loaders across all KPI cards until data arrives.
+      setLoadingSections({
+        plotStats: true,
+        indices: true,
+        stress: true,
+        irrigation: true,
+      });
       fetchAllData();
       setPlotCoordinatesFromState(selectedPlotId); // This will now work
     }
@@ -521,14 +567,6 @@ const OwnerFarmDash: React.FC = () => {
   // Fetch all data for selected plot - Optimized for faster retrieval
   const fetchAllData = async (): Promise<void> => {
     if (!selectedPlotId) return;
-
-    // Don't block the UI with a long spinner; cards will show "-" until data updates.
-    setLoadingData(false);
-    // Optimistic guard: avoid dashboard staying on spinner forever
-    // if one backend endpoint is slow. UI will still update when data arrives.
-    const optimisticSpinnerTimeout = window.setTimeout(() => {
-      setLoadingData(false);
-    }, 2500);
     try {
       const tzOffsetMs = new Date().getTimezoneOffset() * 60000;
       const endDate = new Date(Date.now() - tzOffsetMs)
@@ -669,6 +707,7 @@ const OwnerFarmDash: React.FC = () => {
       // because the events endpoints can be slow.
       if (currentPlotData) {
         applyPlotStatsToState(currentPlotData);
+        setLoadingSections((prev) => ({ ...prev, plotStats: false }));
       } else {
         const plotIdAtStart = selectedPlotId;
         void (async () => {
@@ -719,16 +758,17 @@ const OwnerFarmDash: React.FC = () => {
                 });
               }
               applyPlotStatsToState(plotData);
+              setLoadingSections((prev) => ({ ...prev, plotStats: false }));
             }
           } catch (e) {
             console.error("[OwnerFarmDash] plot stats fetch failed:", e);
+            setLoadingSections((prev) => ({ ...prev, plotStats: false }));
+          } finally {
+            // If we couldn't apply data (no plotData), still stop the plot-stats loader.
+            setLoadingSections((prev) => ({ ...prev, plotStats: false }));
           }
         })();
       }
-
-      // Turn off the big dashboard spinner as soon as the main plot stats are ready.
-      // Stress/irrigation/indices are loaded afterwards and will update cards/charts when ready.
-      setLoadingData(false);
 
       // When harvest status arrives, update growthStage without blocking render.
       harvestPromise.then(({ harvestStatus: hs }) => {
@@ -754,13 +794,14 @@ const OwnerFarmDash: React.FC = () => {
       if (cachedIndices) {
         // Cached indices are already in LineChartData[] format.
         setLineChartData(cachedIndices as LineChartData[]);
+        setLoadingSections((prev) => ({ ...prev, indices: false }));
       } else {
         // Don't block dashboard further on indices (chart can render later).
         setLineChartData([]);
         makeRequestWithRetry(
           `${BASE_URL}/plots/${selectedPlotId}/indices`,
           1,
-          10000,
+          OWNER_EVENTS_SLOW_ENDPOINT_TIMEOUT_MS,
         )
           .then((data) => {
             const mapped = (data || []).map((item: any) => ({
@@ -772,9 +813,11 @@ const OwnerFarmDash: React.FC = () => {
             }));
             setCache(indicesCacheKey, mapped);
             setLineChartData(mapped);
+            setLoadingSections((prev) => ({ ...prev, indices: false }));
           })
           .catch(() => {
             setLineChartData([]);
+            setLoadingSections((prev) => ({ ...prev, indices: false }));
           });
       }
 
@@ -783,7 +826,7 @@ const OwnerFarmDash: React.FC = () => {
         makeRequestWithRetry(
           `${BASE_URL}/plots/${selectedPlotId}/stress?index_type=NDRE&threshold=0.15`,
           1,
-          10000,
+          OWNER_EVENTS_SLOW_ENDPOINT_TIMEOUT_MS,
         )
           .then((data) => {
             setCache(stressCacheKey, data);
@@ -795,6 +838,7 @@ const OwnerFarmDash: React.FC = () => {
               stressCount: data?.total_events ?? 0,
               cnRatio: null,
             }));
+            setLoadingSections((prev) => ({ ...prev, stress: false }));
           })
           .catch(() => {
             const events: any[] = [];
@@ -805,6 +849,7 @@ const OwnerFarmDash: React.FC = () => {
               stressCount: 0,
               cnRatio: null,
             }));
+            setLoadingSections((prev) => ({ ...prev, stress: false }));
           });
       } else {
         const events = cachedStress?.events ?? [];
@@ -815,6 +860,7 @@ const OwnerFarmDash: React.FC = () => {
           stressCount: cachedStress?.total_events ?? 0,
           cnRatio: null,
         }));
+        setLoadingSections((prev) => ({ ...prev, stress: false }));
       }
 
       // Irrigation events - background
@@ -822,7 +868,7 @@ const OwnerFarmDash: React.FC = () => {
         makeRequestWithRetry(
           `${BASE_URL}/plots/${selectedPlotId}/irrigation?threshold_ndmi=0.05&threshold_ndwi=0.05&min_days_between_events=10`,
           1,
-          10000,
+          OWNER_EVENTS_SLOW_ENDPOINT_TIMEOUT_MS,
         )
           .then((data) => {
             setCache(irrigationCacheKey, data);
@@ -830,25 +876,34 @@ const OwnerFarmDash: React.FC = () => {
               ...prev,
               irrigationEvents: data?.total_events ?? null,
             }));
+            setLoadingSections((prev) => ({ ...prev, irrigation: false }));
           })
           .catch(() => {
             setMetrics((prev) => ({
               ...prev,
               irrigationEvents: null,
             }));
+            setLoadingSections((prev) => ({ ...prev, irrigation: false }));
           });
       } else {
         setMetrics((prev) => ({
           ...prev,
           irrigationEvents: cachedIrrigation?.total_events ?? null,
         }));
+        setLoadingSections((prev) => ({ ...prev, irrigation: false }));
       }
     } catch (err: any) {
       // You could add a toast notification here to inform the user
       // For now, we'll just log the error and continue with partial data
+      setLoadingSections((prev) => ({
+        ...prev,
+        plotStats: false,
+        indices: false,
+        stress: false,
+        irrigation: false,
+      }));
     } finally {
-      clearTimeout(optimisticSpinnerTimeout);
-      setLoadingData(false);
+      // Per-endpoint loaders are cleared in their own handlers above.
     }
   };
 
@@ -959,7 +1014,7 @@ const OwnerFarmDash: React.FC = () => {
         fieldOfficersTmp.length === 0
       ) {
         const response = await api.get(
-          `${import.meta.env.VITE_API_BASE_URL || "https://cropeye-backend.up.railway.app/api"}/users/owner-hierarchy/`,
+          `${import.meta.env.VITE_API_BASE_URL || "https://cropeye-backendd.up.railway.app/api"}/users/owner-hierarchy/`,
         );
         const responseData = response.data;
 
@@ -1024,7 +1079,7 @@ const OwnerFarmDash: React.FC = () => {
         void (async () => {
           try {
             const response = await api.get(
-              `${import.meta.env.VITE_API_BASE_URL || "https://cropeye-backend.up.railway.app/api"}/users/owner-hierarchy/`,
+              `${import.meta.env.VITE_API_BASE_URL || "https://cropeye-backendd.up.railway.app/api"}/users/owner-hierarchy/`,
             );
             if (hierarchyRequestIdRef.current !== requestId) return;
 
@@ -1335,7 +1390,7 @@ const OwnerFarmDash: React.FC = () => {
       const data = await makeRequestWithRetry(
         `${BASE_URL}/plots/${selectedPlotId}/stress?index_type=NDRE&threshold=0.15`,
         1,
-        15000,
+        OWNER_EVENTS_SLOW_ENDPOINT_TIMEOUT_MS,
       );
       setNdreStressEvents(data.events ?? []);
       setShowNDREEvents(true);
@@ -1609,7 +1664,7 @@ const OwnerFarmDash: React.FC = () => {
               <pre className="text-xs text-green-300 font-mono">
                 {JSON.stringify(
                   {
-                    endpoint: `${import.meta.env.VITE_API_BASE_URL || "https://cropeye-backend.up.railway.app/api"}/farms/recent-farmers/`,
+                    endpoint: `${import.meta.env.VITE_API_BASE_URL || "https://cropeye-backendd.up.railway.app/api"}/farms/recent-farmers/`,
                     method: "GET",
                     bearerToken: localStorage.getItem("token")
                       ? "✅ Present"
@@ -2055,6 +2110,23 @@ const OwnerFarmDash: React.FC = () => {
               >
                 <Maximize2 className="w-4 h-4" />
               </div>
+
+              {/* Loading overlay when switching farmer/plot */}
+              {isFarmerDataLoading && selectedPlotId ? (
+                <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/25 backdrop-blur-[1px] pointer-events-none">
+                  <div className="bg-white/90 rounded-xl shadow-lg px-4 py-3 flex items-center gap-3 border border-white/60">
+                    <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                    <div className="text-sm text-gray-800">
+                      <div className="font-semibold">
+                        Loading data for {selectedFarmerNameForUi}
+                      </div>
+                      <div className="text-xs text-gray-600">
+                        Plot: {selectedPlotId}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               {/* Centered Growth Stage Indicator */}
               <div className="absolute top-10 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">

@@ -5,9 +5,11 @@ import "leaflet/dist/leaflet.css";
 import "./Map.css";
 import { useFarmerProfile } from "../hooks/useFarmerProfile";
 import { useAppContext } from "../context/AppContext";
-import { FaExpand } from 'react-icons/fa';
+import { FaExpand, FaColumns } from 'react-icons/fa';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { AnalysisTimelineRibbon } from "./AnalysisTimelineRibbon";
+import { getOrFetchJson } from "../utils/requestCache";
+import { getCache } from "../utils/cache";
 import {
   fetchAnalysisTimeline,
   sortedRebinDatesForLayer,
@@ -167,6 +169,22 @@ function waterUptakeVeryHealthyCoordinates(pixelSummary: Record<string, unknown>
   return Array.isArray(legacy) ? (legacy as number[][]) : [];
 }
 
+/**
+ * Layer APIs use `end_date` = calendar day after the date shown in the rebin ribbon / arrows
+ * (e.g. UI 2025-04-08 → request end_date=2025-04-09).
+ */
+function layerApiEndDate(uiDateIso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(uiDateIso.trim());
+  if (!m) return uiDateIso;
+  const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (Number.isNaN(dt.getTime())) return uiDateIso;
+  dt.setDate(dt.getDate() + 1);
+  const y = dt.getFullYear();
+  const mo = String(dt.getMonth() + 1).padStart(2, "0");
+  const d = String(dt.getDate()).padStart(2, "0");
+  return `${y}-${mo}-${d}`;
+}
+
 /** Overview framing: wider context like satellite overview (~zoom ≤16); refit when date changes. */
 const PLOT_VIEW_MAX_ZOOM = 16;
 const PLOT_FIT_PADDING_PX = 56;
@@ -222,6 +240,7 @@ interface MapProps {
   onFieldAnalysisChange?: (data: any) => void;
   onMoistGroundChange?: (percent: number) => void;
   onPestDataChange?: (data: any) => void;
+  onSplitScreen?: () => void;
 }
 
 const CustomTileLayer: React.FC<{
@@ -257,6 +276,7 @@ const CropEyeMap: React.FC<MapProps> = ({
   onFieldAnalysisChange,
   onMoistGroundChange,
   onPestDataChange,
+  onSplitScreen,
 }) => {
   const { profile, loading: profileLoading } = useFarmerProfile();
   const { getCached, setCached } = useAppContext();
@@ -304,6 +324,7 @@ const CropEyeMap: React.FC<MapProps> = ({
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [timelineError, setTimelineError] = useState<string | null>(null);
   const mapRebinSnapKeyRef = useRef<string>("");
+  const layerFetchInFlightRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -388,6 +409,9 @@ const CropEyeMap: React.FC<MapProps> = ({
   // Works regardless of which layer is currently active - all 4 layers always use the same date
   useEffect(() => {
     if (selectedPlotName) {
+      const fetchKey = `${selectedPlotName}|${currentEndDate}`;
+      if (layerFetchInFlightRef.current.has(fetchKey)) return;
+      layerFetchInFlightRef.current.add(fetchKey);
       setDateNavigationLoading(true);
       const fetchAllLayerData = async () => {
         try {
@@ -403,6 +427,7 @@ const CropEyeMap: React.FC<MapProps> = ({
           console.error('❌ Map: Some layer APIs failed to fetch for date:', currentEndDate, err);
         } finally {
           setDateNavigationLoading(false);
+          layerFetchInFlightRef.current.delete(fetchKey);
         }
       };
       fetchAllLayerData();
@@ -457,23 +482,16 @@ const CropEyeMap: React.FC<MapProps> = ({
     // Mark that we're doing the initial fetch to prevent duplicate calls
     initialFetchDoneRef.current = true;
     
-    // Fetch ALL 4 APIs in parallel on login to preload data for faster button switching
-    // This ensures all data is loaded when farmer logs in, making button switching instant
-    console.log('🔄 Map: Fetching all 4 layer APIs (Growth, Water Uptake, Soil Moisture, Pest) on login for plot:', selectedPlotName);
-    
-    // Fetch all APIs in parallel - this preloads data so button clicks are instant
-    Promise.all([
-      fetchGrowthData(selectedPlotName),
-      fetchWaterUptakeData(selectedPlotName),
-      fetchSoilMoistureData(selectedPlotName),
-      fetchPestData(selectedPlotName),
-      fetchPlotData(selectedPlotName),
-      fetchFieldAnalysis(selectedPlotName)
-    ]).then(() => {
-      console.log('✅ Map: All 4 layer APIs (Growth, Water Uptake, Soil Moisture, Pest) fetched successfully on login');
-    }).catch((err) => {
-      console.error('❌ Map: Some APIs failed to fetch:', err);
-    });
+    // Initial plot fetch: only non-layer APIs here.
+    // The 4 layer APIs are already fetched by the [currentEndDate, selectedPlotName] effect above.
+    console.log('🔄 Map: Fetching plot + field analysis on login for plot:', selectedPlotName);
+    Promise.all([fetchPlotData(selectedPlotName), fetchFieldAnalysis(selectedPlotName)])
+      .then(() => {
+        console.log('✅ Map: Plot + field analysis fetched successfully on login');
+      })
+      .catch((err) => {
+        console.error('❌ Map: Plot/analysis fetch failed:', err);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPlotName, profileLoading]);
 
@@ -556,6 +574,7 @@ const CropEyeMap: React.FC<MapProps> = ({
   const fetchGrowthData = async (plotName: string) => {
     if (!plotName) return;
 
+    const apiEndDate = layerApiEndDate(currentEndDate);
     const memKey = `growth:${plotName}:${currentEndDate}`;
     if (layerTilesCacheRef.current.has(memKey)) {
       const hit = layerTilesCacheRef.current.get(memKey) as any;
@@ -568,12 +587,23 @@ const CropEyeMap: React.FC<MapProps> = ({
 
     // Check cache first (only for today's date to ensure freshness)
     const today = new Date().toISOString().split('T')[0];
+    const sharedKey = `layer:growth:${plotName}:${currentEndDate}`;
+    const sharedTtlMs = currentEndDate === today ? 10 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+    const sharedCached = getCache(sharedKey, sharedTtlMs);
+    if (sharedCached) {
+      layerTilesCacheRef.current.set(memKey, sharedCached);
+      setGrowthData(sharedCached);
+      if (!plotBoundary && sharedCached?.features?.[0]?.geometry) {
+        setPlotBoundary(sharedCached.features[0]);
+      }
+      return;
+    }
+    // Back-compat: older cache key used by prefetch/login
     if (currentEndDate === today) {
       const cachedData = getCached(`growthData_${plotName}`);
       if (cachedData) {
-        console.log('✅ Using cached growth data');
+        layerTilesCacheRef.current.set(memKey, cachedData);
         setGrowthData(cachedData);
-        // Preserve plot boundary from growth data if not already set
         if (!plotBoundary && cachedData?.features?.[0]?.geometry) {
           setPlotBoundary(cachedData.features[0]);
         }
@@ -586,36 +616,25 @@ const CropEyeMap: React.FC<MapProps> = ({
       // ? '/api/dev-plot' 
       // : 'https://admin-cropeye.up.railway.app';
     const baseUrl='https://admin-cropeye.up.railway.app';
-    const url = `${baseUrl}/analyze_Growth?plot_name=${plotName}&end_date=${currentEndDate}&days_back=15`;
+    const url = `${baseUrl}/analyze_Growth?plot_name=${plotName}&end_date=${apiEndDate}&days_back=15`;
     
     try {
       
       // Try fetch with explicit CORS mode and proper headers matching curl command
-      const resp = await fetch(url, {
+      const data = await getOrFetchJson({
+        key: sharedKey,
+        url,
+        ttlMs: sharedTtlMs,
+        fetchInit: {
           method: "POST",
-        mode: "cors",
-        cache: "no-cache",
-        credentials: "omit",
-        headers: { 
-          "Accept": "application/json"
+          mode: "cors",
+          cache: "no-cache",
+          credentials: "omit",
+          headers: {
+            Accept: "application/json",
+          },
         },
-        // Note: Not setting body at all, let browser handle empty POST body
       });
-
-
-      if (!resp.ok) {
-        const errorText = await resp.text().catch(() => 'Unable to read error response');
-        console.error("Growth API error response:", errorText);
-        
-        // Handle 502 Bad Gateway - filter out HTML error page
-        if (resp.status === 502 || errorText.includes('<html>') || errorText.includes('Bad Gateway')) {
-          throw new Error('Backend service is temporarily unavailable. Please try again in a few moments.');
-        }
-        
-        throw new Error(`Growth API failed: ${resp.status} ${resp.statusText}`);
-      }
-
-      const data = await resp.json();
       layerTilesCacheRef.current.set(memKey, data);
       setGrowthData(data);
       
@@ -637,7 +656,8 @@ const CropEyeMap: React.FC<MapProps> = ({
         stack: err?.stack,
         url: url,
         plotName: plotName,
-        endDate: currentEndDate
+        endDate: currentEndDate,
+        apiEndDate,
       });
       setGrowthData(null);
       
@@ -660,6 +680,7 @@ const CropEyeMap: React.FC<MapProps> = ({
   const fetchWaterUptakeData = async (plotName: string) => {
     if (!plotName) return;
 
+    const apiEndDate = layerApiEndDate(currentEndDate);
     const memKey = `water:${plotName}:${currentEndDate}`;
     if (layerTilesCacheRef.current.has(memKey)) {
       const hit = layerTilesCacheRef.current.get(memKey) as any;
@@ -672,12 +693,23 @@ const CropEyeMap: React.FC<MapProps> = ({
 
     // Check cache first (only for today's date to ensure freshness)
     const today = new Date().toISOString().split('T')[0];
+    const sharedKey = `layer:water:${plotName}:${currentEndDate}`;
+    const sharedTtlMs = currentEndDate === today ? 10 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+    const sharedCached = getCache(sharedKey, sharedTtlMs);
+    if (sharedCached) {
+      layerTilesCacheRef.current.set(memKey, sharedCached);
+      setWaterUptakeData(sharedCached);
+      if (!plotBoundary && sharedCached?.features?.[0]?.geometry) {
+        setPlotBoundary(sharedCached.features[0]);
+      }
+      return;
+    }
+    // Back-compat: older cache key used by prefetch/login
     if (currentEndDate === today) {
       const cachedData = getCached(`waterUptakeData_${plotName}`);
       if (cachedData) {
-        console.log('✅ Using cached water uptake data');
+        layerTilesCacheRef.current.set(memKey, cachedData);
         setWaterUptakeData(cachedData);
-        // Preserve plot boundary from water uptake data if not already set
         if (!plotBoundary && cachedData?.features?.[0]?.geometry) {
           setPlotBoundary(cachedData.features[0]);
         }
@@ -690,36 +722,25 @@ const CropEyeMap: React.FC<MapProps> = ({
     //   ? '/api/dev-plot' 
     //   : 'https://admin-cropeye.up.railway.app';
     const baseUrl = 'https://admin-cropeye.up.railway.app';
-    const url = `${baseUrl}/wateruptake?plot_name=${plotName}&end_date=${currentEndDate}&days_back=15`;
+    const url = `${baseUrl}/wateruptake?plot_name=${plotName}&end_date=${apiEndDate}&days_back=15`;
 
     try {
       
       // Try fetch with explicit CORS mode and proper headers matching curl command
-      const resp = await fetch(url, {
+      const data = await getOrFetchJson({
+        key: sharedKey,
+        url,
+        ttlMs: sharedTtlMs,
+        fetchInit: {
           method: "POST",
-        mode: "cors",
-        cache: "no-cache",
-        credentials: "omit",
-        headers: { 
-          "Accept": "application/json"
+          mode: "cors",
+          cache: "no-cache",
+          credentials: "omit",
+          headers: {
+            Accept: "application/json",
+          },
         },
-        // Note: Not setting body at all, let browser handle empty POST body
       });
-
-
-      if (!resp.ok) {
-        const errorText = await resp.text().catch(() => 'Unable to read error response');
-        console.error("Water Uptake API error response:", errorText);
-        
-        // Handle 502 Bad Gateway - filter out HTML error page
-        if (resp.status === 502 || errorText.includes('<html>') || errorText.includes('Bad Gateway')) {
-          throw new Error('Backend service is temporarily unavailable. Please try again in a few moments.');
-        }
-        
-        throw new Error(`Water Uptake API failed: ${resp.status} ${resp.statusText}`);
-      }
-
-      const data = await resp.json();
       layerTilesCacheRef.current.set(memKey, data);
       setWaterUptakeData(data);
       
@@ -741,7 +762,8 @@ const CropEyeMap: React.FC<MapProps> = ({
         stack: err?.stack,
         url: url,
         plotName: plotName,
-        endDate: currentEndDate
+        endDate: currentEndDate,
+        apiEndDate,
       });
       setWaterUptakeData(null);
       
@@ -764,6 +786,7 @@ const CropEyeMap: React.FC<MapProps> = ({
   const fetchSoilMoistureData = async (plotName: string) => {
     if (!plotName) return;
 
+    const apiEndDate = layerApiEndDate(currentEndDate);
     const memKey = `soil:${plotName}:${currentEndDate}`;
     if (layerTilesCacheRef.current.has(memKey)) {
       const hit = layerTilesCacheRef.current.get(memKey) as any;
@@ -776,12 +799,23 @@ const CropEyeMap: React.FC<MapProps> = ({
 
     // Check cache first (only for today's date to ensure freshness)
     const today = new Date().toISOString().split('T')[0];
+    const sharedKey = `layer:soil:${plotName}:${currentEndDate}`;
+    const sharedTtlMs = currentEndDate === today ? 10 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+    const sharedCached = getCache(sharedKey, sharedTtlMs);
+    if (sharedCached) {
+      layerTilesCacheRef.current.set(memKey, sharedCached);
+      setSoilMoistureData(sharedCached);
+      if (!plotBoundary && sharedCached?.features?.[0]?.geometry) {
+        setPlotBoundary(sharedCached.features[0]);
+      }
+      return;
+    }
+    // Back-compat: older cache key used by prefetch/login
     if (currentEndDate === today) {
       const cachedData = getCached(`soilMoistureData_${plotName}`);
       if (cachedData) {
-        console.log('✅ Using cached soil moisture data');
+        layerTilesCacheRef.current.set(memKey, cachedData);
         setSoilMoistureData(cachedData);
-        // Preserve plot boundary from soil moisture data if not already set
         if (!plotBoundary && cachedData?.features?.[0]?.geometry) {
           setPlotBoundary(cachedData.features[0]);
         }
@@ -794,37 +828,24 @@ const CropEyeMap: React.FC<MapProps> = ({
     //   ? '/api/dev-plot' 
     //   : 'https://admin-cropeye.up.railway.app';
     const baseUrl = 'https://admin-cropeye.up.railway.app';
-    const url = `${baseUrl}/SoilMoisture?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`;
+    const url = `${baseUrl}/SoilMoisture?plot_name=${plotName}&end_date=${apiEndDate}&days_back=7`;
 
     
     try {
-      
-      // Try fetch with explicit CORS mode and proper headers matching curl command
-      const resp = await fetch(url, {
+      const data = await getOrFetchJson({
+        key: sharedKey,
+        url,
+        ttlMs: sharedTtlMs,
+        fetchInit: {
           method: "POST",
-        mode: "cors",
-        cache: "no-cache",
-        credentials: "omit",
-        headers: { 
-          "Accept": "application/json"
+          mode: "cors",
+          cache: "no-cache",
+          credentials: "omit",
+          headers: {
+            Accept: "application/json",
+          },
         },
-        // Note: Not setting body at all, let browser handle empty POST body
       });
-
-
-      if (!resp.ok) {
-        const errorText = await resp.text().catch(() => 'Unable to read error response');
-        console.error("Soil Moisture API error response:", errorText);
-        
-        // Handle 502 Bad Gateway - filter out HTML error page
-        if (resp.status === 502 || errorText.includes('<html>') || errorText.includes('Bad Gateway')) {
-          throw new Error('Backend service is temporarily unavailable. Please try again in a few moments.');
-        }
-        
-        throw new Error(`Soil Moisture API failed: ${resp.status} ${resp.statusText}`);
-      }
-
-      const data = await resp.json();
       layerTilesCacheRef.current.set(memKey, data);
       setSoilMoistureData(data);
       
@@ -846,7 +867,8 @@ const CropEyeMap: React.FC<MapProps> = ({
         stack: err?.stack,
         url: url,
         plotName: plotName,
-        endDate: currentEndDate
+        endDate: currentEndDate,
+        apiEndDate,
       });
       setSoilMoistureData(null);
       
@@ -1012,6 +1034,7 @@ const CropEyeMap: React.FC<MapProps> = ({
       return;
     }
 
+    const apiEndDate = layerApiEndDate(currentEndDate);
     const memKey = `pest:${plotName}:${currentEndDate}`;
     if (layerTilesCacheRef.current.has(memKey)) {
       const hit = layerTilesCacheRef.current.get(memKey) as any;
@@ -1048,10 +1071,22 @@ const CropEyeMap: React.FC<MapProps> = ({
 
     // Check cache first (only for today's date to ensure freshness)
     const today = new Date().toISOString().split('T')[0];
+    const sharedKey = `layer:pest:${plotName}:${currentEndDate}`;
+    const sharedTtlMs = currentEndDate === today ? 10 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+    const sharedCached = getCache(sharedKey, sharedTtlMs);
+    if (sharedCached) {
+      layerTilesCacheRef.current.set(memKey, sharedCached);
+      setPestData(sharedCached);
+      if (!plotBoundary && sharedCached?.features?.[0]?.geometry) {
+        setPlotBoundary(sharedCached.features[0]);
+      }
+      return;
+    }
+    // Back-compat: older cache key used by prefetch/login
     if (currentEndDate === today) {
       const cachedData = getCached(`pestData_${plotName}`);
       if (cachedData) {
-        console.log('✅ Using cached pest data');
+        layerTilesCacheRef.current.set(memKey, cachedData);
         setPestData(cachedData);
         return;
       }
@@ -1062,36 +1097,23 @@ const CropEyeMap: React.FC<MapProps> = ({
     //   ? '/api/dev-plot' 
     //   : 'https://admin-cropeye.up.railway.app';
     const baseUrl = 'https://admin-cropeye.up.railway.app';
-    const url = `${baseUrl}/pest-detection?plot_name=${plotName}&end_date=${currentEndDate}&days_back=7`;
+    const url = `${baseUrl}/pest-detection?plot_name=${plotName}&end_date=${apiEndDate}&days_back=7`;
 
     try {
-      
-      // Try fetch with explicit CORS mode and proper headers matching curl command
-      const resp = await fetch(url, {
+      const data = await getOrFetchJson({
+        key: sharedKey,
+        url,
+        ttlMs: sharedTtlMs,
+        fetchInit: {
           method: "POST",
-        mode: "cors",
-        cache: "no-cache",
-        credentials: "omit",
-        headers: { 
-          "Accept": "application/json"
+          mode: "cors",
+          cache: "no-cache",
+          credentials: "omit",
+          headers: {
+            Accept: "application/json",
+          },
         },
-        // Note: Not setting body at all, let browser handle empty POST body
       });
-
-
-      if (!resp.ok) {
-        const errorText = await resp.text().catch(() => 'Unable to read error response');
-        console.error("Pest detection API error response:", errorText);
-        
-        // Handle 502 Bad Gateway - filter out HTML error page
-        if (resp.status === 502 || errorText.includes('<html>') || errorText.includes('Bad Gateway')) {
-          throw new Error('Backend service is temporarily unavailable. Please try again in a few moments.');
-        }
-        
-        throw new Error(`Pest detection API failed: ${resp.status} ${resp.statusText}`);
-      }
-
-      const data = await resp.json();
       layerTilesCacheRef.current.set(memKey, data);
       setPestData(data);
       
@@ -1137,7 +1159,8 @@ const CropEyeMap: React.FC<MapProps> = ({
         stack: err?.stack,
         url: url,
         plotName: plotName,
-        endDate: currentEndDate
+        endDate: currentEndDate,
+        apiEndDate,
       });
       setPestData(null);
       
@@ -1843,7 +1866,11 @@ const CropEyeMap: React.FC<MapProps> = ({
               selectedDate={currentEndDate}
               onSelectDate={(iso) => {
                 setCurrentEndDate(iso);
-                setShowDatePopup(true);
+                // Do not show timeseries-date-popup here: without setPopupSide(left|right)
+                // it uses default CSS (left:50%, bottom:500px) and the date sits in the map center.
+                // Arrow buttons set popupSide so the popup anchors beside them; the ribbon already
+                // shows the selected date on the cells.
+                setShowDatePopup(false);
               }}
               externalTimeline={{ payload: timelinePayload, loading: timelineLoading, error: timelineError }}
             />
@@ -1920,6 +1947,17 @@ const CropEyeMap: React.FC<MapProps> = ({
         >
           <FaExpand />
         </button>
+
+        {/* Split Screen Button */}
+        {/* {onSplitScreen && (
+          <button
+            className="splitscreen-btn"
+            title="Split Screen View"
+            onClick={onSplitScreen}
+          >
+            <FaColumns />
+          </button>
+        )} */}
 
         {(plotBoundary || currentPlotFeature) && (
           <>

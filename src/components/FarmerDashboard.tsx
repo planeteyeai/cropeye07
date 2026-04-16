@@ -361,7 +361,7 @@ const FarmerDashboard: React.FC = () => {
       );
     }
 
-    return Object.entries(groupedData)
+    const rows = Object.entries(groupedData)
       .map(([key, items]) => {
         const avgGrowth =
           items.reduce((sum, item) => sum + item.growth, 0) / items.length;
@@ -393,6 +393,36 @@ const FarmerDashboard: React.FC = () => {
         };
       })
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    // Weekly: only current calendar week and previous calendar week (same week-start rule as grouping).
+    if (period === "weekly") {
+      const today = new Date();
+      const currentWeekStart = new Date(today);
+      currentWeekStart.setDate(today.getDate() - today.getDay());
+      const previousWeekStart = new Date(currentWeekStart);
+      previousWeekStart.setDate(previousWeekStart.getDate() - 7);
+      const allowed = new Set([
+        currentWeekStart.toISOString().split("T")[0],
+        previousWeekStart.toISOString().split("T")[0],
+      ]);
+      return rows.filter((r) => allowed.has(r.date));
+    }
+
+    // Monthly: only current calendar month and previous calendar month.
+    if (period === "monthly") {
+      const now = new Date();
+      const currentMonthKey = `${now.getFullYear()}-${String(
+        now.getMonth() + 1
+      ).padStart(2, "0")}`;
+      const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const previousMonthKey = `${prevMonthDate.getFullYear()}-${String(
+        prevMonthDate.getMonth() + 1
+      ).padStart(2, "0")}`;
+      const allowed = new Set([currentMonthKey, previousMonthKey]);
+      return rows.filter((r) => allowed.has(r.date));
+    }
+
+    return rows;
   };
 
   const fetchAllData = async (): Promise<void> => {

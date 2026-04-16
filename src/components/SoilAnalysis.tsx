@@ -799,13 +799,13 @@ const SoilAnalysis: React.FC<SoilAnalysisProps> = ({
       {currentPlotName && !loading && !error && (
         <>
           <div className="flex gap-2">
-            <div className="flex flex-col justify-between text-xs text-gray-600 h-40 py-1">
+            {/* <div className="flex flex-col justify-between text-xs text-gray-600 h-40 py-1">
               <span>Very High</span>
               <span>Optimal</span>
               <span>Medium</span>
               <span>Low</span>
               <span>Very Low</span>
-            </div>
+            </div> */}
             <div className="flex-1 overflow-x-auto">
               <div className="flex items-end justify-between gap-2 h-40">
                 {metrics.map((metric, idx) => (

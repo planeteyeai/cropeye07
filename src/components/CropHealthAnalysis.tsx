@@ -425,7 +425,7 @@ const CropHealthAnalysis: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="card h-full flex flex-col min-h-[520px]">
+      <div className="card h-full flex flex-col min-h-[350px]">
         <div className="card-header">
           <h2 className="text-xl font-bold text-green-700">
             Crop Health Analysis
@@ -444,7 +444,7 @@ const CropHealthAnalysis: React.FC = () => {
   }
 
   return (
-    <div className="card h-full flex flex-col min-h-[520px]">
+    <div className="card h-full flex flex-col min-h-[350px]">
       <div className="card-header flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
         <h2 className="text-lg md:text-xl font-bold text-green-700">
           Crop Health Analysis

@@ -6,6 +6,7 @@ import {
   getFieldOfficerAgroStats,
 } from '../api';
 import { getCache } from '../components/utils/cache';
+import { getOrFetchJson } from "../utils/requestCache";
 
 // Base URLs for external APIs
 const BASE_URL = 'https://admin-cropeye.up.railway.app';
@@ -28,8 +29,8 @@ export const prefetchFarmerProfile = async (
   setCached: (key: string, data: any) => void
 ): Promise<boolean> => {
   try {
-    const response = await getFarmerMyProfile();
-    setCached('farmerProfile', response.data);
+    const response: any = await getFarmerMyProfile();
+    setCached('farmerProfile', response?.data);
     return true;
   } catch {
     return false;
@@ -146,10 +147,10 @@ export const prefetchAllData = async (
     let profile = getCache('farmerProfile', 10 * 60 * 1000);
     if (!profile) {
       const profilePromise = getFarmerMyProfile()
-        .then((response) => {
-          setCached('farmerProfile', response.data);
+        .then((response: any) => {
+          setCached('farmerProfile', response?.data);
           fetchedEndpoints.push('farmerProfile');
-          return response.data;
+          return response?.data;
         })
         .catch((err) => {
           errors.push(`Profile: ${err.message}`);
@@ -181,21 +182,22 @@ export const prefetchAllData = async (
     // 4. Fetch all map layer data in parallel (Growth, Water Uptake, Soil Moisture, Pest)
     const mapDataPromises = [
       // Growth data
-      fetch(`${BASE_URL}/analyze_Growth?plot_name=${plotName}&end_date=${today}&days_back=7`, {
-        method: 'POST',
-        mode: 'cors',
-        cache: 'no-cache',
-        credentials: 'omit',
-        headers: { Accept: 'application/json' },
+      getOrFetchJson({
+        key: `layer:growth:${plotName}:${today}`,
+        url: `${BASE_URL}/analyze_Growth?plot_name=${plotName}&end_date=${today}&days_back=7`,
+        ttlMs: 10 * 60 * 1000,
+        fetchInit: {
+          method: "POST",
+          mode: "cors",
+          cache: "no-cache",
+          credentials: "omit",
+          headers: { Accept: "application/json" },
+        },
       })
-        .then(async (res) => {
-          if (res.ok) {
-            const data = await res.json();
-            setCached(`growthData_${plotName}`, data);
-            fetchedEndpoints.push('growthData');
-            return data;
-          }
-          throw new Error(`Growth API: ${res.status}`);
+        .then((data) => {
+          setCached(`growthData_${plotName}`, data);
+          fetchedEndpoints.push("growthData");
+          return data;
         })
         .catch((err) => {
           errors.push(`Growth: ${err.message}`);
@@ -203,21 +205,22 @@ export const prefetchAllData = async (
         }),
 
       // Water Uptake data
-      fetch(`${BASE_URL}/wateruptake?plot_name=${plotName}&end_date=${today}&days_back=7`, {
-        method: 'POST',
-        mode: 'cors',
-        cache: 'no-cache',
-        credentials: 'omit',
-        headers: { Accept: 'application/json' },
+      getOrFetchJson({
+        key: `layer:water:${plotName}:${today}`,
+        url: `${BASE_URL}/wateruptake?plot_name=${plotName}&end_date=${today}&days_back=7`,
+        ttlMs: 10 * 60 * 1000,
+        fetchInit: {
+          method: "POST",
+          mode: "cors",
+          cache: "no-cache",
+          credentials: "omit",
+          headers: { Accept: "application/json" },
+        },
       })
-        .then(async (res) => {
-          if (res.ok) {
-            const data = await res.json();
-            setCached(`waterUptakeData_${plotName}`, data);
-            fetchedEndpoints.push('waterUptakeData');
-            return data;
-          }
-          throw new Error(`Water Uptake API: ${res.status}`);
+        .then((data) => {
+          setCached(`waterUptakeData_${plotName}`, data);
+          fetchedEndpoints.push("waterUptakeData");
+          return data;
         })
         .catch((err) => {
           errors.push(`Water Uptake: ${err.message}`);
@@ -225,21 +228,22 @@ export const prefetchAllData = async (
         }),
 
       // Soil Moisture data
-      fetch(`${BASE_URL}/SoilMoisture?plot_name=${plotName}&end_date=${today}&days_back=7`, {
-        method: 'POST',
-        mode: 'cors',
-        cache: 'no-cache',
-        credentials: 'omit',
-        headers: { Accept: 'application/json' },
+      getOrFetchJson({
+        key: `layer:soil:${plotName}:${today}`,
+        url: `${BASE_URL}/SoilMoisture?plot_name=${plotName}&end_date=${today}&days_back=7`,
+        ttlMs: 10 * 60 * 1000,
+        fetchInit: {
+          method: "POST",
+          mode: "cors",
+          cache: "no-cache",
+          credentials: "omit",
+          headers: { Accept: "application/json" },
+        },
       })
-        .then(async (res) => {
-          if (res.ok) {
-            const data = await res.json();
-            setCached(`soilMoistureData_${plotName}`, data);
-            fetchedEndpoints.push('soilMoistureData');
-            return data;
-          }
-          throw new Error(`Soil Moisture API: ${res.status}`);
+        .then((data) => {
+          setCached(`soilMoistureData_${plotName}`, data);
+          fetchedEndpoints.push("soilMoistureData");
+          return data;
         })
         .catch((err) => {
           errors.push(`Soil Moisture: ${err.message}`);
@@ -247,21 +251,22 @@ export const prefetchAllData = async (
         }),
 
       // Pest detection data
-      fetch(`${BASE_URL}/pest-detection?plot_name=${plotName}&end_date=${today}&days_back=7`, {
-        method: 'POST',
-        mode: 'cors',
-        cache: 'no-cache',
-        credentials: 'omit',
-        headers: { Accept: 'application/json' },
+      getOrFetchJson({
+        key: `layer:pest:${plotName}:${today}`,
+        url: `${BASE_URL}/pest-detection?plot_name=${plotName}&end_date=${today}&days_back=7`,
+        ttlMs: 10 * 60 * 1000,
+        fetchInit: {
+          method: "POST",
+          mode: "cors",
+          cache: "no-cache",
+          credentials: "omit",
+          headers: { Accept: "application/json" },
+        },
       })
-        .then(async (res) => {
-          if (res.ok) {
-            const data = await res.json();
-            setCached(`pestData_${plotName}`, data);
-            fetchedEndpoints.push('pestData');
-            return data;
-          }
-          throw new Error(`Pest API: ${res.status}`);
+        .then((data) => {
+          setCached(`pestData_${plotName}`, data);
+          fetchedEndpoints.push("pestData");
+          return data;
         })
         .catch((err) => {
           errors.push(`Pest: ${err.message}`);
