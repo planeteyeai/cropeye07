@@ -7,6 +7,7 @@ import {
   useNavigate,
 } from "react-router-dom";
 import Login from "../components/Login";
+import DeleteAccountInfo from "../components/DeleteAccountInfo";
 import App from "../App";
 import CommonSpinner from "../components/CommanSpinner";
 import {
@@ -252,6 +253,9 @@ const AppRoutesContent: React.FC = () => {
           )
         }
       />
+
+      {/* Account Deletion Info (Public) */}
+      <Route path="/delete-account" element={<DeleteAccountInfo />} />
 
       {/* Dashboard Route */}
       <Route
